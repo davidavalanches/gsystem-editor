@@ -47,7 +47,7 @@ Pour le développement : `npm run dev`, puis ouvrir l'URL affichée dans Chrome.
   sur ordinateur, `Documents/G-System/` sur Android). La banque en cours est conservée d'une
   session à l'autre.
 - **Lecture du G-System** : toute la banque (~2 min 30, la liste se remplit au fur et à mesure)
-  ou seulement la sélection (0,8 s par preset).
+  ou seulement la banque affichée (menu ⋮ ou vue MIDI, 0,8 s par preset).
 - **Preset** : en-tête (preset précédent/suivant, numéro banque/position en points, nom, Live, Store),
   8 tuiles d'effets avec voyant et type, rangée Loop 1–4 / Insert / Boost (en Live), paramètres du bloc
   en curseurs sur deux colonnes, panneau de réglage fin (valeur, curseur, − / + maintenus, choix pour
