@@ -1,0 +1,210 @@
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+
+import { BankStore, bankPosition, slotLabel } from "../src/core/bank";
+import { BLOCKS, block, diffFields, fieldOffset, FIELD_COUNT, freq, readField, writeField } from "../src/core/params";
+import { BLOCK_IDS, MidiParser, identityVersion, paramMessage, parseParamMessage, presetRequest } from "../src/core/protocol";
+import { SqsFile, USER_BANK_KIND, readSyx, writeSyx } from "../src/core/sqs";
+import {
+  ChecksumError, PRESET_DATA_LEN, PRESET_DUMP_LEN, Preset, SysexError, bytesToNibbles, nibblesToBytes,
+  splitSysex, userNumber,
+} from "../src/core/sysex";
+
+const hex = (s: string) => new Uint8Array(s.replace(/\s/g, "").match(/../g)!.map((b) => parseInt(b, 16)));
+const BLANK = new Uint8Array(PRESET_DATA_LEN);
+
+function makePreset(name = "Test", number = 100): Preset {
+  const data = new Uint8Array(PRESET_DATA_LEN);
+  data.fill(0x20, 0, 20);
+  for (let i = 0; i < name.length; i++) data[i] = name.charCodeAt(i);
+  for (let i = 0; i < 256; i++) data[20 + i] = i;
+  return new Preset(number, data);
+}
+
+describe("sysex", () => {
+  it("round-trips nibbles", () => {
+    const raw = Uint8Array.from({ length: 256 }, (_, i) => i);
+    expect(nibblesToBytes(bytesToNibbles(raw))).toEqual(raw);
+    expect(() => nibblesToBytes(new Uint8Array([0x10, 0]))).toThrow(SysexError);
+  });
+
+  it("round-trips a dump", () => {
+    const preset = makePreset("Test", 237);
+    const msg = preset.toSysex();
+    expect(msg.length).toBe(PRESET_DUMP_LEN);
+    expect([...msg.slice(0, 8)]).toEqual([0xf0, 0, 0x20, 0x1f, 0x7f, 0x55, 0x20, 0x01]);
+    expect(msg.slice(1, -1).every((b) => b < 0x80)).toBe(true);
+    const parsed = Preset.fromSysex(msg);
+    expect(parsed.number).toBe(237);
+    expect(parsed.data).toEqual(preset.data);
+    expect(parsed.checksumOk).toBe(true);
+  });
+
+  it("flags or rejects a checksum mismatch", () => {
+    const msg = makePreset().toSysex();
+    msg[msg.length - 2] = (msg[msg.length - 2] + 1) & 0x7f;
+    expect(() => Preset.fromSysex(msg)).toThrow(ChecksumError);
+    const lenient = Preset.fromSysex(msg, false);
+    expect(lenient.checksumOk).toBe(false);
+    expect(Preset.fromSysex(lenient.toSysex()).checksumOk).toBe(true);
+  });
+
+  it("masks and preserves name flag bits", () => {
+    const data = makePreset("Eau trouble").data.slice();
+    data[5] |= 0x80;
+    data[19] |= 0x80;
+    data[18] = 0x9c;
+    const preset = new Preset(100, data);
+    expect(preset.name).toBe("Eau trouble");
+    const renamed = preset.withName("Clean");
+    expect(renamed.name).toBe("Clean");
+    expect(renamed.data[5] & 0x80).toBeTruthy();
+    expect(renamed.data.slice(20)).toEqual(preset.data.slice(20));
+  });
+
+  it("splits sysex streams", () => {
+    const a = makePreset().toSysex();
+    const b = makePreset("x", 101).toSysex();
+    const stream = new Uint8Array([0, 1, ...a, 0xf7, 1, 2, ...b]);
+    expect(splitSysex(stream)).toEqual([a, b]);
+    expect(userNumber(199)).toBe(299);
+  });
+});
+
+describe("params", () => {
+  it("covers the payload", () => {
+    expect(FIELD_COUNT).toBe(165);
+    expect(fieldOffset(FIELD_COUNT - 1) + 3).toBe(PRESET_DATA_LEN);
+  });
+
+  it.each([0, 1, -1, -25, 1800, -1200, (1 << 23) - 1, -(1 << 23)])("round-trips field value %i", (v) => {
+    expect(readField(writeField(BLANK, 47, v), 47)).toBe(v);
+  });
+
+  it("has contiguous blocks that fit their slots", () => {
+    let expected = 3;
+    for (const b of BLOCKS) {
+      expect(b.countField).toBe(expected);
+      expected = b.firstField + b.size;
+      for (let t = 0; t < Math.max(1, b.types.length); t++) {
+        const data = b.hasType ? writeField(BLANK, b.firstField, t) : BLANK;
+        expect(b.paramList(data).length).toBeLessThanOrEqual(b.size);
+      }
+    }
+    expect(expected).toBe(125);
+  });
+
+  it("decodes the EQ snippet saved by Vyzor", () => {
+    const snippet = [10, 0, 0, 253, 255, 255, 12, 0, 0, 10, 0, 0, 2, 0, 0, 31, 0, 0, 18, 0, 0, 251, 255, 255,
+      48, 0, 0, 26, 0, 0, 1, 0, 0];
+    const data = BLANK.slice();
+    data.set(snippet, fieldOffset(114));
+    const eq = block("eq");
+    const values = Object.fromEntries(eq.fields(data).map(([f, p]) => [p.name, readField(data, f)]));
+    expect(values.Gain1).toBe(-3);
+    expect(values.EQ).toBe(1);
+    expect(eq.enableField(data)).toBe(124);
+  });
+
+  it("follows the effect type", () => {
+    const filt = block("filter");
+    const wah = writeField(BLANK, filt.firstField, 5);
+    expect(filt.effectType(wah)?.name).toBe("Auto Wah");
+    expect(filt.fields(wah).at(-1)![1].name).toBe("AutoOn");
+    expect(filt.enableField(wah)).toBe(filt.firstField + 1);
+    expect(freq(34)).toBe("1.02 kHz");
+    expect(freq(18)).toBe("160 Hz");
+  });
+
+  it("diffs fields", () => {
+    const changed = writeField(writeField(BLANK, 3, 9), 100, -2);
+    expect(diffFields(BLANK, changed)).toEqual([[3, 0, 9], [100, 0, -2]]);
+  });
+});
+
+describe("protocol (captures from the unit)", () => {
+  it("encodes parameter messages exactly like the unit", () => {
+    const delayOff = hex("f000201f7f5522090001000000000000f7");
+    expect(paramMessage(9, 1, 0)).toEqual(delayOff);
+    expect(parseParamMessage(delayOff)).toEqual([9, 1, 0]);
+    expect(paramMessage(BLOCK_IDS.reverb, 2, 39)).toEqual(hex("f000201f7f55220b0002000000000207f7"));
+    const gate = hex("f000201f7f55220c00020f0f0f0f0e03f7");
+    expect(parseParamMessage(gate)).toEqual([BLOCK_IDS.gate, 2, -29]);
+    expect(paramMessage(BLOCK_IDS.gate, 2, -29)).toEqual(gate);
+  });
+
+  it("knows every block id", () => {
+    expect(new Set(Object.keys(BLOCK_IDS))).toEqual(new Set(BLOCKS.map((b) => b.key)));
+  });
+
+  it("builds requests and reads the identity", () => {
+    expect(presetRequest(100)).toEqual(hex("f000201f0055450100 64f7"));
+    expect(identityVersion(hex("f07e7f060200201f550000000000 0405f7"))).toBe("4.05");
+  });
+
+  it("reassembles messages delivered in pieces", () => {
+    const out: Uint8Array[] = [];
+    const parser = new MidiParser((m) => out.push(m));
+    const dump = makePreset().toSysex();
+    parser.push(dump.slice(0, 300));
+    parser.push([0xf8]);
+    parser.push(dump.slice(300));
+    parser.push([0xb0, 0x00]);
+    parser.push([0x01, 0xc0, 0x0f]);
+    expect(out.map((m) => m.length)).toEqual([1, PRESET_DUMP_LEN, 3, 2]);
+    expect(out[1]).toEqual(dump);
+  });
+});
+
+describe("bank", () => {
+  it("numbers banks and positions", () => {
+    expect(bankPosition(6)).toEqual([1, 2]);
+    expect(slotLabel(0)).toBe("00-1");
+    expect(slotLabel(199)).toBe("39-5");
+  });
+
+  it("undoes and redoes slot changes", () => {
+    const bank = new BankStore();
+    bank.setSlots(new Map([[3, makePreset("A", 103)]]), "set");
+    expect(bank.preset(3)?.name).toBe("A");
+    expect(bank.undo.isClean).toBe(false);
+    bank.undoLast();
+    expect(bank.preset(3)).toBeNull();
+    bank.redoLast();
+    expect(bank.preset(3)?.name).toBe("A");
+  });
+
+  it("exports renumbered presets", () => {
+    const bank = new BankStore();
+    bank.load([null, makePreset("B", 150)], "t");
+    const back = readSyx(bank.exportSyx());
+    expect(back.map((p) => p.number)).toEqual([101]);
+    expect(readSyx(writeSyx(back))[0].data).toEqual(back[0].data);
+  });
+});
+
+// Real Vyzor banks, when present on this machine (not shipped with the repository).
+const SAMPLES = process.env.GSYSTEM_SAMPLES ?? join(homedir(), "Documents/Psicraft/Vyzor G-System");
+function sqsFiles(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).flatMap((n) => {
+    const p = join(dir, n);
+    return statSync(p).isDirectory() ? sqsFiles(p) : n.toLowerCase().endsWith(".sqs") ? [p] : [];
+  });
+}
+const FILES = sqsFiles(SAMPLES);
+
+describe.skipIf(!FILES.length)("real .sqs banks", () => {
+  it.each(FILES)("%s rewrites byte-identically", (path) => {
+    const bytes = new Uint8Array(readFileSync(path));
+    const sqs = new SqsFile(bytes);
+    const bank = sqs.bank(USER_BANK_KIND);
+    expect(bank.slotCount).toBe(200);
+    sqs.userPresets().forEach((p, slot) => {
+      if (p && p.checksumOk && p.userSlot === slot) sqs.setUserPreset(slot, p);
+    });
+    expect(sqs.toBytes()).toEqual(bytes);
+  });
+});

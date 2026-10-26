@@ -5,3 +5,5 @@ __pycache__/
 build/
 dist/
 *.bak
+node_modules/
+dist/

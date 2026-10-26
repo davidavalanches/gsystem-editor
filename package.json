@@ -1,0 +1,25 @@
+{
+  "name": "gsystem-editor",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Éditeur libre pour TC Electronic G-System (web, Android via Capacitor)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "android": "npm run build && cap sync android"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/filesystem": "^8.1.5"
+  }
+}
