@@ -89,3 +89,20 @@ def test_bank_navigation(editor):
     ed, _model = editor
     ed.press("preset3")
     assert ed.slot == 2
+
+
+def test_up_down_change_bank_and_keep_position(app):
+    presets = [Preset(100 + i, b"P".ljust(21, b" ") + bytes(PRESET_DATA_LEN - 21)) for i in range(200)]
+    ed = PresetEditor(BankModel(Library(presets)))
+    ed.press("preset2")
+    assert ed.slot == 1
+    ed.press("up")
+    assert ed.slot == 6  # bank 01, preset 2
+    ed.press("down")
+    ed.press("down")
+    assert ed.slot == 196  # wraps to bank 39, preset 2
+
+
+def test_slot_labels():
+    from gsystem.model import slot_label
+    assert slot_label(0) == "00-1" and slot_label(6) == "01-2" and slot_label(199) == "39-5"

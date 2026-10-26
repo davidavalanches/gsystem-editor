@@ -14,9 +14,19 @@ COLUMNS = ("N°", "Nom", "État")
 COL_SLOT, COL_NAME, COL_STATUS = range(3)
 
 
+PRESETS_PER_BANK = 5
+BANK_COUNT = USER_SLOTS // PRESETS_PER_BANK
+
+
+def bank_position(slot: int) -> tuple[int, int]:
+    """User presets are grouped in banks 00-39 of 5 presets (positions 1-5)."""
+    return slot // PRESETS_PER_BANK, slot % PRESETS_PER_BANK + 1
+
+
 def slot_label(slot: int) -> str:
-    """Front-panel style number: user presets are shown 1..200."""
-    return str(slot + 1)
+    """Front-panel style location, e.g. "00-1"."""
+    bank, position = bank_position(slot)
+    return f"{bank:02d}-{position}"
 
 
 class Library:

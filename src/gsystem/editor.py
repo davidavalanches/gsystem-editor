@@ -42,6 +42,7 @@ from .params import (
     write_field,
 )
 from .frontpanel import FrontPanel
+from .model import BANK_COUNT, PRESETS_PER_BANK, bank_position
 from .sysex import NAME_LEN, USER_SLOTS, Preset, SysexError
 
 # The "Levels" table of the firmware (block 1 in parameter messages): switch indices.
@@ -422,13 +423,13 @@ class PresetEditor(QWidget):
             leds[key] = self.level_states[key]
             if live:
                 enabled.add(key)
-        bank_first = self.slot - self.slot % 5
-        for i in range(1, 6):
-            leds[f"preset{i}"] = self.slot == bank_first + i - 1
+        bank, position = bank_position(self.slot)
+        for i in range(1, PRESETS_PER_BANK + 1):
+            leds[f"preset{i}"] = position == i
         status = "Store pour garder" if self.is_dirty() else ""
         if live:
             status = ("EN DIRECT  " + status).strip()
-        self.panel.set_state(f"{self.slot + 1:03d}", preset.name if preset else "", leds, enabled,
+        self.panel.set_state(f"{bank:02d}", str(position), preset.name if preset else "", leds, enabled,
                              self.is_dirty(), status)
         self.panel.set_live(live)
 
@@ -479,12 +480,12 @@ class PresetEditor(QWidget):
                 self.level_states[key] = on
                 self._refresh_panel()
         elif key in ("up", "down"):
-            step = 5 if key == "up" else -5
-            target = self.slot + step
-            if 0 <= target < USER_SLOTS:
-                self.open_slot(target)
+            # Like the unit: change bank, keep the position within the bank.
+            bank, position = bank_position(self.slot)
+            bank = (bank + (1 if key == "up" else -1)) % BANK_COUNT
+            self.open_slot(bank * PRESETS_PER_BANK + position - 1)
         elif key.startswith("preset"):
-            target = self.slot - self.slot % 5 + int(key[-1]) - 1
+            target = self.slot - self.slot % PRESETS_PER_BANK + int(key[-1]) - 1
             if target != self.slot:
                 self.open_slot(target)
 

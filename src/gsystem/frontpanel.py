@@ -83,7 +83,8 @@ class FrontPanel(QWidget):
         # key -> True (LED on), False (off), None (unknown) ; missing = no LED
         self.leds: dict[str, bool | None] = {}
         self.enabled_keys: set[str] = set()
-        self.number = "---"
+        self.bank = "--"
+        self.position = ""
         self.name = ""
         self.status = ""
         self.edited = False
@@ -96,9 +97,9 @@ class FrontPanel(QWidget):
 
     # Public API
 
-    def set_state(self, number: str, name: str, leds: dict[str, bool | None], enabled: set[str],
+    def set_state(self, bank: str, position: str, name: str, leds: dict[str, bool | None], enabled: set[str],
                   edited: bool, status: str = "") -> None:
-        self.number, self.name, self.leds, self.enabled_keys = number, name, leds, enabled
+        self.bank, self.position, self.name, self.leds, self.enabled_keys = bank, position, name, leds, enabled
         self.edited, self.status = edited, status
         self.update()
 
@@ -393,12 +394,16 @@ class FrontPanel(QWidget):
             p.setPen(Qt.NoPen)
 
         # Red dot-matrix preset number.
-        self._paint_dots(p, self.number[-3:].rjust(3), QRectF(d.left() + d.width() * 0.19, d.top() + d.height() * 0.14,
-                                                              d.width() * 0.12, d.height() * 0.72))
+        # Bank number in large dots, position within the bank as a small subscript.
+        big = QRectF(d.left() + d.width() * 0.19, d.top() + d.height() * 0.14, d.width() * 0.08, d.height() * 0.72)
+        pitch = self._paint_dots(p, self.bank[-2:].rjust(2), big)
+        small_pitch = pitch * 0.5
+        sub = QRectF(big.left() + pitch * 12, big.top() + pitch * 7 - small_pitch * 7, small_pitch * 5, small_pitch * 7)
+        self._paint_dots(p, self.position[-1:], sub)
         if self.edited:
             p.setPen(QColor(200, 200, 200))
             p.setFont(self._font(d.height() * 0.1, bold=False))
-            p.drawText(QRectF(d.left() + d.width() * 0.29, d.top() + d.height() * 0.62, d.width() * 0.05,
+            p.drawText(QRectF(d.left() + d.width() * 0.285, d.top() + d.height() * 0.05, d.width() * 0.05,
                               d.height() * 0.2), Qt.AlignLeft, "EDITED")
 
         # Green LCD with the preset name.
@@ -439,7 +444,8 @@ class FrontPanel(QWidget):
         p.drawText(QRectF(d.left() + d.width() * 0.7, d.top() + d.height() * 0.45, d.width() * 0.27, d.height() * 0.45),
                    Qt.AlignRight | Qt.AlignVCenter, "G·SYSTEM")
 
-    def _paint_dots(self, p: QPainter, text: str, rect: QRectF) -> None:
+    def _paint_dots(self, p: QPainter, text: str, rect: QRectF) -> float:
+        """Draw text in 5x7 dots; returns the dot pitch used."""
         cols = 6 * len(text) - 1
         pitch = min(rect.width() / cols, rect.height() / 7)
         radius = pitch * 0.38
@@ -451,3 +457,4 @@ class FrontPanel(QWidget):
                     centre = QPointF(rect.left() + (ci * 6 + x + 0.5) * pitch, rect.top() + (y + 0.5) * pitch)
                     p.setBrush(QColor(255, 45, 30) if bit == "1" else QColor(45, 10, 8))
                     p.drawEllipse(centre, radius, radius)
+        return pitch
