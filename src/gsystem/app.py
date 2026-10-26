@@ -7,10 +7,11 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, Qt
-from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence
+from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence, QUndoGroup
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QButtonGroup,
     QComboBox,
     QDockWidget,
     QFileDialog,
@@ -25,12 +26,14 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QSplitter,
+    QStackedWidget,
     QTableView,
     QVBoxLayout,
     QWidget,
 )
 
 from . import __version__
+from .editor import PresetEditor
 from .midi import MidiInput
 from .model import COL_NAME, BankModel, Library, slot_label
 from .sqs import atomic_write, read_syx
@@ -53,15 +56,11 @@ class DetailPanel(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.title = QLabel()
-        title_font = self.title.font()
-        title_font.setPointSizeF(title_font.pointSizeF() * 1.6)
-        title_font.setBold(True)
-        self.title.setFont(title_font)
         self.info = QLabel()
         self.info.setWordWrap(True)
         self.hex = QPlainTextEdit(readOnly=True)
-        self.hex.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
         self.hex.setLineWrapMode(QPlainTextEdit.NoWrap)
+        self.rescale(self.title.font())
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.title)
@@ -69,6 +68,15 @@ class DetailPanel(QWidget):
         layout.addWidget(QLabel("Données brutes (516 octets, décodés) :"))
         layout.addWidget(self.hex, 1)
         self.show_preset(None, None)
+
+    def rescale(self, base: QFont) -> None:
+        title_font = QFont(base)
+        title_font.setPointSizeF(base.pointSizeF() * 1.6)
+        title_font.setBold(True)
+        self.title.setFont(title_font)
+        mono = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+        mono.setPointSizeF(base.pointSizeF())
+        self.hex.setFont(mono)
 
     def show_preset(self, slot: int | None, preset: Preset | None) -> None:
         if slot is None:
@@ -220,7 +228,38 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 1)
         self.splitter = splitter
-        self.setCentralWidget(splitter)
+
+        self.editor = PresetEditor(self.model)
+        self.editor.store_requested.connect(
+            lambda slot, preset: self.model.set_slots({slot: preset}, f"Store « {preset.name} »"))
+        self.model.dataChanged.connect(lambda top, _bottom: self.editor.reload_if_showing(top.row()))
+        self.model.modelReset.connect(lambda: self.editor.open_slot(0))
+        self.table.doubleClicked.connect(lambda index: self.show_preset(index.row()))
+
+        self.undo_group = QUndoGroup(self)
+        self.undo_group.addStack(self.model.undo_stack)
+        self.undo_group.addStack(self.editor.undo_stack)
+
+        self.pages = QStackedWidget()
+        self.pages.addWidget(splitter)
+        self.pages.addWidget(self.editor)
+        self.modes = QButtonGroup(self)
+        mode_bar = QHBoxLayout()
+        for i, label in enumerate(("Banques", "Preset", "Global")):
+            btn = QPushButton(label, checkable=True)
+            btn.setMinimumWidth(btn.fontMetrics().horizontalAdvance("M" * 8))
+            self.modes.addButton(btn, i)
+            mode_bar.addWidget(btn)
+        self.modes.button(2).setEnabled(False)
+        self.modes.button(2).setToolTip("Réglages globaux : prévu après les essais sur le G-System")
+        mode_bar.addStretch(1)
+        self.modes.idClicked.connect(self.set_mode)
+        central = QWidget()
+        central_layout = QVBoxLayout(central)
+        central_layout.addLayout(mode_bar)
+        central_layout.addWidget(self.pages, 1)
+        self.setCentralWidget(central)
+        self.set_mode(0)
 
         self.midi_panel = MidiPanel(self)
         dock = QDockWidget("MIDI", self)
@@ -260,9 +299,9 @@ class MainWindow(QMainWindow):
         file_menu.addAction(self.action("&Quitter", self.close, QKeySequence.Quit))
 
         edit = self.menuBar().addMenu("É&dition")
-        undo = self.model.undo_stack.createUndoAction(self, "Annuler")
+        undo = self.undo_group.createUndoAction(self, "Annuler")
         undo.setShortcut(QKeySequence.Undo)
-        redo = self.model.undo_stack.createRedoAction(self, "Rétablir")
+        redo = self.undo_group.createRedoAction(self, "Rétablir")
         redo.setShortcut(QKeySequence.Redo)
         edit.addAction(undo)
         edit.addAction(redo)
@@ -294,6 +333,8 @@ class MainWindow(QMainWindow):
         QApplication.setFont(font)
         for widget in self.findChildren(QWidget):
             widget.setFont(font)
+        self.editor.rescale(font)
+        self.detail.rescale(font)
         self.detail.show_preset(*self.current_slot_and_preset())
         self.table.resizeRowsToContents()
         # Room for a full 20-character name plus number and status columns.
@@ -315,6 +356,15 @@ class MainWindow(QMainWindow):
         if not index.isValid():
             return None, None
         return index.row(), self.model.preset(index.row())
+
+    def set_mode(self, mode: int) -> None:
+        self.modes.button(mode).setChecked(True)
+        self.pages.setCurrentIndex(mode)
+        self.undo_group.setActiveStack(self.editor.undo_stack if mode == 1 else self.model.undo_stack)
+
+    def show_preset(self, slot: int) -> None:
+        self.editor.open_slot(slot)
+        self.set_mode(1)
 
     def on_current_changed(self, index) -> None:
         if index.isValid():
@@ -362,7 +412,25 @@ class MainWindow(QMainWindow):
     def last_dir(self) -> str:
         return str(self.settings.value("last_dir", Path.home() / "Documents/Psicraft/Vyzor G-System"))
 
+    def resolve_pending_edit(self) -> bool:
+        """Ask what to do with an edited but unstored preset. False means cancel."""
+        if self.editor.is_dirty():
+            self.set_mode(1)
+            answer = QMessageBox.question(
+                self, "Preset non stocké",
+                f"Le preset « {self.editor.buffer.name} » a été modifié sans être stocké. Le stocker ?",
+                QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel)
+            if answer == QMessageBox.Cancel:
+                return False
+            if answer == QMessageBox.Save:
+                self.editor.store()
+            else:
+                self.editor.revert()
+        return True
+
     def maybe_discard(self) -> bool:
+        if not self.resolve_pending_edit():
+            return False
         if self.model.undo_stack.isClean():
             return True
         answer = QMessageBox.question(
@@ -394,6 +462,8 @@ class MainWindow(QMainWindow):
                                      + (f", {bad} avec une somme de contrôle invalide" if bad else ""))
 
     def save(self) -> None:
+        if not self.resolve_pending_edit():
+            return
         lib = self.model.library
         if lib.sqs is None or lib.path is None:
             self.save_as()
@@ -401,6 +471,8 @@ class MainWindow(QMainWindow):
         self.write_sqs(lib.path)
 
     def save_as(self) -> None:
+        if not self.resolve_pending_edit():
+            return
         lib = self.model.library
         if lib.sqs is None:
             self.export_syx(False)
@@ -420,6 +492,8 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Enregistré dans {path} (copie de sauvegarde .bak créée)")
 
     def export_syx(self, selection_only: bool) -> None:
+        if not self.resolve_pending_edit():
+            return
         slots = self.selected_slots() if selection_only else None
         name = (self.model.library.path.stem if self.model.library.path else "banque") + ".syx"
         path, _ = QFileDialog.getSaveFileName(self, "Exporter en SysEx", str(Path(self.last_dir()) / name),

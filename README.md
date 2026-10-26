@@ -19,7 +19,19 @@ python3 -m venv .venv
 
 Lancement : `.venv/bin/gsystem-editor [banque.sqs]`
 
-## Fonctionnalités (v0.1)
+## Fonctionnalités (v0.2)
+
+### Éditeur de preset (mode Preset)
+
+- Écran LCD virtuel avec le numéro et le nom du preset (renommage direct).
+- Switches ronds pour activer ou désactiver chaque bloc : Compresseur, Filter, Mod, Pitch, Delay, Reverb, EQ, Noise gate.
+- Vues Tout, Filter, Dyn | EQ, Mod, Pitch, Delay, Reverb, Modifiers et Niveaux, avec boutons rotatifs et valeurs exactes.
+- Vue **Brut** : les 165 champs du preset, modifiables.
+- Vue **Comparer** : les champs qui diffèrent entre deux presets (outil d'identification des paramètres).
+- Tampon d'édition comme sur le G-System : les modifications n'atteignent la banque qu'avec **Store**, avec annulation.
+- Chaque paramètre affiche son niveau d'identification : confirmé, probable ou hypothèse.
+
+### Bibliothèque (mode Banques)
 
 - Ouvre les banques Vyzor `.sqs` et les fichiers SysEx `.syx` (200 emplacements utilisateur).
 - Signale les presets dont la **somme de contrôle** est invalide, et la recalcule toujours à l'enregistrement.
@@ -37,6 +49,13 @@ En ligne de commande :
 .venv/bin/gsystem-tool info banque.sqs          # liste + vérification des sommes de contrôle
 .venv/bin/gsystem-tool export banque.sqs out.syx
 ```
+
+## Disposition des paramètres
+
+Les 516 octets de données d'un preset = nom (21 octets) + **165 champs de 3 octets**.
+Les champs 0 à 124 sont des entiers signés 24 bits little-endian ; les champs 125 à 164 sont
+des données octet par octet (assignations des switches, pédales et modifiers).
+La correspondance champ ↔ paramètre est dans `src/gsystem/params.py`, avec son niveau de confiance.
 
 ## Format d'un preset (observé)
 
