@@ -140,7 +140,13 @@ class LearnBlocksDialog(QDialog):
         known = ", ".join(f"{block(k).label} = {v}" for k, v in sorted(self.block_ids.items(), key=lambda kv: kv[1]))
         self.log.setText(f"Connus : {known}")
         if self.todo:
-            self.prompt.setText(f"Appuyez sur le switch <b>{block(self.todo[0]).label.upper()}</b>")
+            key = self.todo[0]
+            if key in ("eq", "gate"):
+                # No footswitch for these blocks on the unit.
+                self.prompt.setText(f"Sur le G-System, modifiez un réglage du bloc <b>{block(key).label.upper()}</b> "
+                                    "(mode édition), puis revenez au réglage d'origine")
+            else:
+                self.prompt.setText(f"Appuyez sur le switch <b>{block(key).label.upper()}</b>")
         else:
             self.prompt.setText("Terminé. Cliquez sur OK pour enregistrer.")
 
@@ -171,7 +177,7 @@ class MidiPanel(QWidget):
         self.reader.preset_received.connect(self.on_preset_read)
         self.read_mode: str | None = None
         self.reader.param_changed.connect(self.on_param_changed)
-        self.reader.preset_selected.connect(lambda slot: self.window.editor.follow_unit(slot))
+        self.reader.preset_selected.connect(self.on_unit_preset)
 
         self.ports = QComboBox()
         refresh = QPushButton("Actualiser")
@@ -303,6 +309,17 @@ class MidiPanel(QWidget):
         self.progress.show()
         self.reader.read_bank(slots)
 
+    def on_unit_preset(self, slot: int) -> None:
+        """A preset was recalled on the pedalboard: follow it and re-read it, so the
+        editor shows exactly what the unit plays."""
+        editor = self.window.editor
+        if not editor.live.isChecked():
+            return
+        editor.follow_unit(slot)
+        if not self.reader.busy:
+            self.read_mode = "refresh"
+            self.reader.read_bank([slot])
+
     def on_preset_read(self, preset: Preset) -> None:
         if self.read_mode == "all":
             self.window.device_preset_arrived(preset)
@@ -313,6 +330,9 @@ class MidiPanel(QWidget):
 
     def on_bank_read(self, presets: list, missing: list) -> None:
         mode, self.read_mode = self.read_mode, None
+        if mode == "refresh":
+            self._apply_refresh(presets, missing)
+            return
         self.read_button.setText("Lire toute la banque")
         self.read_selection_button.setText("Lire la sélection")
         self.read_button.setEnabled(True)
@@ -324,6 +344,16 @@ class MidiPanel(QWidget):
             if changes and self.window.confirm_overwrite(changes):
                 self.window.model.set_slots(changes, f"Lecture de {len(changes)} emplacement(s) du G-System")
         self.status.setText(f"{len(presets)} presets lus, {len(missing)} emplacement(s) vide(s).")
+
+    def _apply_refresh(self, presets: list, missing: list) -> None:
+        model = self.window.model
+        changes = {p.user_slot: p for p in presets if p.user_slot is not None}
+        changes.update({n - USER_PRESET_BASE: None for n in missing})
+        changes = {s: p for s, p in changes.items()
+                   if (model.preset(s).data if model.preset(s) else None) != (p.data if p else None)}
+        if changes:
+            model.set_slots(changes, "Relu depuis le G-System")
+            self.window.statusBar().showMessage("Preset mis à jour depuis le G-System (différent de la banque affichée).")
 
     def shutdown(self) -> None:
         if self.reader.busy:
@@ -364,6 +394,7 @@ class MainWindow(QMainWindow):
         self.splitter = splitter
 
         self.editor = PresetEditor(self.model)
+        self.editor.notice.connect(lambda text: self.statusBar().showMessage(text, 8000))
         try:
             learned = json.loads(self.settings.value("block_ids", "{}"))
         except (TypeError, ValueError):
@@ -506,7 +537,6 @@ class MainWindow(QMainWindow):
 
     def set_live_available(self, available: bool) -> None:
         self.editor.send_param = self.midi_panel.reader.send_param if available else None
-        self.editor.select_on_unit = self.midi_panel.reader.select_preset if available else None
         self.editor.live.setEnabled(available)
         if not available:
             self.editor.live.setChecked(False)

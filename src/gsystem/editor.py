@@ -281,6 +281,7 @@ class PresetEditor(QWidget):
     """Edit buffer for one preset. Changes reach the bank only through Store."""
 
     store_requested = Signal(int, object)  # slot, Preset
+    notice = Signal(str)  # short message for the status bar
     buffer_changed = Signal(object)  # Preset, for live audition once MIDI send is validated
 
     def __init__(self, bank_model, parent=None) -> None:
@@ -293,7 +294,6 @@ class PresetEditor(QWidget):
         # Live link: block key -> G-System block id, and a callable(block_id, param, value).
         self.block_ids: dict[str, int] = {}
         self.send_param = None
-        self.select_on_unit = None  # callable(slot): recall that preset on the unit
         self._from_unit = False
 
         # Level switches (loops, insert, boost) are live-only: their place in the
@@ -419,14 +419,35 @@ class PresetEditor(QWidget):
         self.undo_stack.clear()
         self._set_buffer(self.stored, send=False)
         self._show_number(slot)
-        if changed and not self._from_unit and self.live.isChecked() and self.select_on_unit is not None:
-            self.select_on_unit(slot)
+        if changed and not self._from_unit:
+            self.push_to_unit()
 
     def _live_toggled(self, on: bool) -> None:
-        # Entering Live mode recalls the edited preset on the unit so both match.
-        if on and self.select_on_unit is not None:
-            self.select_on_unit(self.slot)
+        # Entering Live mode loads the edited preset into the unit so both match.
+        if on:
+            self.push_to_unit()
         self._refresh_panel()
+
+    def push_to_unit(self) -> None:
+        """Audition the edited preset: write all its parameters into the unit's edit buffer.
+
+        Nothing is stored on the unit. Blocks whose id has not been learned are skipped.
+        """
+        if self.buffer is None or self.send_param is None or not self.live.isChecked():
+            return
+        skipped = []
+        for blk in BLOCKS:
+            block_id = self.block_ids.get(blk.key)
+            if block_id is None:
+                skipped.append(blk.label)
+                continue
+            # The type comes first: it selects which parameters the others are.
+            for index, _param in blk.fields(self.buffer.data):
+                self.send_param(block_id, index - blk.first_field, read_field(self.buffer.data, index))
+        message = f"« {self.buffer.name} » chargé dans la mémoire de travail du G-System"
+        if skipped:
+            message += f" (blocs non appris, non envoyés : {', '.join(skipped)})"
+        self.notice.emit(message)
 
     def follow_unit(self, slot: int) -> None:
         """A preset was recalled on the G-System: show it, without sending it back."""

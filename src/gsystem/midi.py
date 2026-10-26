@@ -7,6 +7,9 @@ Messages used, all observed on the hardware:
 - ``55 22 <block> <param:2> <value:6 nibbles>``: set one parameter of the edit
   buffer. The unit sends the same message when a switch or knob is used.
   Writing needs SysEx ID 7F; nothing is stored until Store is pressed.
+- Bank Select + Program Change: sent by the unit when a preset is recalled.
+  Over USB the unit ignores incoming Program Changes, so the editor auditions
+  a preset by writing its parameters into the edit buffer instead.
 """
 
 from __future__ import annotations
@@ -32,12 +35,7 @@ REQUEST_TIMEOUT_MS = 1100
 
 
 USER_BANK_SIZE = 100  # Bank Select (CC 0) 1 = user presets 1-100, 2 = 101-200
-
-
-def select_messages(slot: int, channel: int = 0) -> list[bytes]:
-    """Bank Select + Program Change recalling a user preset, as documented in the manual."""
-    bank, program = 1 + slot // USER_BANK_SIZE, slot % USER_BANK_SIZE
-    return [bytes((0xB0 | channel, 0x00, bank)), bytes((0xC0 | channel, program))]
+SEND_INTERVAL_MS = 2  # pacing for bursts of parameter messages
 
 
 def param_message(block_id: int, param: int, value: int) -> bytes:
@@ -134,6 +132,9 @@ class GSystemReader(QObject):
         # MIDI channel the unit uses; learned from its own messages.
         self.channel = 0
         self._bank: int | None = None
+        self._send_queue: deque[bytes] = deque()
+        self._send_timer = QTimer(self, interval=SEND_INTERVAL_MS)
+        self._send_timer.timeout.connect(self._drain)
         self._timer = QTimer(self, singleShot=True)
         self._timer.timeout.connect(self._timed_out)
         midi_in.message.connect(self._on_message)
@@ -150,19 +151,26 @@ class GSystemReader(QObject):
         self._out = out
 
     def close_output(self) -> None:
+        self._send_queue.clear()
+        self._send_timer.stop()
         if self._out is not None:
             self._out.close_port()
             self._out.delete()
         self._out = None
 
-    def select_preset(self, slot: int) -> None:
-        if self._out is not None:
-            for msg in select_messages(slot, self.channel):
-                self._out.send_message(list(msg))
-
     def send_param(self, block_id: int, param: int, value: int) -> None:
-        if self._out is not None:
-            self._out.send_message(list(param_message(block_id, param, value)))
+        """Queue a parameter change; bursts (a whole preset) are paced."""
+        if self._out is None:
+            return
+        self._send_queue.append(param_message(block_id, param, value))
+        if not self._send_timer.isActive():
+            self._send_timer.start()
+
+    def _drain(self) -> None:
+        if not self._send_queue or self._out is None:
+            self._send_timer.stop()
+            return
+        self._out.send_message(list(self._send_queue.popleft()))
 
     def identify(self) -> None:
         self._out.send_message(list(DEVICE_INQUIRY))

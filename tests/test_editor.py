@@ -59,6 +59,7 @@ def test_live_mode_sends_and_mirrors(editor):
     ed.send_param = lambda *a: sent.append(a)
     ed.live.setEnabled(True)
     ed.live.setChecked(True)
+    sent.clear()  # entering Live loaded the preset into the unit
     delay = block("delay")
     ed.set_field(delay.first_field + 1, 1, "delay on")
     assert sent == [(9, 1, 1)]
@@ -108,25 +109,24 @@ def test_slot_labels():
     assert slot_label(0) == "00-1" and slot_label(6) == "01-2" and slot_label(199) == "39-5"
 
 
-def test_live_preset_selection_follows_both_ways(app):
+def test_preset_change_in_live_mode_pushes_to_edit_buffer(app):
     presets = [Preset(100 + i, b"P".ljust(21, b" ") + bytes(PRESET_DATA_LEN - 21)) for i in range(200)]
     ed = PresetEditor(BankModel(Library(presets)))
-    recalled = []
-    ed.select_on_unit = recalled.append
-    ed.send_param = lambda *a: None
+    sent, notices = [], []
+    ed.send_param = lambda *a: sent.append(a)
+    ed.notice.connect(notices.append)
+    ed.block_ids = {"delay": 9}
     ed.press("up")
-    assert recalled == []  # not live: the unit is left alone
+    assert sent == []  # not live: the unit is left alone
     ed.live.setEnabled(True)
-    ed.live.setChecked(True)
-    assert recalled == [5]  # entering Live recalls the edited preset
+    ed.live.setChecked(True)  # entering Live loads the preset
+    delay = block("delay")
+    assert sent[0] == (9, 0, 0)  # effect type first
+    assert len(sent) == len(delay.fields(ed.buffer.data))
+    assert "non appris" in notices[-1]
+    sent.clear()
     ed.press("preset3")
-    ed.press("up")
-    assert recalled == [5, 7, 12]
-    ed.follow_unit(150)  # preset recalled on the unit
-    assert ed.slot == 150 and recalled == [5, 7, 12]
-
-
-def test_select_messages_match_manual():
-    from gsystem.midi import select_messages
-    assert select_messages(0) == [bytes((0xB0, 0, 1)), bytes((0xC0, 0))]
-    assert select_messages(199, channel=2) == [bytes((0xB2, 0, 2)), bytes((0xC2, 99))]
+    assert {s[0] for s in sent} == {9}
+    sent.clear()
+    ed.follow_unit(150)  # recalled on the unit: nothing sent back
+    assert ed.slot == 150 and sent == []
