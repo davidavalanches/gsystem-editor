@@ -36,7 +36,7 @@ from . import __version__
 from .editor import PresetEditor
 from .params import BLOCKS, SWITCH_BLOCKS, block, read_field
 from .midi import GSystemReader, MidiInput, is_gsystem_identity
-from .model import COL_NAME, BankModel, Library, slot_label
+from .model import BankModel, Library, slot_label
 from .sqs import read_syx
 from .sysex import USER_PRESET_BASE, USER_SLOTS, Preset, SysexError
 
@@ -342,16 +342,15 @@ class MainWindow(QMainWindow):
 
         self.table = QTableView()
         self.table.setModel(self.model)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectItems)
         self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.table.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed)
-        self.table.verticalHeader().hide()
+        # Double-click opens the preset; F2 renames it.
+        self.table.setEditTriggers(QAbstractItemView.EditKeyPressed)
         self.table.setAlternatingRowColors(True)
         self.table.setWordWrap(False)
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(COL_NAME, QHeaderView.Stretch)
-        self.table.selectionModel().currentRowChanged.connect(self.on_current_changed)
+        header.setSectionResizeMode(QHeaderView.Stretch)
+        self.table.selectionModel().currentChanged.connect(self.on_current_changed)
         self.model.dataChanged.connect(lambda *_: self.on_current_changed(self.table.currentIndex()))
 
         self.detail = DetailPanel()
@@ -359,8 +358,9 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self.table)
         splitter.addWidget(self.detail)
         splitter.setChildrenCollapsible(False)
-        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 1)
+        splitter.setSizes([3000, 1000])
         self.splitter = splitter
 
         self.editor = PresetEditor(self.model)
@@ -371,9 +371,10 @@ class MainWindow(QMainWindow):
         self.editor.block_ids = {**KNOWN_BLOCK_IDS, **learned}
         self.editor.store_requested.connect(
             lambda slot, preset: self.model.set_slots({slot: preset}, f"Store « {preset.name} »"))
-        self.model.dataChanged.connect(lambda top, _bottom: self.editor.reload_if_showing(top.row()))
+        self.model.dataChanged.connect(
+            lambda top, _bottom: self.editor.reload_if_showing(self.model.slot_of(top)))
         self.model.modelReset.connect(lambda: self.editor.open_slot(0))
-        self.table.doubleClicked.connect(lambda index: self.show_preset(index.row()))
+        self.table.doubleClicked.connect(lambda index: self.show_preset(self.model.slot_of(index)))
 
         self.undo_group = QUndoGroup(self)
         self.undo_group.addStack(self.model.undo_stack)
@@ -482,8 +483,8 @@ class MainWindow(QMainWindow):
         self.detail.rescale(font)
         self.detail.show_preset(*self.current_slot_and_preset())
         self.table.resizeRowsToContents()
-        # Room for a full 20-character name plus number and status columns.
-        self.table.setMinimumWidth(self.table.fontMetrics().horizontalAdvance("M" * 34))
+        # Room for five names of about 16 characters each.
+        self.table.setMinimumWidth(self.table.fontMetrics().horizontalAdvance("x" * 16) * 5)
         self.settings.setValue("zoom", factor)
 
     def step_zoom(self, direction: int) -> None:
@@ -494,13 +495,14 @@ class MainWindow(QMainWindow):
     # Selection
 
     def selected_slots(self) -> list[int]:
-        return sorted({index.row() for index in self.table.selectionModel().selectedRows()})
+        return sorted({self.model.slot_of(index) for index in self.table.selectionModel().selectedIndexes()})
 
     def current_slot_and_preset(self) -> tuple[int | None, Preset | None]:
         index = self.table.currentIndex()
         if not index.isValid():
             return None, None
-        return index.row(), self.model.preset(index.row())
+        slot = self.model.slot_of(index)
+        return slot, self.model.preset(slot)
 
     def set_live_available(self, available: bool) -> None:
         self.editor.send_param = self.midi_panel.reader.send_param if available else None
@@ -524,7 +526,8 @@ class MainWindow(QMainWindow):
 
     def on_current_changed(self, index) -> None:
         if index.isValid():
-            self.detail.show_preset(index.row(), self.model.preset(index.row()))
+            slot = self.model.slot_of(index)
+            self.detail.show_preset(slot, self.model.preset(slot))
 
     # Editing
 
@@ -548,7 +551,7 @@ class MainWindow(QMainWindow):
         index = self.table.currentIndex()
         if not self.clipboard or not index.isValid():
             return
-        start = index.row()
+        start = self.model.slot_of(index)
         changes = {start + i: p for i, p in enumerate(self.clipboard) if start + i < USER_SLOTS}
         if self.confirm_overwrite(changes):
             self.model.set_slots(changes, f"Coller {len(changes)} preset(s)")
@@ -561,7 +564,7 @@ class MainWindow(QMainWindow):
     def rename_current(self) -> None:
         index = self.table.currentIndex()
         if index.isValid():
-            self.table.edit(self.model.index(index.row(), COL_NAME))
+            self.table.edit(index)
 
     # Files
 
@@ -610,7 +613,7 @@ class MainWindow(QMainWindow):
         self.settings.setValue("last_dir", str(path.parent))
         self.model.set_library(library)
         self.table.resizeRowsToContents()
-        self.table.selectRow(0)
+        self.table.setCurrentIndex(self.model.slot_index(0))
         self.update_title()
         bad = sum(1 for p in library.presets if p is not None and not p.checksum_ok)
         used = sum(p is not None for p in library.presets)

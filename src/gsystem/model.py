@@ -10,10 +10,6 @@ from PySide6.QtGui import QBrush, QColor, QUndoCommand, QUndoStack
 from .sqs import SqsFile, read_syx, write_syx
 from .sysex import USER_SLOTS, Preset, SysexError, user_number
 
-COLUMNS = ("N°", "Nom", "État")
-COL_SLOT, COL_NAME, COL_STATUS = range(3)
-
-
 PRESETS_PER_BANK = 5
 BANK_COUNT = USER_SLOTS // PRESETS_PER_BANK
 
@@ -90,6 +86,8 @@ class SetSlotsCommand(QUndoCommand):
 
 
 class BankModel(QAbstractTableModel):
+    """Bank grid: one row per bank (00-39), one column per preset position (1-5)."""
+
     def __init__(self, library: Library, parent=None) -> None:
         super().__init__(parent)
         self.library = library
@@ -108,54 +106,62 @@ class BankModel(QAbstractTableModel):
         if changes:
             self.undo_stack.push(SetSlotsCommand(self, changes, text))
 
+    @staticmethod
+    def slot_of(index) -> int:
+        return index.row() * PRESETS_PER_BANK + index.column()
+
+    def slot_index(self, slot: int):
+        return self.index(slot // PRESETS_PER_BANK, slot % PRESETS_PER_BANK)
+
     def slot_changed(self, slot: int) -> None:
-        self.dataChanged.emit(self.index(slot, 0), self.index(slot, len(COLUMNS) - 1))
+        index = self.slot_index(slot)
+        self.dataChanged.emit(index, index)
 
     # Qt model API
 
     def rowCount(self, parent=QModelIndex()) -> int:
-        return 0 if parent.isValid() else USER_SLOTS
+        return 0 if parent.isValid() else BANK_COUNT
 
     def columnCount(self, parent=QModelIndex()) -> int:
-        return 0 if parent.isValid() else len(COLUMNS)
+        return 0 if parent.isValid() else PRESETS_PER_BANK
 
     def headerData(self, section, orientation, role=Qt.DisplayRole):
-        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
-            return COLUMNS[section]
-        return None
+        if role != Qt.DisplayRole:
+            return None
+        return f"Preset {section + 1}" if orientation == Qt.Horizontal else f"{section:02d}"
 
     def flags(self, index):
         base = Qt.ItemIsEnabled | Qt.ItemIsSelectable
-        if index.column() == COL_NAME and self.preset(index.row()) is not None:
+        if self.preset(self.slot_of(index)) is not None:
             base |= Qt.ItemIsEditable
         return base
 
     def data(self, index, role=Qt.DisplayRole):
-        slot, col = index.row(), index.column()
+        slot = self.slot_of(index)
         preset = self.preset(slot)
-        if role in (Qt.DisplayRole, Qt.EditRole):
-            if col == COL_SLOT:
-                return slot_label(slot)
+        if role == Qt.DisplayRole:
             if preset is None:
-                return "— vide —" if col == COL_NAME else ""
-            if col == COL_NAME:
-                return preset.name
-            if col == COL_STATUS:
-                return "" if preset.checksum_ok else "⚠ somme"
+                return "— vide —"
+            return preset.name or "(sans nom)"
+        if role == Qt.EditRole:
+            return preset.name if preset else ""
         if role == Qt.ForegroundRole:
-            if preset is None:
+            if preset is None or not preset.name:
                 return QBrush(QColor(128, 128, 128))
-            if col == COL_STATUS and not preset.checksum_ok:
+            if not preset.checksum_ok:
                 return QBrush(QColor(220, 120, 0))
-        if role == Qt.ToolTipRole and col == COL_STATUS and preset is not None and not preset.checksum_ok:
-            return ("La somme de contrôle stockée ne correspond pas aux données.\n"
-                    "Le preset a pu être modifié sans être recalculé, ou être corrompu.\n"
-                    "Elle sera recalculée à l'enregistrement.")
+        if role == Qt.ToolTipRole:
+            tip = slot_label(slot)
+            if preset is not None and not preset.checksum_ok:
+                tip += ("\nLa somme de contrôle stockée ne correspond pas aux données : "
+                        "elle sera recalculée à l'enregistrement.")
+            return tip
         return None
 
     def setData(self, index, value, role=Qt.EditRole):
-        preset = self.preset(index.row())
-        if role != Qt.EditRole or index.column() != COL_NAME or preset is None:
+        slot = self.slot_of(index)
+        preset = self.preset(slot)
+        if role != Qt.EditRole or preset is None:
             return False
         name = str(value).strip()
         if name == preset.name:
@@ -164,5 +170,5 @@ class BankModel(QAbstractTableModel):
             renamed = preset.with_name(name)
         except SysexError:
             return False
-        self.set_slots({index.row(): renamed}, f"Renommer « {preset.name} » en « {renamed.name} »")
+        self.set_slots({slot: renamed}, f"Renommer « {preset.name} » en « {renamed.name} »")
         return True
