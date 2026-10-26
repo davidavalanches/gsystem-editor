@@ -67,7 +67,11 @@ export class App {
       this.scheduleSave();
     };
     this.bank.undo.onChange = () => this.banks.refresh();
-    this.preset.onStore = (slot, p) => this.bank.setSlots(new Map([[slot, p]]), `Store « ${p.name} »`);
+    this.preset.onStore = (slot, p) => {
+      this.bank.setSlots(new Map([[slot, p]]), `Store « ${p.name} »`);
+      // Writing presets into the unit is not validated yet: say where it went.
+      this.notify(`« ${p.name} » enregistré dans la banque de l'éditeur (pas encore dans le G-System)`);
+    };
     this.preset.onNotice = (text) => this.notify(text);
     this.preset.onSlotChange = (slot) => {
       this.banks.current = slot;

@@ -4,6 +4,7 @@ import { bankPosition, slotLabel, type BankStore } from "../core/bank";
 import { BLOCKS, block, diffFields, owner, readField, writeField, type Block, type Param } from "../core/params";
 import { BLOCK_IDS, LEVELS_BLOCK_ID, LEVEL_SWITCHES } from "../core/protocol";
 import { NAME_LEN, Preset, SysexError, USER_SLOTS } from "../core/sysex";
+import { askText } from "./dialog";
 import { el } from "./dom";
 import { ICONS, iconButton } from "./widgets";
 
@@ -72,7 +73,7 @@ export class PresetView {
     this.resetLevels();
     this.nameButton.type = "button";
     this.nameButton.title = "Renommer le preset";
-    this.nameButton.addEventListener("click", () => this.rename());
+    this.nameButton.addEventListener("click", () => void this.rename());
     this.liveButton.type = "button";
     this.liveButton.innerHTML = '<span class="live-dot"></span>Live';
     this.liveButton.title = "Envoyer chaque modification au G-System (mémoire de travail, sans Store) "
@@ -80,7 +81,8 @@ export class PresetView {
     this.liveButton.disabled = true;
     this.liveButton.addEventListener("click", () => this.setLive(!this.live));
     this.storeButton.type = "button";
-    this.storeButton.title = "Enregistrer le preset dans son emplacement de la banque";
+    this.storeButton.title = "Enregistrer le preset dans la banque de l'éditeur (l'écriture dans le G-System "
+      + "n'est pas encore disponible)";
     this.storeButton.addEventListener("click", () => this.store());
 
     const header = el("header", "header preset-header");
@@ -255,10 +257,10 @@ export class PresetView {
     this.setBuffer(this.stored);
   }
 
-  private rename(): void {
+  private async rename(): Promise<void> {
     if (!this.buffer) return;
-    const name = prompt(`Nom du preset (${NAME_LEN} caractères max.)`, this.buffer.name)?.trim();
-    if (!name || name === this.buffer.name) return;
+    const name = (await askText(`Nom du preset (${NAME_LEN} caractères max.)`, this.buffer.name, NAME_LEN))?.trim();
+    if (!name || !this.buffer || name === this.buffer.name) return;
     try {
       this.pushBuffer(this.buffer.withName(name.slice(0, NAME_LEN)));
     } catch (e) {

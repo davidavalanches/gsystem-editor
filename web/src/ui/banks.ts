@@ -3,6 +3,7 @@
 import { BANK_COUNT, PRESETS_PER_BANK, slotLabel, type BankStore } from "../core/bank";
 import { block, readField } from "../core/params";
 import { NAME_LEN, type Preset } from "../core/sysex";
+import { askText } from "./dialog";
 import { el } from "./dom";
 import { ICONS, iconButton, onLongPress, showMenu, type MenuItem } from "./widgets";
 
@@ -37,7 +38,7 @@ export class BanksView {
     titles.append(this.title, this.sub);
     const more = iconButton(ICONS.more, "Plus d'actions : ouvrir, exporter, annuler", () => showMenu(more, actions.menu()));
     const header = el("header", "header");
-    header.append(titles, iconButton(ICONS.search, "Rechercher un preset", () => this.search()), this.readButton, more);
+    header.append(titles, iconButton(ICONS.search, "Rechercher un preset", () => void this.search()), this.readButton, more);
 
     this.list.setAttribute("role", "listbox");
     this.list.setAttribute("aria-label", "Banques");
@@ -135,17 +136,17 @@ export class BanksView {
     const p = this.bank.preset(slot);
     return [
       { label: "Ouvrir", action: () => this.actions.open(slot), disabled: !p },
-      { label: "Renommer…", action: () => this.rename(slot), disabled: !p },
+      { label: "Renommer…", action: () => void this.rename(slot), disabled: !p },
       { label: "Copier", action: () => (this.clipboard = p), disabled: !p },
       { label: "Coller ici", action: () => this.paste(slot), disabled: !this.clipboard },
       { label: "Vider l'emplacement", action: () => this.clear(slot), disabled: !p },
     ];
   }
 
-  private rename(slot: number): void {
+  private async rename(slot: number): Promise<void> {
     const p = this.bank.preset(slot);
     if (!p) return;
-    const name = prompt(`Nom du preset (${NAME_LEN} caractères max.)`, p.name)?.trim();
+    const name = (await askText(`Nom du preset (${NAME_LEN} caractères max.)`, p.name, NAME_LEN))?.trim();
     if (!name || name === p.name) return;
     try {
       this.bank.setSlots(new Map([[slot, p.withName(name.slice(0, NAME_LEN))]]), `Renommer « ${p.name} »`);
@@ -167,8 +168,8 @@ export class BanksView {
     }
   }
 
-  private search(): void {
-    const text = prompt("Rechercher un preset (nom)")?.trim().toLowerCase();
+  private async search(): Promise<void> {
+    const text = (await askText("Rechercher un preset (nom)", "", 40))?.trim().toLowerCase();
     if (!text) return;
     const start = this.bankIndex * PRESETS_PER_BANK;
     for (let i = 1; i <= this.bank.presets.length; i++) {

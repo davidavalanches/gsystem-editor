@@ -401,3 +401,19 @@ button:disabled { opacity: 0.4; cursor: default; }
   transition: opacity 200ms;
 }
 .toast.hidden { opacity: 0; pointer-events: none; }
+
+/* In-app dialog (the WebView prompt ignores default values). */
+.dialog-layer { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: rgba(0, 0, 0, 0.55); }
+.dialog { width: min(440px, 90vw); padding: 16px 18px; border-radius: 14px; background: var(--surface-3); border: 1px solid var(--line-2); }
+.dialog-title { display: flex; flex-direction: column; gap: 10px; font-size: 13px; color: var(--muted); }
+.dialog-input {
+  height: 44px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line-3);
+  background: var(--bg);
+  color: var(--lcd);
+  font: 500 16px var(--mono);
+}
+.dialog-input:focus { outline: 2px solid var(--amber); outline-offset: 0; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
