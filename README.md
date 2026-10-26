@@ -39,16 +39,19 @@ Pour le développement : `npm run dev`, puis ouvrir l'URL affichée dans Chrome.
 
 ## Fonctionnalités
 
-- **Banques** : grille 40 banques × 5 presets, résumé des effets, renommer, copier/coller, vider,
-  annulation (Ctrl+Z / boutons ↶ ↷).
+- **Banques** : liste des 40 banques, les 5 presets de la banque avec le voyant de chacun des 8 effets,
+  recherche par nom, appui long sur un preset pour renommer / copier / coller / vider, annulation (menu ⋮, Ctrl+Z).
+- **Interface** : thème sombre en paysage, conçue pour un téléphone 5" (740×360 dp), polices IBM Plex et Doto
+  embarquées (OFL).
 - **Fichiers** : ouverture des banques Vyzor `.sqs` et des `.syx` ; export `.syx` (téléchargement
   sur ordinateur, `Documents/G-System/` sur Android). La banque en cours est conservée d'une
   session à l'autre.
 - **Lecture du G-System** : toute la banque (~2 min 30, la liste se remplit au fur et à mesure)
   ou seulement la sélection (0,8 s par preset).
-- **Preset** : face avant du G-System (switches avec anneau néon, afficheur banque/position,
-  LCD), vues Tout / Filter / Dyn | EQ / Mod / Pitch / Delay / Reverb avec boutons rotatifs en métal
-  brossé et interrupteurs On/Off, tampon d'édition avec Store / Revenir.
+- **Preset** : en-tête (preset précédent/suivant, numéro banque/position en points, nom, Live, Store),
+  8 tuiles d'effets avec voyant et type, rangée Loop 1–4 / Insert / Boost (en Live), paramètres du bloc
+  en curseurs sur deux colonnes, panneau de réglage fin (valeur, curseur, − / + maintenus, choix pour
+  les listes), tampon d'édition avec Store.
 - **Live** : chaque modification part dans la mémoire de travail du G-System (rien n'est stocké),
   les switches du pédalier sont reflétés dans l'éditeur, et changer de preset au pied fait suivre
   l'éditeur (avec relecture du preset).

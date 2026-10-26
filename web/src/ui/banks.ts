@@ -1,112 +1,145 @@
-/** Bank grid: one row per bank (00-39), one column per preset position (1-5). */
+/** Banks view: the 40 banks on the left, the 5 presets of the chosen bank on the right. */
 
 import { BANK_COUNT, PRESETS_PER_BANK, slotLabel, type BankStore } from "../core/bank";
-import { BLOCKS, readField } from "../core/params";
+import { block, readField } from "../core/params";
 import { NAME_LEN, type Preset } from "../core/sysex";
 import { el } from "./dom";
+import { ICONS, iconButton, onLongPress, showMenu, type MenuItem } from "./widgets";
+
+/** LED order: the unit's effect sections, as on the Preset view. */
+const LED_BLOCKS = ["filter", "comp", "mod", "pitch", "delay", "reverb", "eq", "gate"];
+
+export interface BanksActions {
+  open(slot: number): void;
+  menu(): MenuItem[];
+  readUnit(): void;
+}
 
 export class BanksView {
-  readonly el = el("div", "banks");
-  private readonly table = el("table", "bank-grid");
-  private readonly summary = el("div", "summary");
-  private readonly cells: HTMLTableCellElement[] = [];
-  selected = new Set<number>([0]);
+  readonly el = el("section", "view");
+  bankIndex = 0;
+  /** The preset shown in the Preset view, highlighted here. */
   current = 0;
-  private clipboard: (Preset | null)[] = [];
-  onOpen: ((slot: number) => void) | null = null;
+  private clipboard: Preset | null = null;
+  private readonly title = el("div", "header-title");
+  private readonly sub = el("div");
+  private readonly readButton = el("button", "pill primary", "Lire le G-System");
+  private readonly list = el("div", "bank-list");
+  private readonly slots = el("div", "slots");
+  private bankButtons: HTMLButtonElement[] = [];
+  private reading: [number, number] | null = null;
 
-  constructor(private bank: BankStore) {
-    const head = el("tr");
-    head.append(el("th"));
-    for (let p = 1; p <= PRESETS_PER_BANK; p++) head.append(el("th", "", `Preset ${p}`));
-    const thead = el("thead");
-    thead.append(head);
-    const tbody = el("tbody");
+  constructor(private bank: BankStore, private actions: BanksActions) {
+    this.readButton.type = "button";
+    this.readButton.disabled = true;
+    this.readButton.addEventListener("click", () => actions.readUnit());
+    const titles = el("div", "grow");
+    titles.append(this.title, this.sub);
+    const more = iconButton(ICONS.more, "Plus d'actions : ouvrir, exporter, annuler", () => showMenu(more, actions.menu()));
+    const header = el("header", "header");
+    header.append(titles, iconButton(ICONS.search, "Rechercher un preset", () => this.search()), this.readButton, more);
+
+    this.list.setAttribute("role", "listbox");
+    this.list.setAttribute("aria-label", "Banques");
     for (let b = 0; b < BANK_COUNT; b++) {
-      const row = el("tr");
-      row.append(el("th", "", String(b).padStart(2, "0")));
-      for (let p = 0; p < PRESETS_PER_BANK; p++) {
-        const slot = b * PRESETS_PER_BANK + p;
-        const td = el("td");
-        td.addEventListener("click", (e) => this.select(slot, e.shiftKey, e.ctrlKey || e.metaKey));
-        td.addEventListener("dblclick", () => this.onOpen?.(slot));
-        this.cells.push(td);
-        row.append(td);
-      }
-      tbody.append(row);
+      const button = el("button");
+      button.type = "button";
+      button.setAttribute("role", "option");
+      button.addEventListener("click", () => this.showBank(b));
+      this.bankButtons.push(button);
+      this.list.append(button);
     }
-    this.table.append(thead, tbody);
-    const scroller = el("div", "grid-scroller");
-    scroller.append(this.table);
-    this.el.append(scroller, this.summary);
-    this.refresh(null);
+    const body = el("div", "banks-body");
+    body.append(this.list, this.slots);
+    this.el.append(header, body);
+    this.refresh();
   }
 
-  /** Redraw the given slots (all when null). */
-  refresh(slots: number[] | null): void {
-    for (const slot of slots ?? this.cells.keys()) {
-      const td = this.cells[slot];
-      const p = this.bank.preset(slot);
-      td.textContent = p ? p.name || "(sans nom)" : "— vide —";
-      td.className = [!p || !p.name ? "empty" : "", p && !p.checksumOk ? "warn" : "",
-        this.selected.has(slot) ? "selected" : "", slot === this.current ? "current" : ""].join(" ").trim();
-      td.title = slotLabel(slot) + (p && !p.checksumOk
-        ? "\nSomme de contrôle invalide dans le fichier : elle sera corrigée à l'enregistrement." : "");
-    }
-    this.renderSummary();
+  setConnected(connected: boolean): void {
+    this.readButton.disabled = !connected;
   }
 
-  select(slot: number, extend = false, toggle = false): void {
-    const before = [...this.selected, this.current];
-    if (extend) {
-      const [a, b] = [Math.min(this.current, slot), Math.max(this.current, slot)];
-      for (let s = a; s <= b; s++) this.selected.add(s);
-    } else if (toggle) {
-      if (this.selected.has(slot)) this.selected.delete(slot);
-      else this.selected.add(slot);
+  /** Reading progress, or null when no read is running. */
+  setReading(progress: [number, number] | null): void {
+    this.reading = progress;
+    this.readButton.textContent = progress ? "Annuler" : "Lire le G-System";
+    this.readButton.className = progress ? "pill warn" : "pill primary";
+    this.renderHeader();
+  }
+
+  showBank(index: number, focus = false): void {
+    this.bankIndex = index;
+    this.refresh();
+    if (focus) this.bankButtons[index].scrollIntoView({ block: "nearest" });
+  }
+
+  refresh(): void {
+    this.renderHeader();
+    this.bankButtons.forEach((button, b) => {
+      const selected = b === this.bankIndex;
+      button.setAttribute("aria-selected", String(selected));
+      const used = [...Array(PRESETS_PER_BANK).keys()].map((i) => !!this.bank.preset(b * PRESETS_PER_BANK + i));
+      const num = el("span", used.some(Boolean) ? "bank-num used" : "bank-num", String(b).padStart(2, "0"));
+      const dots = el("span", "fill-dots");
+      for (const u of used) dots.append(el("span", u ? "used" : ""));
+      button.replaceChildren(num, dots);
+      button.setAttribute("aria-label", `Banque ${String(b).padStart(2, "0")}, ${used.filter(Boolean).length} presets`);
+    });
+    this.slots.replaceChildren(...[...Array(PRESETS_PER_BANK).keys()].map((i) => this.slotRow(this.bankIndex * PRESETS_PER_BANK + i)));
+  }
+
+  private renderHeader(): void {
+    this.title.textContent = this.bank.title + (this.bank.undo.isClean ? "" : " *");
+    if (this.reading) {
+      const [done, total] = this.reading;
+      this.sub.className = "reading";
+      const bar = el("span", "progress");
+      const fill = el("span");
+      fill.style.width = `${(done / Math.max(1, total)) * 100}%`;
+      bar.append(fill);
+      this.sub.replaceChildren(el("b", "", `Lecture ${done}/${total}`), bar);
     } else {
-      this.selected = new Set([slot]);
+      const used = this.bank.presets.filter(Boolean).length;
+      const bad = this.bank.presets.filter((p) => p && !p.checksumOk).length;
+      this.sub.className = "header-sub";
+      this.sub.textContent = `${used} presets sur 200 · `
+        + (bad ? `${bad} somme(s) de contrôle à corriger` : "sommes de contrôle valides");
     }
-    this.current = slot;
-    this.refresh([...new Set([...before, ...this.selected, slot])]);
   }
 
-  get selectedSlots(): number[] {
-    return [...this.selected].sort((a, b) => a - b);
-  }
-
-  private renderSummary(): void {
-    const slot = this.current;
+  private slotRow(slot: number): HTMLElement {
     const p = this.bank.preset(slot);
-    const actions = el("div", "summary-actions");
-    const button = (label: string, action: () => void, disabled = false) => {
-      const b = el("button", "", label);
-      b.disabled = disabled;
-      b.addEventListener("click", action);
-      actions.append(b);
-    };
-    button("Ouvrir", () => this.onOpen?.(slot), !p);
-    button("Renommer", () => this.rename(slot), !p);
-    button("Copier", () => (this.clipboard = this.selectedSlots.map((s) => this.bank.preset(s))));
-    button("Coller", () => this.paste(), !this.clipboard.length);
-    button("Vider", () => this.clear());
-    this.summary.replaceChildren(el("h2", "", `${slotLabel(slot)} — ${p ? p.name || "(sans nom)" : "vide"}`));
+    const classes = ["slot", p ? "" : "empty", slot === this.current ? "current" : "", p && !p.checksumOk ? "warn" : ""];
+    const row = el("button", classes.filter(Boolean).join(" "));
+    row.type = "button";
+    row.setAttribute("aria-label", `${slotLabel(slot)} ${p ? p.name : "vide"}`);
+    const leds = el("span", "leds");
     if (p) {
-      const table = el("table", "effects");
-      for (const blk of BLOCKS) {
-        const kind = blk.effectType(p.data);
+      for (const key of LED_BLOCKS) {
+        const blk = block(key);
         const field = blk.enableField(p.data);
         const on = field !== null && readField(p.data, field) === 1;
-        const row = el("tr");
-        row.append(el("td", "", blk.label), el("td", "", kind?.name ?? ""), el("td", on ? "on" : "off", on ? "On" : "Off"));
-        table.append(row);
-      }
-      this.summary.append(table);
-      if (!p.checksumOk) {
-        this.summary.append(el("p", "warn", "⚠ Somme de contrôle invalide dans le fichier : elle sera corrigée à l'enregistrement."));
+        const led = el("span", on ? "led on" : "led");
+        led.title = `${blk.label} ${on ? "on" : "off"}`;
+        leds.append(led);
       }
     }
-    this.summary.append(actions);
+    row.append(el("span", "slot-code", slotLabel(slot)), el("span", "slot-name", p ? p.name || "(sans nom)" : "vide"), leds);
+    row.insertAdjacentHTML("beforeend", ICONS.chevron);
+    row.addEventListener("click", () => this.actions.open(slot));
+    onLongPress(row, (x, y) => showMenu({ x, y }, this.slotMenu(slot)));
+    return row;
+  }
+
+  private slotMenu(slot: number): MenuItem[] {
+    const p = this.bank.preset(slot);
+    return [
+      { label: "Ouvrir", action: () => this.actions.open(slot), disabled: !p },
+      { label: "Renommer…", action: () => this.rename(slot), disabled: !p },
+      { label: "Copier", action: () => (this.clipboard = p), disabled: !p },
+      { label: "Coller ici", action: () => this.paste(slot), disabled: !this.clipboard },
+      { label: "Vider l'emplacement", action: () => this.clear(slot), disabled: !p },
+    ];
   }
 
   private rename(slot: number): void {
@@ -121,26 +154,37 @@ export class BanksView {
     }
   }
 
-  confirmOverwrite(changes: Map<number, Preset | null>): boolean {
-    const lost = [...changes].filter(([s, p]) => {
-      const old = this.bank.preset(s);
-      return old && (!p || !p.data.every((b, i) => b === old.data[i]));
-    }).map(([s]) => `${slotLabel(s)}  ${this.bank.preset(s)!.name}`);
-    if (!lost.length) return true;
-    return confirm(`${lost.length} preset(s) existant(s) vont être remplacés :\n\n${lost.slice(0, 15).join("\n")}`
-      + `${lost.length > 15 ? "\n…" : ""}\n\nVous pourrez annuler.`);
+  private paste(slot: number): void {
+    const old = this.bank.preset(slot);
+    if (old && !confirm(`Remplacer « ${old.name} » (${slotLabel(slot)}) ? Vous pourrez annuler.`)) return;
+    this.bank.setSlots(new Map([[slot, this.clipboard]]), `Coller dans ${slotLabel(slot)}`);
   }
 
-  private paste(): void {
-    const changes = new Map<number, Preset | null>();
-    this.clipboard.forEach((p, i) => {
-      if (this.current + i < this.cells.length) changes.set(this.current + i, p);
-    });
-    if (this.confirmOverwrite(changes)) this.bank.setSlots(changes, `Coller ${changes.size} preset(s)`);
+  private clear(slot: number): void {
+    const old = this.bank.preset(slot);
+    if (old && confirm(`Vider ${slotLabel(slot)} « ${old.name} » ? Vous pourrez annuler.`)) {
+      this.bank.setSlots(new Map([[slot, null]]), `Vider ${slotLabel(slot)}`);
+    }
   }
 
-  private clear(): void {
-    const changes = new Map(this.selectedSlots.map((s) => [s, null] as [number, null]));
-    if (this.confirmOverwrite(changes)) this.bank.setSlots(changes, `Vider ${changes.size} emplacement(s)`);
+  private search(): void {
+    const text = prompt("Rechercher un preset (nom)")?.trim().toLowerCase();
+    if (!text) return;
+    const start = this.bankIndex * PRESETS_PER_BANK;
+    for (let i = 1; i <= this.bank.presets.length; i++) {
+      const slot = (start + i) % this.bank.presets.length;
+      if (this.bank.preset(slot)?.name.toLowerCase().includes(text)) {
+        this.showBank(Math.floor(slot / PRESETS_PER_BANK), true);
+        this.slots.children[slot % PRESETS_PER_BANK]?.animate?.(
+          [{ outline: "2px solid #FFB224" }, { outline: "2px solid transparent" }], { duration: 1200 });
+        return;
+      }
+    }
+    alert(`Aucun preset ne contient « ${text} ».`);
+  }
+
+  /** Slots a "read this bank" request should cover. */
+  get bankSlots(): number[] {
+    return [...Array(PRESETS_PER_BANK).keys()].map((i) => this.bankIndex * PRESETS_PER_BANK + i);
   }
 }

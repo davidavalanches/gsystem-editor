@@ -1,97 +1,84 @@
-/** Application shell: modes, file actions, MIDI connection and Live wiring. */
+/** Application shell: navigation rail, views, file actions, MIDI connection and Live wiring. */
 
-import { BankStore } from "../core/bank";
+import { BankStore, PRESETS_PER_BANK } from "../core/bank";
 import { GSystemLink } from "../core/protocol";
 import { SqsFile, readSyx } from "../core/sqs";
 import { USER_PRESET_BASE, USER_SLOTS, sameBytes, type Preset } from "../core/sysex";
-import { midiAccess, type MidiAccess } from "../midi/transport";
+import { midiAccess } from "../midi/transport";
 import { BanksView } from "./banks";
 import { el } from "./dom";
-import { PresetEditor } from "./editor";
 import { loadSession, pickFile, saveFile, storeSession } from "./files";
+import { MidiView } from "./midiview";
+import { PresetView } from "./preset";
+import { ICONS, type MenuItem } from "./widgets";
 
-type ReadMode = "all" | "selection" | "refresh";
+type ReadMode = "all" | "bank" | "refresh";
+type ViewKey = "banks" | "preset" | "midi";
 
 export class App {
   private readonly bank = new BankStore();
-  private readonly banks = new BanksView(this.bank);
-  private readonly editor = new PresetEditor(this.bank);
-  private readonly status = el("div", "status");
-  private readonly titleEl = el("span", "title");
-  private readonly midiStatus = el("span", "midi-status", "Non connecté");
-  private readonly connectButton = el("button", "", "Connecter");
-  private readonly readAll = el("button", "", "Lire tout");
-  private readonly readSelection = el("button", "", "Lire la sélection");
-  private readonly progress = el("progress", "progress");
-  private readonly undoButton = el("button", "", "↶");
-  private readonly redoButton = el("button", "", "↷");
-  private mode: "banks" | "preset" = "banks";
-  private midi: MidiAccess = midiAccess();
+  private readonly preset = new PresetView(this.bank);
+  private readonly banks: BanksView;
+  private readonly midiView = new MidiView();
+  private readonly toast = el("div", "toast hidden");
+  private readonly railButtons = new Map<ViewKey, HTMLButtonElement>();
+  private readonly midiDot = el("span", "midi-dot");
+  private view: ViewKey = "banks";
   private link: GSystemLink | null = null;
   private readMode: ReadMode | null = null;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(root: HTMLElement) {
-    const modeTabs = el("div", "modes");
-    const modeButtons = (["banks", "preset"] as const).map((m) => {
-      const b = el("button", m === this.mode ? "mode active" : "mode", m === "banks" ? "Banques" : "Preset");
-      b.addEventListener("click", () => this.setMode(m));
-      modeTabs.append(b);
-      return b;
+    this.banks = new BanksView(this.bank, {
+      open: (slot) => {
+        this.preset.openSlot(slot);
+        this.show("preset");
+      },
+      menu: () => this.fileMenu(),
+      readUnit: () => (this.link?.busy ? this.link.cancel() : this.startRead("all")),
     });
-    this.setMode = (m) => {
-      this.mode = m;
-      modeButtons.forEach((b, i) => b.classList.toggle("active", ["banks", "preset"][i] === m));
-      this.banks.el.hidden = m !== "banks";
-      this.editor.el.hidden = m !== "preset";
-      this.updateUndo();
-    };
 
-    const fileMenu = el("div", "file-actions");
-    const action = (label: string, fn: () => void, title = "") => {
-      const b = el("button", "", label);
-      b.title = title;
-      b.addEventListener("click", fn);
-      fileMenu.append(b);
-      return b;
-    };
-    action("Ouvrir…", () => void this.open(), "Ouvrir une banque .sqs ou .syx");
-    action("Exporter .syx", () => void this.exportSyx(), "Enregistrer la banque au format SysEx");
-    this.undoButton.title = "Annuler";
-    this.redoButton.title = "Rétablir";
-    this.undoButton.addEventListener("click", () => this.undo());
-    this.redoButton.addEventListener("click", () => this.redo());
-    fileMenu.append(this.undoButton, this.redoButton);
-
-    const midiBar = el("div", "midi-actions");
-    this.connectButton.addEventListener("click", () => void this.toggleConnection());
-    this.readAll.addEventListener("click", () => this.startRead("all"));
-    this.readSelection.addEventListener("click", () => this.startRead("selection"));
-    this.readAll.disabled = this.readSelection.disabled = true;
-    this.progress.hidden = true;
-    midiBar.append(this.midiStatus, this.progress, this.connectButton, this.readAll, this.readSelection);
-
-    const top = el("header", "topbar");
-    top.append(modeTabs, this.titleEl, fileMenu, midiBar);
-    const main = el("main");
-    main.append(this.banks.el, this.editor.el);
-    root.append(top, main, this.status);
+    const rail = el("nav", "rail");
+    rail.setAttribute("aria-label", "Navigation");
+    for (const [key, label, icon] of [["banks", "Banques", ICONS.banks], ["preset", "Preset", ICONS.preset],
+      ["midi", "MIDI", ICONS.midi]] as [ViewKey, string, string][]) {
+      const b = el("button");
+      b.type = "button";
+      if (key === "midi") {
+        const wrap = el("span", "midi-icon");
+        wrap.innerHTML = icon;
+        wrap.append(this.midiDot);
+        b.append(wrap, label);
+      } else {
+        b.innerHTML = icon;
+        b.append(label);
+      }
+      b.addEventListener("click", () => this.show(key));
+      this.railButtons.set(key, b);
+      rail.append(b);
+    }
+    root.append(rail, this.banks.el, this.preset.el, this.midiView.el, this.toast);
 
     this.bank.onChange = (slots) => {
-      this.banks.refresh(slots);
-      for (const s of slots ?? []) this.editor.reloadIfShowing(s);
-      if (!slots) this.editor.openSlot(0);
-      this.updateTitle();
+      this.banks.refresh();
+      for (const s of slots ?? []) this.preset.reloadIfShowing(s);
+      if (!slots) this.preset.openSlot(this.preset.slot);
       this.scheduleSave();
     };
-    this.bank.undo.onChange = () => this.updateUndo();
-    this.banks.onOpen = (slot) => {
-      this.editor.openSlot(slot);
-      this.setMode("preset");
+    this.bank.undo.onChange = () => this.banks.refresh();
+    this.preset.onStore = (slot, p) => this.bank.setSlots(new Map([[slot, p]]), `Store « ${p.name} »`);
+    this.preset.onNotice = (text) => this.notify(text);
+    this.preset.onSlotChange = (slot) => {
+      this.banks.current = slot;
+      this.banks.showBank(Math.floor(slot / PRESETS_PER_BANK));
     };
-    this.editor.onStore = (slot, preset) => this.bank.setSlots(new Map([[slot, preset]]), `Store « ${preset.name} »`);
-    this.editor.onNotice = (text) => this.notify(text);
-    this.editor.onChange = () => this.updateUndo();
+    this.midiView.connectButton.addEventListener("click", () => void this.toggleConnection());
+    this.midiView.readAllButton.addEventListener("click", () => {
+      this.startRead("all");
+      this.show("banks");
+    });
+    this.midiView.readBankButton.addEventListener("click", () => this.startRead("bank"));
 
     document.addEventListener("keydown", (e) => {
       if (!(e.ctrlKey || e.metaKey) || (e.target as HTMLElement).tagName === "INPUT") return;
@@ -102,23 +89,39 @@ export class App {
     });
 
     this.restore();
-    this.setMode("banks");
+    this.show("banks");
   }
 
-  private setMode: (m: "banks" | "preset") => void;
+  private show(view: ViewKey): void {
+    this.view = view;
+    this.banks.el.hidden = view !== "banks";
+    this.preset.el.hidden = view !== "preset";
+    this.midiView.el.hidden = view !== "midi";
+    for (const [key, b] of this.railButtons) {
+      if (key === view) b.setAttribute("aria-current", "page");
+      else b.removeAttribute("aria-current");
+    }
+  }
+
+  private fileMenu(): MenuItem[] {
+    return [
+      { label: "Ouvrir un fichier (.sqs, .syx)…", action: () => void this.open() },
+      { label: "Exporter la banque (.syx)", action: () => void this.exportSyx() },
+      { label: "Lire cette banque du G-System", action: () => this.startRead("bank"), disabled: !this.link },
+      { label: `Annuler${this.bank.undo.undoText ? ` : ${this.bank.undo.undoText}` : ""}`,
+        action: () => this.bank.undoLast(), disabled: !this.bank.undo.canUndo },
+      { label: "Rétablir", action: () => this.bank.redoLast(), disabled: !this.bank.undo.canRedo },
+    ];
+  }
 
   // Session and files
 
   private restore(): void {
     const session = loadSession();
-    if (!session) {
-      this.updateTitle();
-      return;
-    }
+    if (!session) return;
     const presets: (Preset | null)[] = new Array(USER_SLOTS).fill(null);
     for (const p of readSyx(session.syx)) if (p.userSlot !== null) presets[p.userSlot] = p;
     this.bank.load(presets, session.title, session.sqs ? new SqsFile(session.sqs) : null);
-    this.notify("Banque de la session précédente restaurée.");
   }
 
   private scheduleSave(): void {
@@ -134,39 +137,33 @@ export class App {
     try {
       this.bank.loadFile(file.name, file.bytes);
       const used = this.bank.presets.filter(Boolean).length;
-      const bad = this.bank.presets.filter((p) => p && !p.checksumOk).length;
-      this.notify(`${used} presets chargés${bad ? `, ${bad} avec une somme de contrôle invalide` : ""}`);
+      this.notify(`${used} presets chargés depuis ${file.name}`);
+      this.banks.showBank(0);
     } catch (e) {
       alert(`Ouverture impossible : ${(e as Error).message}`);
     }
   }
 
   private async exportSyx(): Promise<void> {
-    const base = this.bank.title.replace(/\.(sqs|syx)$/i, "").replace(/[^\w\- ]+/g, "_") || "banque";
+    const base = this.bank.title.replace(/\.(sqs|syx)$/i, "").replace(/[^\w\- ]+/g, "_").trim() || "banque";
     const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
-    const where = await saveFile(`${base}-${stamp}.syx`, this.bank.exportSyx());
-    this.bank.undo.setClean();
-    this.notify(`Banque exportée : ${where}`);
+    try {
+      const where = await saveFile(`${base}-${stamp}.syx`, this.bank.exportSyx());
+      this.bank.undo.setClean();
+      this.notify(`Banque exportée : ${where}`);
+    } catch (e) {
+      alert(`Export impossible : ${(e as Error).message}`);
+    }
   }
-
-  private updateTitle(): void {
-    this.titleEl.textContent = this.bank.title + (this.bank.undo.isClean ? "" : " *");
-  }
-
-  // Undo
 
   private undo(): void {
-    if (this.mode === "preset") this.editor.undo();
+    if (this.view === "preset") this.preset.undo();
     else this.bank.undoLast();
   }
 
   private redo(): void {
-    if (this.mode === "preset") this.editor.redo();
+    if (this.view === "preset") this.preset.redo();
     else this.bank.redoLast();
-  }
-
-  private updateUndo(): void {
-    this.updateTitle();
   }
 
   // MIDI
@@ -175,83 +172,72 @@ export class App {
     if (this.link) {
       this.link.close();
       this.link = null;
-      this.connected(false);
-      this.midiStatus.textContent = "Déconnecté";
+      this.setConnected(false, "Déconnecté");
       return;
     }
     try {
-      const ports = await this.midi.listPorts();
+      const midi = midiAccess();
+      const ports = await midi.listPorts();
       const port = ports.find((p) => /g-system/i.test(p.name)) ?? ports[0];
       if (!port) {
-        this.midiStatus.textContent = "Aucun appareil MIDI";
-        this.notify("Branchez le G-System en USB (câble OTG sur téléphone), puis réessayez.");
+        this.midiView.setStatus("Aucun appareil MIDI", false, "Branchez le G-System en USB (câble OTG sur téléphone), puis réessayez.");
         return;
       }
-      const link = new GSystemLink(await this.midi.open(port.id));
+      const link = new GSystemLink(await midi.open(port.id));
       this.link = link;
-      link.onIdentity = (version) => {
-        this.midiStatus.textContent = `G-System ${version}`;
-        this.connected(true);
-      };
-      link.onActivity = () => this.editor.panel.flashMidi();
-      link.onParam = (b, p, v) => this.editor.applyFromUnit(b, p, v);
+      link.onIdentity = (version) => this.setConnected(true, `G-System ${version}`, port.name);
+      link.onParam = (b, p, v) => this.preset.applyFromUnit(b, p, v);
       link.onPresetSelected = (slot) => this.unitPreset(slot);
-      link.onPresetRead = (preset) => {
-        if (this.readMode === "all" && preset.userSlot !== null) this.bank.setDirect(preset.userSlot, preset);
+      link.onPresetRead = (p) => {
+        if (this.readMode === "all" && p.userSlot !== null) this.bank.setDirect(p.userSlot, p);
       };
       link.onProgress = (done, total) => {
-        this.progress.max = total;
-        this.progress.value = done;
-        if (this.readMode !== "refresh") this.notify(`Lecture du preset ${done}/${total}…`);
+        if (this.readMode !== "refresh") this.banks.setReading([done, total]);
       };
       link.onReadFinished = (presets, missing) => this.readFinished(presets, missing);
-      this.midiStatus.textContent = `${port.name}…`;
-      this.connectButton.textContent = "Déconnecter";
+      this.midiView.setStatus(`${port.name}…`, false, "Identification…");
       link.identify();
+      // The unit answers the identity request at once; without an answer it is not a G-System.
+      setTimeout(() => {
+        if (this.link === link && !this.midiDot.classList.contains("on")) {
+          this.midiView.setStatus("Pas de réponse", false, `« ${port.name} » ne répond pas comme un G-System.`);
+        }
+      }, 2000);
     } catch (e) {
-      this.midiStatus.textContent = "Erreur MIDI";
-      alert((e as Error).message);
+      this.midiView.setStatus("Erreur MIDI", false, (e as Error).message);
     }
   }
 
-  private connected(on: boolean): void {
-    this.connectButton.textContent = on || this.link ? "Déconnecter" : "Connecter";
-    this.readAll.disabled = this.readSelection.disabled = !on;
-    this.editor.sendParam = on && this.link ? (b, p, v) => this.link!.sendParam(b, p, v) : null;
-    this.editor.setConnected(on);
+  private setConnected(on: boolean, text: string, detail = ""): void {
+    this.midiView.setStatus(text, on, detail);
+    this.midiDot.classList.toggle("on", on);
+    this.banks.setConnected(on);
+    this.preset.sendParam = on && this.link ? (b, p, v) => this.link!.sendParam(b, p, v) : null;
+    this.preset.setConnected(on);
+    if (on) this.notify(`${text} connecté`);
   }
 
   private startRead(mode: ReadMode): void {
-    if (!this.link) return;
-    if (this.link.busy) {
-      this.link.cancel();
-      return;
-    }
+    if (!this.link || this.link.busy) return;
     let slots: number[];
     if (mode === "all") {
       if (!this.bank.undo.isClean && !confirm("La banque affichée a des modifications non exportées. Les abandonner ?")) return;
       this.bank.load(new Array(USER_SLOTS).fill(null), `G-System (lu le ${new Date().toLocaleString("fr-FR")})`);
-      this.setMode("banks");
       slots = [...Array(USER_SLOTS).keys()];
-    } else if (mode === "selection") {
-      slots = this.banks.selectedSlots;
+    } else if (mode === "bank") {
+      slots = this.banks.bankSlots;
     } else {
-      slots = [this.editor.slot];
+      slots = [this.preset.slot];
     }
     this.readMode = mode;
-    if (mode !== "refresh") {
-      this.progress.hidden = false;
-      (mode === "all" ? this.readAll : this.readSelection).textContent = "Annuler";
-    }
+    if (mode !== "refresh") this.banks.setReading([0, slots.length]);
     this.link.readSlots(slots);
   }
 
   private readFinished(presets: Preset[], missing: number[]): void {
     const mode = this.readMode;
     this.readMode = null;
-    this.progress.hidden = true;
-    this.readAll.textContent = "Lire tout";
-    this.readSelection.textContent = "Lire la sélection";
+    this.banks.setReading(null);
     if (mode === "all") {
       this.bank.undo.setClean();
       this.notify(`${presets.length} presets lus, ${missing.length} emplacement(s) vide(s). Pensez à exporter la banque.`);
@@ -261,28 +247,23 @@ export class App {
     for (const p of presets) if (p.userSlot !== null) changes.set(p.userSlot, p);
     for (const n of missing) changes.set(n - USER_PRESET_BASE, null);
     for (const [s, p] of [...changes]) if (sameBytes(this.bank.preset(s)?.data, p?.data)) changes.delete(s);
-    if (mode === "selection") this.notify(`${presets.length} preset(s) lu(s), ${missing.length} emplacement(s) vide(s).`);
-    if (!changes.size) {
-      if (mode === "selection") this.notify("Les presets lus sont identiques à la banque affichée.");
-      return;
-    }
-    if (mode === "refresh") {
-      this.bank.setSlots(changes, "Relu depuis le G-System");
-      this.notify("Preset mis à jour depuis le G-System (différent de la banque affichée).");
-    } else if (this.banks.confirmOverwrite(changes)) {
-      this.bank.setSlots(changes, `Lecture de ${changes.size} emplacement(s) du G-System`);
-    }
+    if (mode === "bank") this.notify(`${presets.length} preset(s) lu(s), ${changes.size} différent(s) de la banque affichée.`);
+    if (!changes.size) return;
+    this.bank.setSlots(changes, mode === "refresh" ? "Relu depuis le G-System" : "Lecture d'une banque du G-System");
+    if (mode === "refresh") this.notify("Preset mis à jour depuis le G-System (différent de la banque affichée).");
   }
 
   /** A preset was recalled on the pedalboard: follow it and re-read it so the editor shows what the unit plays. */
   private unitPreset(slot: number): void {
-    if (!this.editor.isLive) return;
-    this.editor.followUnit(slot);
-    this.banks.select(slot);
+    if (!this.preset.isLive) return;
+    this.preset.followUnit(slot);
     if (this.link && !this.link.busy) this.startRead("refresh");
   }
 
   private notify(text: string): void {
-    this.status.textContent = text;
+    this.toast.textContent = text;
+    this.toast.classList.remove("hidden");
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => this.toast.classList.add("hidden"), 2500);
   }
 }
