@@ -24,6 +24,8 @@ import { MODEL_G_SYSTEM, Preset, TC_MANUFACTURER, USER_PRESET_BASE, USER_SLOTS, 
 
 export const DEVICE_INQUIRY = new Uint8Array([0xf0, 0x7e, 0x7f, 0x06, 0x01, 0xf7]);
 export const REQUEST_PRESET = 0x45;
+/** 55 47 <block> <first:2> <count:2>: the unit answers with 55 22 messages for those parameters (as Vyzor reads globals). */
+export const REQUEST_PARAMS = 0x47;
 export const SET_PARAM = 0x22;
 export const WRITE_DEVICE_ID = 0x7f;
 export const REQUEST_TIMEOUT_MS = 1100;
@@ -62,6 +64,11 @@ export function storeMessages(slot: number, preset: Preset, sysexId: number): Ui
   ];
 }
 
+export function paramsRequest(blockId: number, first: number, count: number, deviceId: number): Uint8Array {
+  return new Uint8Array([0xf0, ...TC_MANUFACTURER, deviceId, MODEL_G_SYSTEM, REQUEST_PARAMS, blockId,
+    first >> 7, first & 0x7f, count >> 7, count & 0x7f, 0xf7]);
+}
+
 export function paramMessage(blockId: number, param: number, value: number): Uint8Array {
   const raw = value & 0xffffff;
   const nibbles = [20, 16, 12, 8, 4, 0].map((shift) => (raw >> shift) & 0x0f);
@@ -71,12 +78,21 @@ export function paramMessage(blockId: number, param: number, value: number): Uin
 
 /** [block id, parameter, value] of a 55 22 message, else null. */
 export function parseParamMessage(msg: Uint8Array): [number, number, number] | null {
-  if (msg.length !== 17 || msg[1] !== 0x00 || msg[2] !== 0x20 || msg[3] !== 0x1f
+  return msg.length === 17 ? parseParamValues(msg)?.[0] ?? null : null;
+}
+
+/** All [block id, parameter, value] of a 55 22 message: the unit sends consecutive parameters in one message. */
+export function parseParamValues(msg: Uint8Array): [number, number, number][] | null {
+  if (msg.length < 17 || (msg.length - 11) % 6 || msg[1] !== 0x00 || msg[2] !== 0x20 || msg[3] !== 0x1f
     || msg[5] !== MODEL_G_SYSTEM || msg[6] !== SET_PARAM) return null;
-  let raw = 0;
-  for (const n of msg.slice(10, 16)) raw = (raw << 4) | (n & 0x0f);
-  const value = raw & 0x800000 ? raw - (1 << 24) : raw;
-  return [msg[7], (msg[8] << 7) | msg[9], value];
+  const first = (msg[8] << 7) | msg[9];
+  const out: [number, number, number][] = [];
+  for (let off = 10, i = 0; off + 6 < msg.length; off += 6, i++) {
+    let raw = 0;
+    for (const n of msg.slice(off, off + 6)) raw = (raw << 4) | (n & 0x0f);
+    out.push([msg[7], first + i, raw & 0x800000 ? raw - (1 << 24) : raw]);
+  }
+  return out;
 }
 
 /** Firmware version ("4.05") if this is the G-System's identity reply. */
@@ -143,6 +159,11 @@ export class GSystemLink {
         }
       }, SEND_INTERVAL_MS);
     }
+  }
+
+  /** Ask for parameter values; they arrive through onParam. */
+  requestParams(blockId: number, first: number, count: number): void {
+    this.transport.send(paramsRequest(blockId, first, count, this.sysexId));
   }
 
   /** Store a preset into a user slot of the unit; `done` runs once the unit has had time to write it. */
@@ -228,9 +249,9 @@ export class GSystemLink {
       this.onIdentity?.(version);
       return;
     }
-    const change = parseParamMessage(msg);
-    if (change) {
-      this.onParam?.(...change);
+    const changes = parseParamValues(msg);
+    if (changes) {
+      for (const change of changes) this.onParam?.(...change);
       return;
     }
     if (this.current === null || !isPresetDump(msg)) return;

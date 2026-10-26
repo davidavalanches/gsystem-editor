@@ -1,6 +1,7 @@
 /** Application shell: navigation rail, views, file actions, MIDI connection and Live wiring. */
 
 import { AVOIDED_BANKS, BANK_COUNT, BankStore, PRESETS_PER_BANK, isAvoided, slotLabel } from "../core/bank";
+import { GLOBAL_RANGES } from "../core/globals";
 import { DEFAULT_SYSEX_ID, GSystemLink } from "../core/protocol";
 import { SqsFile, readSyx } from "../core/sqs";
 import { USER_PRESET_BASE, USER_SLOTS, sameBytes, type Preset } from "../core/sysex";
@@ -11,6 +12,7 @@ import { el } from "./dom";
 import { loadSession, pickFile, saveFile, storeSession } from "./files";
 import { MidiView } from "./midiview";
 import { PresetView } from "./preset";
+import { SettingsView } from "./settings";
 import { ICONS, type MenuItem } from "./widgets";
 
 type ReadMode = "all" | "bank" | "refresh" | "verify";
@@ -18,13 +20,14 @@ const SYSEX_ID_KEY = "gsystem-editor.sysex-id";
 /** Write stored presets into the unit (Vyzor's Sync sequence, checked by reading back). */
 const STORE_TO_UNIT = true;
 const pad2 = (n: number) => String(n).padStart(2, "0");
-type ViewKey = "banks" | "preset" | "midi";
+type ViewKey = "banks" | "preset" | "settings" | "midi";
 
 export class App {
   private readonly bank = new BankStore();
   private readonly preset = new PresetView(this.bank);
   private readonly banks: BanksView;
   private readonly midiView = new MidiView();
+  private readonly settings = new SettingsView();
   private readonly toast = el("div", "toast hidden");
   private readonly railButtons = new Map<ViewKey, HTMLButtonElement>();
   private readonly midiDot = el("span", "midi-dot");
@@ -48,7 +51,7 @@ export class App {
     const rail = el("nav", "rail");
     rail.setAttribute("aria-label", "Navigation");
     for (const [key, label, icon] of [["banks", "Banques", ICONS.banks], ["preset", "Preset", ICONS.preset],
-      ["midi", "MIDI", ICONS.midi]] as [ViewKey, string, string][]) {
+      ["settings", "Réglages", ICONS.settings], ["midi", "MIDI", ICONS.midi]] as [ViewKey, string, string][]) {
       const b = el("button");
       b.type = "button";
       if (key === "midi") {
@@ -64,7 +67,9 @@ export class App {
       this.railButtons.set(key, b);
       rail.append(b);
     }
-    root.append(rail, this.banks.el, this.preset.el, this.midiView.el, this.toast);
+    root.append(rail, this.banks.el, this.preset.el, this.settings.el, this.midiView.el, this.toast);
+    this.settings.onRead = () => this.readSettings();
+    this.settings.onChange = (b, p, raw) => this.link?.sendParam(b, p, raw);
 
     this.bank.onChange = (slots) => {
       this.banks.refresh();
@@ -116,7 +121,9 @@ export class App {
     this.view = view;
     this.banks.el.hidden = view !== "banks";
     this.preset.el.hidden = view !== "preset";
+    this.settings.el.hidden = view !== "settings";
     this.midiView.el.hidden = view !== "midi";
+    if (view === "settings") this.readSettings();
     for (const [key, b] of this.railButtons) {
       if (key === view) b.setAttribute("aria-current", "page");
       else b.removeAttribute("aria-current");
@@ -221,7 +228,10 @@ export class App {
         const n = this.bank.pending.size;
         if (n) this.notify(`${n} preset(s) modifié(s) hors connexion : touchez « Synchroniser » pour les écrire dans le G-System`);
       };
-      link.onParam = (b, p, v) => this.preset.applyFromUnit(b, p, v);
+      link.onParam = (b, p, v) => {
+        this.settings.update(b, p, v);
+        this.preset.applyFromUnit(b, p, v);
+      };
       link.onPresetSelected = (slot) => this.unitPreset(slot);
       link.onPresetRead = (p) => {
         if (this.readMode === "all" && p.userSlot !== null) this.bank.setDirect(p.userSlot, p);
@@ -243,13 +253,23 @@ export class App {
     }
   }
 
+  /** Ask the unit for its global settings (answers arrive as parameter messages). */
+  private readSettings(): void {
+    if (!this.link) return;
+    for (const [block, first, count] of GLOBAL_RANGES) this.link.requestParams(block, first, count);
+  }
+
   private setConnected(on: boolean, text: string, detail = ""): void {
     this.midiView.setStatus(text, on, detail);
     this.midiDot.classList.toggle("on", on);
     this.banks.setConnected(on);
     this.preset.sendParam = on && this.link ? (b, p, v) => this.link!.sendParam(b, p, v) : null;
     this.preset.setConnected(on);
-    if (on) this.notify(`${text} connecté`);
+    this.settings.setConnected(on);
+    if (on) {
+      this.notify(`${text} connecté`);
+      if (this.view === "settings") this.readSettings();
+    }
   }
 
   private get sysexId(): number {

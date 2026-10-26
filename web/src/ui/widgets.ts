@@ -11,6 +11,7 @@ export const ICONS = {
     + '<rect x="3" y="16" width="18" height="4" rx="1.5"/>', 22, 24),
   preset: svg('<circle class="accent" cx="12" cy="12" r="8"/><path d="M12 12 12 6"/>', 22, 24),
   midi: svg('<path d="M4 7h16M4 12h16M4 17h10"/>', 22, 24),
+  settings: svg('<circle class="accent" cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>', 22, 24),
   prev: svg('<path d="M10 3 5 8l5 5"/>', 18),
   next: svg('<path d="M6 3l5 5-5 5"/>', 18),
   chevron: svg('<path d="M6 3l5 5-5 5"/>', 14),

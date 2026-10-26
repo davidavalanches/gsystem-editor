@@ -8,7 +8,10 @@ import { BLOCKS, block, diffFields, fieldOffset, FIELD_COUNT, freq, readField, w
 import {
   MODIFIER_FIELD, MODIFIER_SLOTS, UNASSIGNED, decodeModifier, encodeModifier, modifierTargets, writeModifier,
 } from "../src/core/modifiers";
-import { BLOCK_IDS, MidiParser, identityVersion, paramMessage, parseParamMessage, presetRequest, storeMessages } from "../src/core/protocol";
+import {
+  BLOCK_IDS, MidiParser, identityVersion, paramMessage, paramsRequest, parseParamMessage, parseParamValues, presetRequest,
+  storeMessages,
+} from "../src/core/protocol";
 import { SqsFile, USER_BANK_KIND, readSyx, writeSyx } from "../src/core/sqs";
 import {
   ChecksumError, PRESET_DATA_LEN, PRESET_DUMP_LEN, Preset, SysexError, bytesToNibbles, nibblesToBytes,
@@ -146,6 +149,15 @@ describe("protocol (captures from the unit)", () => {
     expect(msgs[2].length).toBe(PRESET_DUMP_LEN);
     expect(msgs[3]).toEqual(hex("f000201f01555701f7"));
     expect(() => storeMessages(0, makePreset(), 0x7f)).toThrow(RangeError);
+  });
+
+  it("reads parameter ranges like Vyzor", () => {
+    expect(paramsRequest(5, 3, 3, 1)).toEqual(hex("f000201f01554705000300 03f7"));
+    expect(paramsRequest(5, 20, 224, 1)).toEqual(hex("f000201f015547050014 0160f7"));
+    // The unit's answer: Tap Master, Tap Tempo 677 ms, tuner output.
+    const answer = hex("f000201f7f552205 0003 000000000000 000000020a05 000000000001 f7");
+    expect(parseParamValues(answer)).toEqual([[5, 3, 0], [5, 4, 677], [5, 5, 1]]);
+    expect(parseParamMessage(answer)).toBeNull();
   });
 
   it("knows every block id", () => {
