@@ -15,7 +15,7 @@ from PySide6.QtWidgets import QSizePolicy, QWidget
 
 COLUMNS = 7
 # Real control board is 2000x1054 for 6 columns; one extra column for Insert, EQ and Gate.
-ASPECT = 1054 / (2000 * 7 / 6)
+ASPECT = 0.40
 
 # 5x7 dot-matrix glyphs for the red preset display.
 GLYPHS = {
@@ -140,19 +140,19 @@ class FrontPanel(QWidget):
         r = self._panel_rect()
         cw = (r.width() - 2 * r.width() * 0.022) / COLUMNS
         x = r.left() + r.width() * 0.022 + col * cw
-        tops = (0.005, 0.44, 0.72)
-        heights = (0.29, 0.28, 0.275)
+        tops = (0.005, 0.43, 0.715)
+        heights = (0.28, 0.285, 0.28)
         return QRectF(x, r.top() + r.height() * tops[row], cw, r.height() * heights[row])
 
     def _display_rect(self) -> QRectF:
         r = self._panel_rect()
-        return QRectF(r.left() + r.width() * 0.022, r.top() + r.height() * 0.297, r.width() * 0.956,
-                      r.height() * 0.127)
+        return QRectF(r.left() + r.width() * 0.022, r.top() + r.height() * 0.29, r.width() * 0.956,
+                      r.height() * 0.13)
 
     def _switch_circle(self, row: int, col: int) -> QRectF:
         cell = self._cell(row, col)
-        d = min(cell.width(), cell.height()) * (0.38 if row == 0 else 0.42)
-        cy = cell.top() + cell.height() * (0.64 if row == 0 else 0.62 if row == 1 else 0.66)
+        d = min(cell.width(), cell.height()) * 0.44
+        cy = cell.top() + cell.height() * (0.6 if row == 0 else 0.56 if row == 1 else 0.6)
         return QRectF(cell.center().x() - d / 2, cy - d / 2, d, d)
 
     def _rows(self):
@@ -304,29 +304,33 @@ class FrontPanel(QWidget):
             cap = QRectF(cell.left(), circle.bottom() + cell.height() * 0.02, cell.width(), title_size * 1.1)
             p.drawText(cap, Qt.AlignCenter, sw.caption)
 
-        # LED above the switch.
-        if sw.key in self.leds:
-            state = self.leds[sw.key]
-            led_r = r.height() * 0.009
-            c = QPointF(circle.center().x(), circle.top() - led_r * 1.8)
-            color = QColor(255, 40, 30) if state else QColor(255, 190, 0) if state is None else QColor(90, 30, 28)
-            if state:
-                glow = QRadialGradient(c, led_r * 3.2)
-                glow.setColorAt(0, QColor(255, 60, 40, 150))
-                glow.setColorAt(1, QColor(255, 60, 40, 0))
-                p.setPen(Qt.NoPen)
-                p.setBrush(glow)
-                p.drawEllipse(c, led_r * 3.2, led_r * 3.2)
-            p.setPen(QPen(QColor(40, 20, 20), 1))
-            p.setBrush(color)
-            p.drawEllipse(c, led_r, led_r)
-            if state is None:
-                p.setPen(QColor(40, 40, 40))
-                p.setFont(self._font(led_r * 1.8))
-                p.drawText(QRectF(c.x() + led_r * 1.5, c.y() - led_r * 1.5, led_r * 4, led_r * 3),
-                           Qt.AlignLeft | Qt.AlignVCenter, "?")
-
         self._paint_footswitch(p, circle, enabled, sw.key == self._down, sw.key == self._hover and enabled)
+        if sw.key in self.leds:
+            self._paint_ring(p, circle, self.leds[sw.key])
+
+    def _paint_ring(self, p: QPainter, circle: QRectF, state: bool | None) -> None:
+        """Neon ring around the footswitch: red when on, amber dashed when unknown."""
+        width = circle.width() * 0.07
+        ring = circle.adjusted(-width * 0.9, -width * 0.9, width * 0.9, width * 0.9)
+        if state:
+            glow = QRadialGradient(circle.center(), ring.width() * 0.68)
+            glow.setColorAt(0.70, QColor(255, 40, 30, 0))
+            glow.setColorAt(0.80, QColor(255, 50, 35, 150))
+            glow.setColorAt(1.00, QColor(255, 50, 35, 0))
+            p.setPen(Qt.NoPen)
+            p.setBrush(glow)
+            p.drawEllipse(circle.center(), ring.width() * 0.68, ring.width() * 0.68)
+            pen = QPen(QColor(255, 70, 50), width)
+        elif state is None:
+            pen = QPen(QColor(255, 175, 0), width * 0.7, Qt.DashLine)
+        else:
+            pen = QPen(QColor(120, 40, 36, 170), width * 0.7)
+        p.setPen(pen)
+        p.setBrush(Qt.NoBrush)
+        p.drawEllipse(ring)
+        if state:
+            p.setPen(QPen(QColor(255, 200, 190, 200), width * 0.3))
+            p.drawEllipse(ring)
 
     def _paint_arrow(self, p: QPainter, center: QPointF, size: float, up: bool, ink: QColor) -> None:
         p.setPen(QPen(ink, size * 0.12))
