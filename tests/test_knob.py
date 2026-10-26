@@ -36,11 +36,12 @@ def test_wheel_reports_final_value(app):
     assert knob.value() == 2 and released == [1, 2]
 
 
-def test_toggle_has_two_positions(app):
-    knob = Knob(0, 1, toggle=True)
-    released = []
-    knob.released.connect(released.append)
-    wheel(knob, 1)
-    wheel(knob, 1)
-    wheel(knob, -1)
-    assert released == [1, 1, 0] and knob.value() == 0
+def test_toggle_switch(app):
+    from gsystem.toggle import ToggleSwitch
+    switch = ToggleSwitch()
+    toggled = []
+    switch.toggled.connect(toggled.append)
+    switch.toggle()
+    switch.toggle()
+    switch.setChecked(True)  # programmatic: no signal
+    assert toggled == [True, False] and switch.isChecked()

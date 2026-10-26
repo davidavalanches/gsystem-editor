@@ -42,6 +42,7 @@ from .params import (
 )
 from .frontpanel import FrontPanel
 from .knob import Knob
+from .toggle import ToggleSwitch
 from .model import BANK_COUNT, PRESETS_PER_BANK, bank_position
 from .sysex import NAME_LEN, USER_SLOTS, Preset, SysexError
 
@@ -79,24 +80,32 @@ class ParamControl(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
         layout.addWidget(title)
-        self.combo = self.knob = None
+        self.combo = self.knob = self.switch = None
         self.readout = QLabel()
         self.readout.setAlignment(Qt.AlignCenter)
-        if param.choices and not param.is_switch:
+        if param.is_switch:
+            self.switch = ToggleSwitch()
+            self.switch.toggled.connect(lambda on: self.edited.emit(index, param.lo + int(on)))
+            layout.addStretch(1)
+            layout.addWidget(self.switch, 0, Qt.AlignCenter)
+            layout.addStretch(1)
+        elif param.choices:
             self.combo = QComboBox()
             for value in range(param.lo, param.hi + 1):
                 self.combo.addItem(param.format(value), value)
             self.combo.currentIndexChanged.connect(lambda i: self.edited.emit(index, self.combo.itemData(i)))
             layout.addWidget(self.combo)
         else:
-            self.knob = Knob(param.lo, param.hi, toggle=param.is_switch)
+            self.knob = Knob(param.lo, param.hi)
             self.knob.valueChanged.connect(lambda v: self.readout.setText(param.format(v)))
             self.knob.released.connect(lambda v: self.edited.emit(index, v))
             layout.addWidget(self.knob, 1, Qt.AlignCenter)
             layout.addWidget(self.readout)
 
     def set_value(self, value: int) -> None:
-        if self.combo is not None:
+        if self.switch is not None:
+            self.switch.setChecked(value != self.param.lo)
+        elif self.combo is not None:
             self.combo.blockSignals(True)
             i = self.combo.findData(value)
             if i < 0:
