@@ -1,6 +1,10 @@
 /** Preset view: effect tiles, block parameters and the fine-adjust sheet, over an edit buffer. */
 
 import { bankPosition, slotLabel, type BankStore } from "../core/bank";
+import {
+  MODIFIER_BLOCK_ID, MODIFIER_FIELD, MODIFIER_PARAM_BASE, MODIFIER_SLOTS, SOURCES, UNASSIGNED, isValidModifier,
+  modifierTargets, valueAt, writeModifier, type Modifier, type ModifierTarget,
+} from "../core/modifiers";
 import { BLOCKS, block, diffFields, owner, readField, writeField, type Block, type Param } from "../core/params";
 import { BLOCK_IDS, LEVELS_BLOCK_ID, LEVEL_SWITCHES } from "../core/protocol";
 import { NAME_LEN, Preset, SysexError, USER_SLOTS } from "../core/sysex";
@@ -14,6 +18,10 @@ const TILES: [string, string][] = [
   ["delay", "DELAY"], ["reverb", "REVERB"], ["eq", "EQ"], ["gate", "GATE"],
 ];
 const TILE_LABELS: Record<string, string> = { mod: "Modulation", eq: "EQ paramétrique" };
+/** Pseudo block of the tile list: pedal and encoder assignments. */
+const MODIFIERS = "modifiers";
+const SHORT_SOURCES = ["—", "VOL", "EXP", "ENC A", "ENC B", "ENC C"];
+const isModifierField = (index: number) => index >= MODIFIER_FIELD && index < MODIFIER_FIELD + MODIFIER_SLOTS;
 const LEVEL_LABELS: [string, string][] = [
   ["loop1", "L1"], ["loop2", "L2"], ["loop3", "L3"], ["loop4", "L4"], ["insert", "INS"], ["boost", "BST"],
 ];
@@ -82,7 +90,7 @@ export class PresetView {
     this.liveButton.addEventListener("click", () => this.setLive(!this.live));
     this.storeButton.type = "button";
     this.storeButton.title = "Enregistrer le preset dans la banque de l'éditeur "
-      + "(l'écriture dans le G-System est désactivée pour l'instant)";
+      + "et dans le G-System s'il est connecté (sinon à la prochaine synchronisation)";
     this.storeButton.addEventListener("click", () => this.store());
 
     const header = el("header", "header preset-header");
@@ -132,6 +140,10 @@ export class PresetView {
         this.sendParam!(BLOCK_IDS[blk.key], index - blk.firstField, readField(this.buffer.data, index));
       }
     }
+    // After the types, which select what each modifier slot controls (Vyzor sends them the same way).
+    for (let slot = 0; slot < MODIFIER_SLOTS; slot++) {
+      this.sendParam!(MODIFIER_BLOCK_ID, MODIFIER_PARAM_BASE + slot, readField(this.buffer.data, MODIFIER_FIELD + slot));
+    }
     this.onNotice?.(`« ${this.buffer.name} » chargé dans la mémoire de travail du G-System`);
   }
 
@@ -140,6 +152,7 @@ export class PresetView {
     for (const [index, , value] of diffFields(before, after)) {
       const blk = owner(index);
       if (blk && index !== blk.countField) this.sendParam!(BLOCK_IDS[blk.key], index - blk.firstField, value);
+      else if (isModifierField(index)) this.sendParam!(MODIFIER_BLOCK_ID, MODIFIER_PARAM_BASE + index - MODIFIER_FIELD, value);
     }
   }
 
@@ -151,12 +164,18 @@ export class PresetView {
       return;
     }
     const key = Object.keys(BLOCK_IDS).find((k) => BLOCK_IDS[k] === blockId);
-    if (!key || !this.buffer || !this.live) return;
-    const blk = block(key);
-    if (param >= blk.size) return;
+    if (!this.buffer || !this.live) return;
+    let index: number;
+    if (blockId === MODIFIER_BLOCK_ID) {
+      index = MODIFIER_FIELD + param - MODIFIER_PARAM_BASE;
+      if (!isModifierField(index)) return;
+    } else {
+      if (!key || param >= block(key).size) return;
+      index = block(key).firstField + param;
+    }
     this.fromUnit = true;
     try {
-      this.setField(blk.firstField + param, value);
+      this.setField(index, value);
     } finally {
       this.fromUnit = false;
     }
@@ -331,7 +350,30 @@ export class PresetView {
         this.render();
       });
       return tile;
-    }));
+    }), this.modifiersTile());
+  }
+
+  private modifiersTile(): HTMLElement {
+    const assigned = this.buffer ? this.assignedModifiers(this.buffer.data) : [];
+    const sources = [...new Set(assigned.map((t) => SHORT_SOURCES[t.modifier.source]))];
+    const tile = el("button", `tile wide${this.blockKey === MODIFIERS ? " selected" : ""}${assigned.length ? " on" : ""}`);
+    tile.type = "button";
+    tile.setAttribute("aria-label", `Pédales et encodeurs, ${assigned.length} affectation(s)`);
+    const head = el("span", "tile-head");
+    head.append(el("span", "tile-code", "PÉDALES"), el("span", assigned.length ? "tile-count" : "tile-count none",
+      sources.join(" · ") || "aucune"));
+    tile.append(head, el("span", "tile-type", assigned.length
+      ? assigned.map((t) => t.name).join(", ") : "Exp, Vol, encodeurs A-C"));
+    tile.addEventListener("click", () => {
+      this.blockKey = MODIFIERS;
+      this.closeSheet();
+      this.render();
+    });
+    return tile;
+  }
+
+  private assignedModifiers(data: Uint8Array): ModifierTarget[] {
+    return modifierTargets(data, true).filter((t) => t.modifier.source && isValidModifier(t.modifier));
   }
 
   private renderLevels(): void {
@@ -349,6 +391,10 @@ export class PresetView {
   }
 
   private renderParams(): void {
+    if (this.blockKey === MODIFIERS) {
+      this.renderModifiers();
+      return;
+    }
     const blk = block(this.blockKey);
     const preset = this.buffer;
     const on = this.isOn(blk);
@@ -382,16 +428,72 @@ export class PresetView {
     // Type and on/off are in the block header.
     const rows = blk.fields(preset.data)
       .filter(([index, p]) => !(blk.hasType && index === blk.firstField) && p.name !== blk.enableName);
-    this.paramsList.replaceChildren(...rows.map(([index, p]) => this.paramRow(index, p, readField(preset.data, index))));
+    const pedals = new Map(this.assignedModifiers(preset.data).map((t) => [t.paramField, t.modifier.source]));
+    this.paramsList.replaceChildren(...rows.map(([index, p]) =>
+      this.paramRow(index, p, readField(preset.data, index), pedals.get(index))));
   }
 
-  private paramRow(index: number, p: Param, value: number): HTMLElement {
+  private renderModifiers(): void {
+    this.paramsHead.replaceChildren(el("span", "label", "Pédales & encodeurs"), el("div", "grow"));
+    this.paramsList.classList.remove("on-block");
+    const preset = this.buffer;
+    if (!preset) {
+      this.paramsList.replaceChildren(el("p", "empty-note", "Emplacement vide."));
+      return;
+    }
+    this.paramsHead.append(el("span", "params-hint", "Paramètres pilotables avec les types d'effets actuels"));
+    // NovaDrive slots only matter with a NovaDrive pedal: listed once one is assigned.
+    const targets = modifierTargets(preset.data, true)
+      .filter((t) => t.key !== "novadrive" || (t.modifier.source && isValidModifier(t.modifier)));
+    this.paramsList.replaceChildren(...targets.map((t) => this.modifierRow(t)));
+  }
+
+  private blockLabel(key: string): string {
+    return key === "novadrive" ? "NovaDrive" : TILES.find(([k]) => k === key)?.[1] ?? key;
+  }
+
+  private modifierRow(t: ModifierTarget): HTMLElement {
+    const m = t.modifier;
+    const valid = isValidModifier(m);
+    const active = valid && m.source > 0;
+    const row = el("button", `param modifier${t.field === this.paramIndex ? " selected" : ""}${active ? " assigned" : ""}`);
+    row.type = "button";
+    const summary = !valid ? "valeurs invalides" : active ? `${SOURCES[m.source]}, ${m.min} / ${m.mid} / ${m.max} %` : "aucune";
+    row.setAttribute("aria-label", `${this.blockLabel(t.key)} ${t.name} : ${summary}, toucher pour régler`);
+    const top = el("span", "param-top");
+    const name = el("span", "param-name");
+    name.append(el("span", "param-block", this.blockLabel(t.key)), t.name);
+    top.append(name, el("span", !valid ? "source-chip warn" : active ? "source-chip on" : "source-chip",
+      valid ? SHORT_SOURCES[m.source] : "?"));
+    const range = el("span", "mod-range");
+    if (active) {
+      const bar = el("span", "mod-bar");
+      const lo = Math.min(m.min, m.max), hi = Math.max(m.min, m.max);
+      bar.style.left = `${lo}%`;
+      bar.style.width = `${Math.max(hi - lo, 1)}%`;
+      const mid = el("span", "mod-mid");
+      mid.style.left = `${m.mid}%`;
+      range.append(bar, mid);
+    }
+    const values = el("span", "mod-values", active ? `${m.min} · ${m.mid} · ${m.max} %` : "");
+    row.append(top, range, values);
+    row.addEventListener("click", () => {
+      this.paramIndex = t.field;
+      this.paramsList.querySelectorAll(".param").forEach((r) => r.classList.toggle("selected", r === row));
+      this.openModifierSheet(t);
+    });
+    return row;
+  }
+
+  private paramRow(index: number, p: Param, value: number, pedal?: number): HTMLElement {
     const row = el("button", index === this.paramIndex ? "param selected" : "param");
     row.type = "button";
     row.setAttribute("aria-label", `${p.name} : ${p.format(value)}, toucher pour régler`);
     const top = el("span", "param-top");
     const out = value < p.lo || value > p.hi;
-    top.append(el("span", "param-name", p.name), el("span", out ? "param-value warn" : "param-value", p.format(value)));
+    const name = el("span", "param-name", p.name);
+    if (pedal) name.append(el("span", "source-chip on small", SHORT_SOURCES[pedal]));
+    top.append(name, el("span", out ? "param-value warn" : "param-value", p.format(value)));
     row.append(top);
     const count = p.hi - p.lo + 1;
     if (p.choices.length && count <= 8) {
@@ -420,15 +522,8 @@ export class PresetView {
     if (!param) return;
     let value = readField(preset.data, index);
 
-    const layer = el("div", "sheet-layer");
     const close = () => this.closeSheet();
-    const backdrop = el("button", "sheet-backdrop");
-    backdrop.type = "button";
-    backdrop.setAttribute("aria-label", "Fermer");
-    backdrop.addEventListener("click", close);
     const sheet = el("div", "sheet");
-    sheet.setAttribute("role", "dialog");
-    sheet.setAttribute("aria-label", param.name);
     const head = el("div", "sheet-head");
     head.append(el("span", "", `${TILE_LABELS[blk.key] ?? blk.label} · ${param.name}`), el("span", "field", `champ #${index}`));
     const big = el("div", "sheet-value", param.format(value));
@@ -496,40 +591,84 @@ export class PresetView {
     }
 
     const buttons = el("div", "sheet-buttons");
-    const stepper = (label: string, delta: number) => {
-      const b = el("button", "", label);
-      b.type = "button";
-      b.setAttribute("aria-label", delta < 0 ? "Diminuer" : "Augmenter");
-      // Hold to repeat.
-      let timer: ReturnType<typeof setTimeout> | null = null;
-      const step = () => {
-        commit(value + delta);
-        this.sheetShow?.(value);
-      };
-      const stop = () => {
-        if (timer) clearTimeout(timer);
-        timer = null;
-      };
-      b.addEventListener("pointerdown", () => {
-        step();
-        const repeat = (delay: number) => {
-          timer = setTimeout(() => {
-            step();
-            repeat(Math.max(40, delay * 0.8));
-          }, delay);
-        };
-        repeat(400);
-      });
-      b.addEventListener("pointerup", stop);
-      b.addEventListener("pointerleave", stop);
-      b.addEventListener("pointercancel", stop);
-      return b;
-    };
+    const stepper = (label: string, delta: number) => holdButton(label, delta < 0 ? "Diminuer" : "Augmenter", () => {
+      commit(value + delta);
+      this.sheetShow?.(value);
+    });
     const ok = el("button", "ok", "OK");
     ok.type = "button";
     ok.addEventListener("click", close);
     buttons.append(stepper("−", -1), ok, stepper("+", 1));
     sheet.append(buttons);
+    this.showSheet(sheet, param.name);
+  }
+
+  /** Source and Min / Mid / Max of a modifier slot. */
+  private openModifierSheet(t: ModifierTarget): void {
+    this.body.querySelector(".sheet-layer")?.remove();
+    if (!this.buffer) return;
+    const clampPct = (v: number) => Math.max(0, Math.min(100, v));
+    let m: Modifier = isValidModifier(t.modifier) ? { ...t.modifier } : { ...UNASSIGNED };
+    const sheet = el("div", "sheet modifier-sheet");
+    const head = el("div", "sheet-head");
+    head.append(el("span", "", `${this.blockLabel(t.key)} · ${t.name}`), el("span", "field", `modifier ${t.slot + 1}`));
+    const sources = el("div", "sheet-choices sources");
+    const rows = el("div", "mod-rows");
+    sheet.append(head, sources, rows);
+
+    // Rows are built once: rebuilding them would drop the − / + button being held.
+    const rowParts = (["min", "mid", "max"] as const).map((k) => {
+      const label = { min: "Min", mid: "Mid", max: "Max" }[k];
+      const row = el("div", "mod-row");
+      const pct = el("span", "mod-pct");
+      const equiv = el("span", "mod-equiv");
+      const step = (d: number) => commit({ ...m, [k]: clampPct(m[k] + d) });
+      row.append(el("span", "mod-label", label), holdButton("−", `${label} : diminuer`, () => step(-1)), pct,
+        holdButton("+", `${label} : augmenter`, () => step(1)), equiv);
+      rows.append(row);
+      return { k, row, pct, equiv };
+    });
+    const commit = (next: Modifier) => {
+      m = next;
+      if (this.buffer) this.pushBuffer(this.buffer.withData(writeModifier(this.buffer.data, t.slot, m)));
+      draw();
+    };
+    const draw = () => {
+      sources.replaceChildren(...SOURCES.map((label, i) => {
+        const b = el("button", i === m.source ? "on" : "", label);
+        b.type = "button";
+        b.setAttribute("aria-pressed", String(i === m.source));
+        b.addEventListener("click", () => commit({ ...m, source: i }));
+        return b;
+      }));
+      for (const { k, row, pct, equiv } of rowParts) {
+        row.classList.toggle("disabled", !m.source);
+        pct.textContent = `${m[k]} %`;
+        equiv.textContent = t.param ? `≈ ${t.param.format(valueAt(t.param, m[k]))}` : "";
+      }
+    };
+    draw();
+
+    const buttons = el("div", "sheet-buttons");
+    const reset = el("button", "", "Retirer");
+    reset.type = "button";
+    reset.addEventListener("click", () => commit({ ...UNASSIGNED }));
+    const ok = el("button", "ok", "OK");
+    ok.type = "button";
+    ok.addEventListener("click", () => this.closeSheet());
+    buttons.append(reset, ok);
+    sheet.append(buttons);
+    this.showSheet(sheet, `Modifier ${t.name}`);
+  }
+
+  private showSheet(sheet: HTMLElement, label: string): void {
+    const layer = el("div", "sheet-layer");
+    const backdrop = el("button", "sheet-backdrop");
+    backdrop.type = "button";
+    backdrop.setAttribute("aria-label", "Fermer");
+    backdrop.addEventListener("click", () => this.closeSheet());
+    sheet.setAttribute("role", "dialog");
+    sheet.setAttribute("aria-label", label);
     layer.append(backdrop, sheet);
     this.body.append(layer);
   }
@@ -542,4 +681,30 @@ export class PresetView {
     this.body.querySelector(".sheet-layer")?.remove();
     this.paramsList.querySelector(".param.selected")?.classList.remove("selected");
   }
+}
+
+/** A button that repeats its action while held. */
+function holdButton(label: string, ariaLabel: string, action: () => void): HTMLElement {
+  const b = el("button", "", label);
+  b.type = "button";
+  b.setAttribute("aria-label", ariaLabel);
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const stop = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+  };
+  b.addEventListener("pointerdown", () => {
+    action();
+    const repeat = (delay: number) => {
+      timer = setTimeout(() => {
+        action();
+        repeat(Math.max(40, delay * 0.8));
+      }, delay);
+    };
+    repeat(400);
+  });
+  b.addEventListener("pointerup", stop);
+  b.addEventListener("pointerleave", stop);
+  b.addEventListener("pointercancel", stop);
+  return b;
 }

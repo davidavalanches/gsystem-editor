@@ -5,6 +5,9 @@ import { describe, expect, it } from "vitest";
 
 import { BankStore, bankPosition, slotLabel } from "../src/core/bank";
 import { BLOCKS, block, diffFields, fieldOffset, FIELD_COUNT, freq, readField, writeField } from "../src/core/params";
+import {
+  MODIFIER_FIELD, MODIFIER_SLOTS, UNASSIGNED, decodeModifier, encodeModifier, modifierTargets, writeModifier,
+} from "../src/core/modifiers";
 import { BLOCK_IDS, MidiParser, identityVersion, paramMessage, parseParamMessage, presetRequest, storeMessages } from "../src/core/protocol";
 import { SqsFile, USER_BANK_KIND, readSyx, writeSyx } from "../src/core/sqs";
 import {
@@ -165,6 +168,40 @@ describe("protocol (captures from the unit)", () => {
     parser.push([0x01, 0xc0, 0x0f]);
     expect(out.map((m) => m.length)).toEqual([1, PRESET_DUMP_LEN, 3, 2]);
     expect(out[1]).toEqual(dump);
+  });
+});
+
+describe("modifiers", () => {
+  // Sent by the unit (bulk 55 22 0D from parameter 20) for a preset whose stored bytes match.
+  const UNIT_0D = [0x040404, 0x989804, 0x040404, 0x040404, 0x030303, 0x030303, 0x030303, 0xc8c800, 0xc8c800, 0x243002];
+
+  it("decodes the unit's slot words", () => {
+    expect(decodeModifier(0xc8c800)).toEqual(UNASSIGNED);
+    expect(decodeModifier(0x243002)).toEqual({ source: 2, min: 0, mid: 12, max: 18 });
+    // Vol on a slot, set from the unit's front panel.
+    expect(decodeModifier(0xc918f1)).toEqual({ source: 1, min: 30, mid: 70, max: 100 });
+    for (const raw of UNIT_0D) expect(encodeModifier(decodeModifier(raw)) & 0xffffff).toBe(raw);
+  });
+
+  it("stores slots in fields 125-162", () => {
+    const data = writeModifier(BLANK, 13, { source: 2, min: 0, mid: 50, max: 100 });
+    expect(readField(data, MODIFIER_FIELD + 13) & 0xffffff).toBe(0xc8c802);
+    expect(MODIFIER_FIELD + MODIFIER_SLOTS).toBe(163);
+  });
+
+  it("lists the controllable parameters of the current types", () => {
+    let data: Uint8Array = BLANK.slice();
+    const setType = (key: string, type: number) => { data = writeField(data, block(key).firstField, type); };
+    setType("pitch", 2); // Whammy: OutLev, Pitch
+    setType("delay", 1); // Tape
+    setType("reverb", 3); // Plate
+    setType("mod", 0); // Classic Chorus
+    const names = (key: string) => modifierTargets(data).filter((t) => t.key === key).map((t) => `${t.slot}:${t.name}`);
+    expect(names("pitch")).toEqual(["12:OutLev", "13:Pitch"]);
+    expect(names("delay")).toEqual(["20:Delay", "21:Fb", "22:Drive", "23:Fbhcut", "24:Fblcut", "25:Mix", "26:OutLev"]);
+    expect(names("reverb")).toEqual(["30:Decay", "31:Lo Lev", "32:Mix", "33:OutLev"]);
+    expect(names("mod")).toEqual(["7:Speed", "8:HiCut", "9:Mix", "10:OutLev"]);
+    expect(modifierTargets(data, true).filter((t) => t.key === "novadrive").map((t) => t.slot)).toEqual([34, 35, 36, 37]);
   });
 });
 

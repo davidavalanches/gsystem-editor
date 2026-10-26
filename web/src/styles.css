@@ -244,6 +244,10 @@ button:disabled { opacity: 0.4; cursor: default; }
 .tile-led.on { background: var(--red); border: 0; box-shadow: 0 0 8px rgba(255, 90, 71, 0.9); }
 .tile-type { font-size: 12.5px; font-weight: 600; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .tile.on .tile-type { color: var(--ink); }
+/* Pedal and encoder assignments, under the effect tiles. */
+.tile.wide { grid-column: 1 / -1; }
+.tile-count { font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--amber); }
+.tile-count.none { color: var(--dim); font-family: inherit; font-weight: 500; }
 
 /* Loops, insert and boost: live-only switches. */
 .levels { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; flex-shrink: 0; }
@@ -327,6 +331,31 @@ button:disabled { opacity: 0.4; cursor: default; }
 .segments span.on { background: var(--muted); }
 .on-block .segments span.on { background: var(--red); }
 .empty-note { padding: 24px; color: var(--muted); }
+
+/* Modifiers: what each pedal or encoder controls. */
+.params-hint { font-size: 12px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.param-block { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--dim); margin-right: 6px; }
+.source-chip { flex-shrink: 0; padding: 2px 7px; border-radius: 9px; border: 1px solid var(--line-2); font-family: var(--mono); font-size: 11px; color: var(--dim); }
+.source-chip.on { border-color: var(--amber); color: var(--amber); font-weight: 600; }
+.source-chip.warn { border-style: dashed; border-color: var(--amber); color: var(--amber); }
+.source-chip.small { margin-left: 6px; padding: 0 5px; font-size: 9.5px; vertical-align: 1px; }
+.mod-range { position: relative; display: block; height: 5px; border-radius: 3px; background: var(--line); }
+.mod-bar { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: var(--amber); }
+.mod-mid { position: absolute; top: -3px; width: 2px; height: 11px; margin-left: -1px; background: var(--ink); }
+.mod-values { display: block; margin-top: 5px; min-height: 14px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.sheet-choices.sources { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 10px 0 6px; flex-shrink: 0; }
+.sheet-choices.sources button { height: 32px; }
+.sheet-choices.sources button.on { border-color: var(--amber); color: var(--amber); }
+.mod-rows { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 auto; }
+.mod-row { display: grid; grid-template-columns: 30px 36px 50px 36px 1fr; align-items: center; column-gap: 5px; }
+.mod-row.disabled { opacity: 0.45; }
+.mod-row button { height: 34px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--surface-3); font-size: 20px; touch-action: manipulation; }
+.mod-label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.mod-pct { font-family: var(--mono); font-size: 15px; text-align: center; white-space: nowrap; }
+.mod-equiv { text-align: right; font-family: var(--mono); font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.modifier-sheet .sheet-buttons { grid-template-columns: 1fr 1fr; }
+.modifier-sheet .sheet-buttons { margin-top: 10px; }
+.modifier-sheet .sheet-buttons button { height: 42px; font-size: 15px; font-weight: 600; }
 
 /* Fine-adjust sheet, sliding in from the right. */
 .sheet-layer { position: absolute; inset: 0; display: flex; z-index: 10; }

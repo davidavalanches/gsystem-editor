@@ -13,7 +13,8 @@
  *   This exact sequence succeeded four times, then froze the unit on the next
  *   store with identical bytes and timing; addressed to 7F, overwriting froze it
  *   too. A freeze needs a power cycle, leaves the slot unreadable and once
- *   altered a neighbouring preset. Store to the unit is disabled in the app.
+ *   altered a neighbouring preset. On this unit the freezes stayed in banks 27-29,
+ *   which the app never writes; elsewhere stores are read back to verify them.
  * - Bank Select + Program Change: sent by the unit when a preset is recalled.
  *   Over USB the unit ignores incoming Program Changes, so the editor auditions
  *   a preset by writing its parameters into the edit buffer instead.
@@ -35,7 +36,7 @@ export const DEFAULT_SYSEX_ID = 1;
 const USER_BANK_SIZE = 100; // Bank Select (CC 0) 1 = user presets 1-100, 2 = 101-200
 
 /** Block ids of the 55 22 message, captured from the unit's switches and knobs.
- * Block 1 is the levels table (loops, insert, boost). */
+ * Block 1 is the levels table (loops, insert, boost); block 13 holds the modifiers (see modifiers.ts). */
 export const BLOCK_IDS: Record<string, number> = {
   eq: 2, mod: 4, filter: 7, pitch: 8, delay: 9, comp: 10, reverb: 11, gate: 12,
 };

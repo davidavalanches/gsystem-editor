@@ -62,6 +62,10 @@ Pour le développement : `npm run dev`, puis ouvrir l'URL affichée dans Chrome.
   (vue téléphone : F12 puis mode appareil, 740×360).
 - **Banques entières** (menu ⋮) : échanger la banque affichée avec une autre, ou la copier sur une autre ;
   appliqué dans l'éditeur (annulable) puis écrit preset par preset dans le G-System, chacun vérifié.
+- **Pédales & encodeurs** (tuile PÉDALES) : pour chaque preset, quel paramètre suit la pédale d'expression,
+  la pédale de volume ou les encodeurs A–C, avec Min / Mid / Max (en % de la plage du paramètre, valeur
+  équivalente affichée). La liste suit les types d'effets choisis, comme sur le G-System ; les paramètres
+  pilotés portent un badge EXP / VOL / ENC dans leur bloc. Enregistré avec le preset (Store), envoyé en Live.
 - **Live** : chaque modification part dans la mémoire de travail du G-System (rien n'est stocké),
   les switches du pédalier sont reflétés dans l'éditeur, et changer de preset au pied fait suivre
   l'éditeur (avec relecture du preset).
@@ -77,10 +81,15 @@ Pour le développement : `npm run dev`, puis ouvrir l'URL affichée dans Chrome.
 | `B0 00 <1\|2>` + `C0 <n>` | Changement de preset envoyé par le G-System (ignoré en entrée sur USB) |
 
 Blocs : 1 = niveaux (loops 19–22, insert 23, boost 10), 2 = EQ, 4 = Mod, 7 = Filter, 8 = Pitch,
-9 = Delay, 10 = Comp, 11 = Reverb, 12 = Noise gate.
+9 = Delay, 10 = Comp, 11 = Reverb, 12 = Noise gate, 13 = modifiers (paramètres 20–57).
 
 Données d'un preset : nom (21 octets) + 165 champs de 3 octets (entiers signés 24 bits) ; chaque
 bloc d'effet est stocké `[nombre de paramètres][paramètres…]`. Voir `web/src/core/params.ts`.
+
+Modifiers : champs 125–162, 38 emplacements regroupés par bloc (Filter 4, Comp 3, Mod 5, Pitch 8,
+Delay 10, Reverb 4, NovaDrive 4). L'emplacement n d'un bloc pilote le n-ième paramètre modulable du type
+d'effet courant. Chaque emplacement : source sur 3 bits (0 aucune, 1 Vol, 2 Exp, 3–5 encodeurs A–C) puis
+Min, Mid et Max sur 7 bits chacun. Voir `web/src/core/modifiers.ts`.
 
 ## Tests
 
