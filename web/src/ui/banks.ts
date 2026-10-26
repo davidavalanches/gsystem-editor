@@ -144,7 +144,9 @@ export class BanksView {
         leds.append(led);
       }
     }
-    row.append(el("span", "slot-code", slotLabel(slot)), el("span", "slot-name", p ? p.name || "(sans nom)" : "vide"), leds);
+    const text = el("span", "slot-text");
+    text.append(el("span", "slot-name", p ? p.name || "(sans nom)" : "vide"), leds);
+    row.append(el("span", "slot-code", String((slot % PRESETS_PER_BANK) + 1)), text);
     row.insertAdjacentHTML("beforeend", ICONS.chevron);
     row.addEventListener("click", () => this.actions.open(slot));
     onLongPress(row, (x, y) => showMenu({ x, y }, this.slotMenu(slot)));

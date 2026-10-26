@@ -336,19 +336,27 @@ export class PresetView {
     this.tiles.replaceChildren(...TILES.map(([key, code]) => {
       const blk = block(key);
       const on = this.isOn(blk);
-      const tile = el("button", `tile${key === this.blockKey ? " selected" : ""}${on ? " on" : ""}`);
-      tile.type = "button";
+      // A footswitch (on/off, as on the unit) beside the label that shows the block's parameters.
+      const tile = el("div", `tile${key === this.blockKey ? " selected" : ""}${on ? " on" : ""}`);
+      const label = TILE_LABELS[key] ?? blk.label;
+      const footswitch = el("button", on ? "footswitch on" : "footswitch");
+      footswitch.type = "button";
+      footswitch.disabled = !this.buffer || blk.enableField(this.buffer.data) === null;
+      footswitch.setAttribute("aria-pressed", String(on));
+      footswitch.setAttribute("aria-label", `${label} : ${on ? "désactiver" : "activer"}`);
+      footswitch.addEventListener("click", () => this.toggleBlock(key));
+      const pick = el("button", "tile-label");
+      pick.type = "button";
+      pick.setAttribute("aria-label", `Afficher ${label}, ${on ? "activé" : "désactivé"}`);
       const kind = this.buffer ? blk.effectType(this.buffer.data)?.name : "";
       const typeShort = blk.hasType ? kind ?? "" : key === "eq" ? "3 bandes" : "Gate";
-      tile.setAttribute("aria-label", `${TILE_LABELS[key] ?? blk.label}, ${on ? "activé" : "désactivé"}`);
-      const head = el("span", "tile-head");
-      head.append(el("span", "tile-code", code), el("span", on ? "tile-led on" : "tile-led"));
-      tile.append(head, el("span", "tile-type", typeShort));
-      tile.addEventListener("click", () => {
+      pick.append(el("span", "tile-code", code), el("span", "tile-type", typeShort));
+      pick.addEventListener("click", () => {
         this.blockKey = key;
         this.closeSheet();
         this.render();
       });
+      tile.append(footswitch, pick);
       return tile;
     }), this.modifiersTile());
   }
@@ -420,7 +428,7 @@ export class PresetView {
       sw.setAttribute("aria-label", `${blk.label} : ${on ? "désactiver" : "activer"}`);
       const trackEl = el("span", "switch-track");
       trackEl.append(el("span", "switch-knob"));
-      sw.append(trackEl, el("span", "switch-text", on ? "On" : "Off"));
+      sw.append(trackEl, el("span", "switch-text", on ? "Activé" : "Désactivé"));
       sw.addEventListener("click", () => this.toggleBlock(blk.key));
       this.paramsHead.append(sw);
     }

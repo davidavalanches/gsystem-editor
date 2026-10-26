@@ -93,7 +93,8 @@ export class SettingsView {
       draw = () => {
         const v = current();
         select.disabled = v === null;
-        if (v !== null) {
+        if (v === null) select.selectedIndex = -1;
+        else {
           // Values outside the list are shown as such rather than silently mapped.
           if (![...select.options].some((o) => o.value === String(v))) select.append(new Option(String(v), String(v)));
           select.value = String(v);
