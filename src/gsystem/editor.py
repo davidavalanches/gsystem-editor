@@ -7,7 +7,6 @@ from PySide6.QtGui import QFont, QUndoCommand, QUndoStack
 from PySide6.QtWidgets import (
     QButtonGroup,
     QComboBox,
-    QDial,
     QGridLayout,
     QGroupBox,
     QInputDialog,
@@ -42,6 +41,7 @@ from .params import (
     write_field,
 )
 from .frontpanel import FrontPanel
+from .knob import Knob
 from .model import BANK_COUNT, PRESETS_PER_BANK, bank_position
 from .sysex import NAME_LEN, USER_SLOTS, Preset, SysexError
 
@@ -65,7 +65,7 @@ VIEWS = (
 
 
 class ParamControl(QWidget):
-    """Dial or value list bound to one preset field."""
+    """Metal knob, rotary on/off toggle or value list bound to one preset field."""
 
     edited = Signal(int, int)  # field, value
 
@@ -79,30 +79,21 @@ class ParamControl(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
         layout.addWidget(title)
-        self.combo = self.dial = None
+        self.combo = self.knob = None
         self.readout = QLabel()
         self.readout.setAlignment(Qt.AlignCenter)
-        if param.choices:
+        if param.choices and not param.is_switch:
             self.combo = QComboBox()
             for value in range(param.lo, param.hi + 1):
                 self.combo.addItem(param.format(value), value)
             self.combo.currentIndexChanged.connect(lambda i: self.edited.emit(index, self.combo.itemData(i)))
             layout.addWidget(self.combo)
         else:
-            self.dial = QDial()
-            self.dial.setNotchesVisible(True)
-            self.dial.setRange(param.lo, param.hi)
-            em = self.fontMetrics().height()
-            self.dial.setMinimumSize(int(em * 3.5), int(em * 3.5))
-            self.dial.valueChanged.connect(self._dial_moved)
-            self.dial.sliderReleased.connect(lambda: self.edited.emit(index, self.dial.value()))
-            layout.addWidget(self.dial, 1, Qt.AlignCenter)
+            self.knob = Knob(param.lo, param.hi, toggle=param.is_switch)
+            self.knob.valueChanged.connect(lambda v: self.readout.setText(param.format(v)))
+            self.knob.released.connect(lambda v: self.edited.emit(index, v))
+            layout.addWidget(self.knob, 1, Qt.AlignCenter)
             layout.addWidget(self.readout)
-
-    def _dial_moved(self, value: int) -> None:
-        self.readout.setText(self.param.format(value))
-        if not self.dial.isSliderDown():
-            self.edited.emit(self.index, value)
 
     def set_value(self, value: int) -> None:
         if self.combo is not None:
@@ -114,9 +105,7 @@ class ParamControl(QWidget):
             self.combo.setCurrentIndex(i)
             self.combo.blockSignals(False)
         else:
-            self.dial.blockSignals(True)
-            self.dial.setValue(value)
-            self.dial.blockSignals(False)
+            self.knob.setValue(value)
             out_of_range = not self.param.lo <= value <= self.param.hi
             self.readout.setText(self.param.format(value) + ("  ⚠ hors plage" if out_of_range else ""))
 
