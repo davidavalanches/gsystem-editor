@@ -36,6 +36,8 @@
   --faint: #7d8085;
   --dark-ink: #1a1b1d;
   --red: #f0533e;
+  /* First accent of the app: selection marks and the values being set. */
+  --accent: #ff5a47;
   --amber: #f2c230;
   --lcd: #b5d334;
   --lcd-ink: #1f2a08;
@@ -136,7 +138,8 @@ button:disabled { opacity: 0.4; cursor: default; }
   font-size: 11px;
 }
 .rail button svg { stroke: currentColor; }
-.rail button[aria-current="page"] { color: #fff; font-weight: 600; background: var(--surface-2); box-shadow: inset 3px 0 0 var(--ink); }
+.rail button[aria-current="page"] { color: #fff; font-weight: 600; background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); }
+.rail button[aria-current="page"] svg .accent { stroke: var(--accent); }
 .rail .midi-icon { position: relative; display: block; }
 .rail .midi-dot { position: absolute; top: -2px; right: -4px; width: 7px; height: 7px; border-radius: 50%; background: var(--line-2); }
 .rail .midi-dot.on { background: var(--green); }
@@ -189,7 +192,7 @@ button:disabled { opacity: 0.4; cursor: default; }
   border-radius: 6px;
   background: transparent;
 }
-.bank-list button[aria-selected="true"] { background: var(--selected); box-shadow: inset 3px 0 0 var(--ink); }
+.bank-list button[aria-selected="true"] { background: var(--selected); box-shadow: inset 3px 0 0 var(--accent); }
 .bank-num { font-family: var(--display); font-size: 13px; color: #8a8d92; }
 .bank-num.used { color: #f2f2f2; }
 [aria-selected="true"] .bank-num { color: var(--ink); }
@@ -213,7 +216,7 @@ button:disabled { opacity: 0.4; cursor: default; }
   user-select: none;
 }
 .slot:last-child { border-bottom: 0; }
-.slot.current { background: var(--current); box-shadow: inset 3px 0 0 var(--ink); }
+.slot.current { background: var(--current); box-shadow: inset 3px 0 0 var(--accent); }
 .slot-code { font-family: var(--display); font-size: 22px; color: #f2f2f2; width: 34px; flex-shrink: 0; white-space: nowrap; }
 .slot.empty .slot-code { color: var(--faint); }
 .slot-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
@@ -261,7 +264,7 @@ button:disabled { opacity: 0.4; cursor: default; }
   text-align: left;
 }
 .tile:nth-child(odd):not(.wide) { border-right: 1px solid var(--groove); }
-.tile.selected { background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 -3px 0 var(--ink); }
+.tile.selected { background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 -3px 0 var(--accent); }
 .footswitch {
   flex-shrink: 0;
   width: 42px;
@@ -351,19 +354,19 @@ button:disabled { opacity: 0.4; cursor: default; }
   background: transparent;
   text-align: left;
 }
-.param.selected { background: var(--selected); }
+.param.selected { background: var(--selected); box-shadow: inset 3px 0 0 var(--accent); }
 .param-top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; margin-bottom: 7px; }
 .param-name { font-family: var(--display); font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .param-value { font-family: var(--mono); font-size: 14px; font-weight: 500; white-space: nowrap; }
 .param-value.warn { color: var(--amber); }
 .track { position: relative; display: block; height: 4px; border-radius: 2px; background: var(--line); }
 .track-fill { position: absolute; top: 0; bottom: 0; border-radius: 2px; background: var(--faint); }
-.on-block .track-fill { background: var(--ink); }
+.on-block .track-fill { background: var(--accent); }
 .track-thumb { position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #fff, #b9bdc2); border: 2px solid var(--dark-ink); }
 .segments { display: flex; gap: 3px; }
 .segments span { flex: 1; height: 5px; border-radius: 3px; background: var(--line); }
 .segments span.on { background: var(--faint); }
-.on-block .segments span.on { background: var(--ink); }
+.on-block .segments span.on { background: var(--accent); }
 .empty-note { padding: 24px; color: var(--muted); }
 
 /* Modifiers: what each pedal or encoder controls. */
@@ -409,12 +412,12 @@ button:disabled { opacity: 0.4; cursor: default; }
 .sheet-head .field { font-family: var(--mono); font-size: 11px; color: var(--dim); }
 .sheet-value { margin: auto 0 14px; padding: 8px 12px; background: var(--lcd); color: var(--lcd-ink); font-family: var(--lcd-font); font-size: 44px; line-height: 1; text-align: center; white-space: nowrap; overflow: hidden; }
 .sheet .track { height: 6px; border-radius: 3px; margin: 0 12px; touch-action: none; }
-.sheet .track-fill { border-radius: 3px; background: var(--ink); }
+.sheet .track-fill { border-radius: 3px; background: var(--accent); }
 .sheet .track-thumb { width: 24px; height: 24px; margin: -12px 0 0 -12px; }
 .sheet-range { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--dim); margin: 10px 12px auto; }
 .sheet-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; overflow-y: auto; margin: 4px 0 auto; max-height: 190px; }
 .sheet-choices button { height: 38px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--surface-3); font-size: 13px; }
-.sheet-choices button.on { border-color: var(--ink); background: var(--selected); color: #fff; font-weight: 600; }
+.sheet-choices button.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .sheet-buttons { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 14px; }
 .sheet-buttons button { height: 52px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--surface-3); font-size: 24px; touch-action: manipulation; }
 .sheet-buttons .ok { border: 0; background: var(--ink); color: var(--dark-ink); font-weight: 700; font-size: 15px; }
