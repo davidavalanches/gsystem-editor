@@ -1,6 +1,10 @@
 /** Settings view: the unit's global settings (levels, utility, pedals, MIDI, tuner), read and written live. */
 
 import { GLOBAL_GROUPS, formatGlobal, globalKey, globalRaw, globalValue, type GlobalParam } from "../core/globals";
+import {
+  FUNCTIONS, STYLES, SWITCH_BANKS, SWITCH_BLOCK, SWITCH_COUNT, SWITCH_FIRST, decodeSwitch, encodeSwitch, switchKind,
+  withFunction, type SwitchSetting,
+} from "../core/switches";
 import { el } from "./dom";
 
 export class SettingsView {
@@ -27,6 +31,11 @@ export class SettingsView {
       for (const g of group.params) card.append(this.row(g));
       body.append(card);
     }
+    const switches = el("div", "card settings-card switches-card");
+    switches.append(el("h2", "", "Switches"),
+      el("p", "", "Fonction de chaque switch du pédalier. EDIT, UP et DOWN sont fixes."));
+    for (let n = 0; n < SWITCH_COUNT; n++) switches.append(this.switchRow(n));
+    body.append(switches);
     this.el.append(header, body);
     this.setConnected(false);
   }
@@ -58,6 +67,67 @@ export class SettingsView {
       ? "Connectez le G-System (vue MIDI) : ces réglages sont lus et modifiés directement dans le pédalier."
       : this.raw.size ? "Chaque changement est appliqué immédiatement par le G-System (ce ne sont pas des réglages de preset)."
         : "Lecture des réglages…";
+  }
+
+  /** One footswitch: its function, then the style, the preset to recall or the CC to send. */
+  private switchRow(n: number): HTMLElement {
+    const param = SWITCH_FIRST + n;
+    const key = globalKey(SWITCH_BLOCK, param);
+    const row = el("div", "setting switch-setting");
+    row.append(el("span", "switch-number", `#${n + 1}`));
+    const control = el("div", "setting-control");
+    row.append(control);
+    const select = (label: string, options: string[]) => {
+      const s = el("select", "type-select");
+      s.setAttribute("aria-label", `Switch #${n + 1} : ${label}`);
+      options.forEach((o, i) => s.append(new Option(o, String(i))));
+      return s;
+    };
+    const fn = select("fonction", [...FUNCTIONS]);
+    const style = select("style", STYLES);
+    const bank = select("banque", SWITCH_BANKS);
+    const preset = select("preset", ["1", "2", "3", "4", "5"]);
+    preset.classList.add("narrow");
+    const cc = select("CC", Array.from({ length: 120 }, (_, i) => `CC ${i}`));
+    control.append(fn, style, bank, preset, cc);
+
+    const current = (): SwitchSetting | null => {
+      const raw = this.raw.get(key);
+      return raw === undefined ? null : decodeSwitch(raw);
+    };
+    const send = (next: SwitchSetting) => {
+      const raw = encodeSwitch(next);
+      if (raw === this.raw.get(key)) return;
+      this.raw.set(key, raw);
+      this.onChange?.(SWITCH_BLOCK, param, raw);
+      draw();
+    };
+    const set = (s: HTMLSelectElement, v: number) => {
+      if (![...s.options].some((o) => o.value === String(v))) s.append(new Option(String(v), String(v)));
+      s.value = String(v);
+    };
+    fn.addEventListener("change", () => { const c = current(); if (c) send(withFunction(c, Number(fn.value))); });
+    style.addEventListener("change", () => { const c = current(); if (c) send({ ...c, p1: Number(style.value) }); });
+    bank.addEventListener("change", () => { const c = current(); if (c) send({ ...c, p1: Number(bank.value) }); });
+    cc.addEventListener("change", () => { const c = current(); if (c) send({ ...c, p1: Number(cc.value) }); });
+    preset.addEventListener("change", () => { const c = current(); if (c) send({ ...c, p2: Number(preset.value) }); });
+
+    const draw = () => {
+      const c = current();
+      fn.disabled = c === null;
+      if (c === null) fn.selectedIndex = -1;
+      const kind = c ? switchKind(c.fn) : "none";
+      style.hidden = kind !== "style";
+      bank.hidden = preset.hidden = kind !== "preset";
+      cc.hidden = kind !== "cc";
+      if (!c) return;
+      set(fn, c.fn);
+      if (kind === "style") set(style, c.p1);
+      if (kind === "preset") { set(bank, c.p1); set(preset, c.p2); }
+      if (kind === "cc") set(cc, c.p1);
+    };
+    this.rows.set(key, draw);
+    return row;
   }
 
   private row(g: GlobalParam): HTMLElement {

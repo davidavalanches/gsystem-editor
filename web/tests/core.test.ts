@@ -12,6 +12,7 @@ import {
   BLOCK_IDS, MidiParser, identityVersion, paramMessage, paramsRequest, parseParamMessage, parseParamValues, presetRequest,
   storeMessages,
 } from "../src/core/protocol";
+import { decodeSwitch, describeSwitch, encodeSwitch } from "../src/core/switches";
 import { SqsFile, USER_BANK_KIND, readSyx, writeSyx } from "../src/core/sqs";
 import {
   ChecksumError, PRESET_DATA_LEN, PRESET_DUMP_LEN, Preset, SysexError, bytesToNibbles, nibblesToBytes,
@@ -214,6 +215,19 @@ describe("modifiers", () => {
     expect(names("reverb")).toEqual(["30:Decay", "31:Lo Lev", "32:Mix", "33:OutLev"]);
     expect(names("mod")).toEqual(["7:Speed", "8:HiCut", "9:Mix", "10:OutLev"]);
     expect(modifierTargets(data, true).filter((t) => t.key === "novadrive").map((t) => t.slot)).toEqual([34, 35, 36, 37]);
+  });
+});
+
+describe("switches", () => {
+  it("decodes the unit's assignments", () => {
+    // Read from the unit: #1, #8, #11, #12, #15.
+    expect(describeSwitch(decodeSwitch(1))).toBe("Filter (Toggle)");
+    expect(describeSwitch(decodeSwitch(0x101))).toBe("Filter (Hold)");
+    expect(describeSwitch(decodeSwitch(11))).toBe("Mod (Toggle)");
+    expect(describeSwitch(decodeSwitch(277264))).toBe("Preset 38-5");
+    expect(describeSwitch(decodeSwitch(202000))).toBe("Preset 00-4");
+    expect(describeSwitch(decodeSwitch(65552))).toBe("Preset Banque courante-2");
+    expect(encodeSwitch(decodeSwitch(277264))).toBe(277264);
   });
 });
 

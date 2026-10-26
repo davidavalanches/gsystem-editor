@@ -506,3 +506,9 @@ button:disabled { opacity: 0.4; cursor: default; }
 .setting-control .type-select { width: 130px; }
 .setting-value { min-width: 64px; text-align: center; font-family: var(--mono); font-size: 14px; }
 .step { width: 36px; height: 34px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--surface-3); font-size: 18px; touch-action: manipulation; }
+.switches-card { grid-column: 1 / -1; }
+.switches-card .setting { justify-content: flex-start; gap: 14px; }
+.switch-number { width: 34px; flex-shrink: 0; font-family: var(--display); font-size: 12px; color: var(--soft); }
+.switches-card .setting-control { flex-wrap: wrap; }
+.switches-card .setting-control .type-select { width: 140px; }
+.switches-card .setting-control .type-select.narrow { width: 64px; }

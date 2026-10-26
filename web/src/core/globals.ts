@@ -14,10 +14,13 @@
  * Value lists are the firmware's.
  */
 
+import { SWITCH_BLOCK, SWITCH_COUNT, SWITCH_FIRST } from "./switches";
+
 export const LEVELS_BLOCK = 1;
 export const SYSTEM_BLOCK = 5;
 /** Ranges read in one 55 47 request each: [block, first parameter, count]. */
-export const GLOBAL_RANGES: [number, number, number][] = [[LEVELS_BLOCK, 0, 30], [SYSTEM_BLOCK, 3, 23], [0x0d, 58, 1]];
+export const GLOBAL_RANGES: [number, number, number][] = [[LEVELS_BLOCK, 0, 30], [SYSTEM_BLOCK, 3, 23], [0x0d, 58, 1],
+  [SWITCH_BLOCK, SWITCH_FIRST, SWITCH_COUNT]];
 
 const ONOFF = ["Off", "On"];
 const PRESET_GLOBAL = ["Preset", "Global"];
