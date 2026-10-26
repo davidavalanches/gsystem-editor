@@ -52,6 +52,11 @@ Pour le développement : `npm run dev`, puis ouvrir l'URL affichée dans Chrome.
   8 tuiles d'effets avec voyant et type, rangée Loop 1–4 / Insert / Boost (en Live), paramètres du bloc
   en curseurs sur deux colonnes, panneau de réglage fin (valeur, curseur, − / + maintenus, choix pour
   les listes), tampon d'édition avec Store.
+- **Store** : enregistre dans la banque de l'éditeur et, si le G-System est connecté, l'écrit dans le pédalier
+  (séquence de Vyzor, adressée au SysEx ID du G-System, réglable dans la vue MIDI), puis le relit pour vérifier.
+  Les banques **27 à 29** sont exclues de l'écriture : sur ce G-System, y écrire le bloque (zone mémoire défaillante).
+- **Banques entières** (menu ⋮) : échanger la banque affichée avec une autre, ou la copier sur une autre ;
+  appliqué dans l'éditeur (annulable) puis écrit preset par preset dans le G-System, chacun vérifié.
 - **Live** : chaque modification part dans la mémoire de travail du G-System (rien n'est stocké),
   les switches du pédalier sont reflétés dans l'éditeur, et changer de preset au pied fait suivre
   l'éditeur (avec relecture du preset).

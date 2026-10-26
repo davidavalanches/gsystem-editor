@@ -1,11 +1,12 @@
 /** Application shell: navigation rail, views, file actions, MIDI connection and Live wiring. */
 
-import { BankStore, PRESETS_PER_BANK, slotLabel } from "../core/bank";
+import { AVOIDED_BANKS, BANK_COUNT, BankStore, PRESETS_PER_BANK, isAvoided, slotLabel } from "../core/bank";
 import { DEFAULT_SYSEX_ID, GSystemLink } from "../core/protocol";
 import { SqsFile, readSyx } from "../core/sqs";
 import { USER_PRESET_BASE, USER_SLOTS, sameBytes, type Preset } from "../core/sysex";
 import { midiAccess } from "../midi/transport";
 import { BanksView } from "./banks";
+import { askText } from "./dialog";
 import { el } from "./dom";
 import { loadSession, pickFile, saveFile, storeSession } from "./files";
 import { MidiView } from "./midiview";
@@ -14,9 +15,9 @@ import { ICONS, type MenuItem } from "./widgets";
 
 type ReadMode = "all" | "bank" | "refresh" | "verify";
 const SYSEX_ID_KEY = "gsystem-editor.sysex-id";
-/** Writing presets into the unit froze it intermittently on firmware 4.05, even with the exact
- * sequence Vyzor sends (see protocol.ts). Off until the cause is understood. */
-const STORE_TO_UNIT = false;
+/** Write stored presets into the unit (Vyzor's Sync sequence, checked by reading back). */
+const STORE_TO_UNIT = true;
+const pad2 = (n: number) => String(n).padStart(2, "0");
 type ViewKey = "banks" | "preset" | "midi";
 
 export class App {
@@ -126,6 +127,8 @@ export class App {
       { label: "Ouvrir un fichier (.sqs, .syx)…", action: () => void this.open() },
       { label: "Exporter la banque (.syx)", action: () => void this.exportSyx() },
       { label: "Lire cette banque du G-System", action: () => this.startRead("bank"), disabled: !this.link },
+      { label: "Échanger cette banque avec…", action: () => void this.bankOperation("swap") },
+      { label: "Copier cette banque sur…", action: () => void this.bankOperation("copy") },
       { label: `Annuler${this.bank.undo.undoText ? ` : ${this.bank.undo.undoText}` : ""}`,
         action: () => this.bank.undoLast(), disabled: !this.bank.undo.canUndo },
       { label: "Rétablir", action: () => this.bank.redoLast(), disabled: !this.bank.undo.canRedo },
@@ -245,25 +248,84 @@ export class App {
     }
   }
 
-  /** Store into the editor's bank and, when connected, into the unit, then read it back to check. */
+  /** Store into the editor's bank and, when connected, into the unit. */
   private store(slot: number, p: Preset): void {
     this.bank.setSlots(new Map([[slot, p]]), `Store « ${p.name} »`);
-    if (!this.link || !STORE_TO_UNIT) {
-      this.notify(`« ${p.name} » enregistré dans la banque de l'éditeur`
-        + (this.link ? " (l'écriture dans le G-System est désactivée pour l'instant)" : " (G-System non connecté)"));
-      return;
-    }
-    if (this.link.busy) {
-      alert("Le G-System est occupé (lecture en cours) : le preset est enregistré dans l'éditeur, "
-        + "refaites Store une fois la lecture terminée pour l'écrire dans le pédalier.");
-      return;
-    }
-    this.notify(`Écriture de « ${p.name} » dans le G-System (${slotLabel(slot)})…`);
-    this.verifying = { slot, preset: p };
-    this.link.store(slot, p, () => this.startRead("verify"));
+    this.writeToUnit(new Map([[slot, p]]));
   }
 
+  /** Swap the shown bank with another one, or copy it over another one (5 presets each). */
+  private async bankOperation(kind: "swap" | "copy"): Promise<void> {
+    const from = this.banks.bankIndex;
+    const answer = await askText(kind === "swap" ? `Échanger la banque ${pad2(from)} avec la banque (00–39) :`
+      : `Copier la banque ${pad2(from)} sur la banque (00–39) :`, "", 2);
+    if (answer === null || answer.trim() === "") return;
+    const to = Number(answer);
+    if (!Number.isInteger(to) || to < 0 || to >= BANK_COUNT || to === from) {
+      alert("Indiquez un numéro de banque entre 00 et 39, différent de la banque affichée.");
+      return;
+    }
+    const written = kind === "swap" ? [from, to] : [to];
+    if (written.some((b) => AVOIDED_BANKS.has(b))) {
+      alert("Les banques 27 à 29 sont exclues : écrire dedans bloque le G-System.");
+      return;
+    }
+    const changes = new Map<number, Preset | null>();
+    for (let i = 0; i < PRESETS_PER_BANK; i++) {
+      const a = from * PRESETS_PER_BANK + i, b = to * PRESETS_PER_BANK + i;
+      changes.set(b, this.bank.preset(a));
+      if (kind === "swap") changes.set(a, this.bank.preset(b));
+    }
+    if (kind === "copy") {
+      const lost = [...changes].filter(([s, p]) => this.bank.preset(s) && !sameBytes(this.bank.preset(s)!.data, p?.data))
+        .map(([s]) => `${slotLabel(s)}  ${this.bank.preset(s)!.name}`);
+      if (lost.length && !confirm(`Ces presets de la banque ${pad2(to)} vont être remplacés :\n\n${lost.join("\n")}\n\n`
+        + "Vous pourrez annuler dans l'éditeur, mais pas dans le G-System une fois écrits.")) return;
+    }
+    this.bank.setSlots(changes, kind === "swap" ? `Échanger les banques ${pad2(from)} et ${pad2(to)}`
+      : `Copier la banque ${pad2(from)} sur ${pad2(to)}`);
+    this.banks.showBank(to, true);
+    this.writeToUnit(changes);
+  }
+
+  private writeQueue: { slot: number; preset: Preset }[] = [];
+  private writeTotal = 0;
   private verifying: { slot: number; preset: Preset } | null = null;
+
+  /** Write presets into the unit one at a time, each read back before the next. */
+  private writeToUnit(changes: Map<number, Preset | null>): void {
+    const names = [...changes.values()].filter(Boolean).map((p) => `« ${p!.name} »`);
+    if (!this.link || !STORE_TO_UNIT) {
+      this.notify(`${names.join(", ") || "Modification"} enregistré(s) dans la banque de l'éditeur (G-System non connecté)`);
+      return;
+    }
+    if (this.link.busy || this.writeQueue.length) {
+      alert("Le G-System est occupé : les presets sont enregistrés dans l'éditeur. "
+        + "Refaites l'opération une fois la lecture ou l'écriture en cours terminée pour les écrire dans le pédalier.");
+      return;
+    }
+    const notes: string[] = [];
+    const todo: { slot: number; preset: Preset }[] = [];
+    for (const [slot, preset] of [...changes].sort((a, b) => a[0] - b[0])) {
+      if (isAvoided(slot)) notes.push(`${slotLabel(slot)} : banque exclue, non écrit dans le G-System`);
+      else if (!preset) notes.push(`${slotLabel(slot)} : le G-System ne permet pas de vider un emplacement, il garde son ancien preset`);
+      else todo.push({ slot, preset });
+    }
+    if (notes.length) alert(notes.join("\n"));
+    this.writeQueue = todo;
+    this.writeTotal = todo.length;
+    this.nextWrite();
+  }
+
+  private nextWrite(): void {
+    const item = this.writeQueue[0];
+    if (!item) return;
+    const done = this.writeTotal - this.writeQueue.length;
+    this.notify(`Écriture de « ${item.preset.name} » dans le G-System (${slotLabel(item.slot)})`
+      + (this.writeTotal > 1 ? ` — ${done + 1}/${this.writeTotal}` : "") + "…");
+    this.verifying = item;
+    this.link!.store(item.slot, item.preset, () => this.startRead("verify"));
+  }
 
   private startRead(mode: ReadMode): void {
     if (!this.link || this.link.busy) return;
@@ -293,11 +355,20 @@ export class App {
       this.verifying = null;
       const got = presets[0];
       if (got && sameBytes(got.data, expected.preset.data)) {
-        this.notify(`« ${expected.preset.name} » enregistré dans le G-System (${slotLabel(expected.slot)}, vérifié)`);
+        this.writeQueue.shift();
+        if (this.writeQueue.length) {
+          this.nextWrite();
+        } else {
+          this.notify(this.writeTotal > 1 ? `${this.writeTotal} presets écrits dans le G-System (vérifiés)`
+            : `« ${expected.preset.name} » enregistré dans le G-System (${slotLabel(expected.slot)}, vérifié)`);
+        }
       } else {
+        const left = this.writeQueue.length - 1;
+        this.writeQueue = [];
         alert(`Le G-System n'a pas confirmé l'enregistrement de « ${expected.preset.name} » en ${slotLabel(expected.slot)}`
-          + (got ? " : le preset relu est différent." : " : l'emplacement ne répond pas.")
-          + "\nLe preset reste enregistré dans la banque de l'éditeur. Vérifiez le SysEx ID dans la vue MIDI.");
+          + (got ? " : le preset relu est différent." : " : l'emplacement ne répond pas (G-System bloqué ? éteignez-le et rallumez-le).")
+          + (left ? `\n${left} autre(s) écriture(s) annulée(s).` : "")
+          + "\nLes presets restent enregistrés dans la banque de l'éditeur.");
       }
       return;
     }

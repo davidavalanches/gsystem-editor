@@ -1,6 +1,6 @@
 /** Banks view: the 40 banks on the left, the 5 presets of the chosen bank on the right. */
 
-import { BANK_COUNT, PRESETS_PER_BANK, slotLabel, type BankStore } from "../core/bank";
+import { AVOIDED_BANKS, BANK_COUNT, PRESETS_PER_BANK, slotLabel, type BankStore } from "../core/bank";
 import { block, readField } from "../core/params";
 import { NAME_LEN, type Preset } from "../core/sysex";
 import { askText } from "./dialog";
@@ -79,6 +79,8 @@ export class BanksView {
     this.bankButtons.forEach((button, b) => {
       const selected = b === this.bankIndex;
       button.setAttribute("aria-selected", String(selected));
+      button.classList.toggle("avoided", AVOIDED_BANKS.has(b));
+      button.title = AVOIDED_BANKS.has(b) ? "Banque exclue de l'écriture dans le G-System (zone mémoire défaillante)" : "";
       const used = [...Array(PRESETS_PER_BANK).keys()].map((i) => !!this.bank.preset(b * PRESETS_PER_BANK + i));
       const num = el("span", used.some(Boolean) ? "bank-num used" : "bank-num", String(b).padStart(2, "0"));
       const dots = el("span", "fill-dots");
