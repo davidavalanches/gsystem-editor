@@ -547,6 +547,9 @@ class PresetEditor(QWidget):
     def press(self, key: str) -> None:
         """A footswitch of the virtual front panel was clicked."""
         if key in SWITCH_BLOCKS and self.buffer is not None:
+            if self.live.isChecked() and key not in self.block_ids:
+                self.notice.emit(f"{block(key).label} : bloc pas encore appris, le G-System ne suivra pas. "
+                                 "Utilisez « Apprendre les switches… » dans le panneau MIDI.")
             field = block(key).enable_field(self.buffer.data)
             if field is not None:
                 self._toggle_block(key, read_field(self.buffer.data, field) != 1)

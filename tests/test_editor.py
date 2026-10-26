@@ -130,3 +130,16 @@ def test_preset_change_in_live_mode_pushes_to_edit_buffer(app):
     sent.clear()
     ed.follow_unit(150)  # recalled on the unit: nothing sent back
     assert ed.slot == 150 and sent == []
+
+
+def test_unlearned_block_warns_in_live_mode(editor):
+    ed, _model = editor
+    notices = []
+    ed.notice.connect(notices.append)
+    ed.send_param = lambda *a: None
+    ed.block_ids = {"delay": 9}
+    ed.live.setEnabled(True)
+    ed.live.setChecked(True)
+    notices.clear()
+    ed.press("pitch")
+    assert notices and "pas encore appris" in notices[0]
