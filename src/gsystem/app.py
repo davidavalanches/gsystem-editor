@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
+    QProgressBar,
     QPushButton,
     QSplitter,
     QStackedWidget,
@@ -34,7 +35,7 @@ from PySide6.QtWidgets import (
 
 from . import __version__
 from .editor import PresetEditor
-from .midi import MidiInput
+from .midi import GSystemReader, MidiInput, is_gsystem_identity
 from .model import COL_NAME, BankModel, Library, slot_label
 from .sqs import atomic_write, read_syx
 from .sysex import USER_SLOTS, Preset, SysexError, checksum, bytes_to_nibbles, is_preset_dump
@@ -105,21 +106,31 @@ class DetailPanel(QWidget):
 
 
 class MidiPanel(QWidget):
-    """Port selection, incoming dump list and raw capture for protocol work."""
+    """Connection to the G-System: identification, bank reading and raw capture."""
 
     def __init__(self, window: MainWindow) -> None:
         super().__init__(window)
         self.window = window
         self.midi = MidiInput(self)
         self.midi.message.connect(self.on_message)
+        self.reader = GSystemReader(self.midi, self)
+        self.reader.progress.connect(self.on_progress)
+        self.reader.finished.connect(self.on_bank_read)
         self.capture: list[bytes] = []
 
         self.ports = QComboBox()
         refresh = QPushButton("Actualiser")
         refresh.clicked.connect(self.refresh_ports)
-        self.listen = QPushButton("Écouter", checkable=True)
-        self.listen.toggled.connect(self.on_listen)
+        self.connect_button = QPushButton("Connecter", checkable=True)
+        self.connect_button.toggled.connect(self.on_connect)
         self.status = QLabel()
+        self.status.setWordWrap(True)
+        self.read_button = QPushButton("Lire la banque du G-System")
+        self.read_button.setToolTip("Demande les 200 presets utilisateur un par un (lecture seule)")
+        self.read_button.clicked.connect(self.read_bank)
+        self.read_button.setEnabled(False)
+        self.progress = QProgressBar()
+        self.progress.hide()
         self.received = QListWidget()
         self.received.setSelectionMode(QAbstractItemView.ExtendedSelection)
         add = QPushButton("Placer dans la banque…")
@@ -130,16 +141,18 @@ class MidiPanel(QWidget):
         row = QHBoxLayout()
         row.addWidget(self.ports, 1)
         row.addWidget(refresh)
-        row.addWidget(self.listen)
         layout = QVBoxLayout(self)
         layout.addLayout(row)
+        layout.addWidget(self.connect_button)
         layout.addWidget(self.status)
-        layout.addWidget(QLabel("Presets reçus du G-System :"))
+        layout.addWidget(self.read_button)
+        layout.addWidget(self.progress)
+        layout.addWidget(QLabel("Messages et presets reçus :"))
         layout.addWidget(self.received, 1)
         layout.addWidget(add)
         layout.addWidget(save_capture)
-        hint = QLabel("Réception seule : rien n'est envoyé au G-System tant que le protocole "
-                      "d'envoi n'a pas été validé sur le matériel.")
+        hint = QLabel("Lecture seule : l'éditeur ne fait que des demandes de lecture. "
+                      "L'écriture vers le G-System viendra après validation sur le matériel.")
         hint.setWordWrap(True)
         layout.addWidget(hint)
         self.refresh_ports()
@@ -151,28 +164,45 @@ class MidiPanel(QWidget):
             return
         ports = MidiInput.ports()
         self.ports.addItems(ports)
+        for i, name in enumerate(ports):
+            if "G-System" in name:
+                self.ports.setCurrentIndex(i)
         self.status.setText(f"{len(ports)} port(s) MIDI détecté(s)." if ports else "Aucun port MIDI détecté.")
 
-    def on_listen(self, on: bool) -> None:
+    def on_connect(self, on: bool) -> None:
         if not on:
+            if self.reader.busy:
+                self.reader.cancel()
             self.midi.close()
-            self.status.setText("Écoute arrêtée.")
+            self.reader.close_output()
+            self.read_button.setEnabled(False)
+            self.status.setText("Déconnecté.")
             return
         if self.ports.currentIndex() < 0:
-            self.listen.setChecked(False)
+            self.connect_button.setChecked(False)
             return
         try:
             self.midi.open(self.ports.currentIndex())
+            self.reader.open_output(self.ports.currentText())
+            self.reader.identify()
         except Exception as exc:  # rtmidi raises its own error types
-            self.listen.setChecked(False)
+            self.connect_button.setChecked(False)
+            self.midi.close()
             QMessageBox.warning(self, "MIDI", f"Impossible d'ouvrir le port : {exc}")
             return
-        self.status.setText(f"Écoute de « {self.midi.port_name} »…")
+        self.status.setText(f"Connecté à « {self.midi.port_name} », identification…")
 
     def on_message(self, msg: bytes) -> None:
         self.capture.append(msg)
+        if is_gsystem_identity(msg):
+            version = f"{msg[14]}.{msg[15]:02d}"
+            self.status.setText(f"G-System détecté (version {version}).")
+            self.read_button.setEnabled(True)
+            return
+        if self.reader.busy:
+            return
         if not is_preset_dump(msg):
-            self.status.setText(f"{len(self.capture)} message(s) capturé(s), dernier : {msg[:12].hex(' ')}…")
+            self.received.addItem(msg[:16].hex(" ") + ("…" if len(msg) > 16 else ""))
             return
         preset = Preset.from_sysex(msg, strict=False)
         state = "" if preset.checksum_ok else "  ⚠ somme invalide"
@@ -180,8 +210,33 @@ class MidiPanel(QWidget):
         item.setData(Qt.UserRole, preset)
         self.received.addItem(item)
 
+    def read_bank(self) -> None:
+        if self.reader.busy:
+            self.reader.cancel()
+            return
+        if not self.window.maybe_discard():
+            return
+        self.read_button.setText("Annuler la lecture")
+        self.progress.setRange(0, USER_SLOTS)
+        self.progress.setValue(0)
+        self.progress.show()
+        self.reader.read_bank()
+
+    def on_progress(self, done: int, total: int) -> None:
+        self.progress.setValue(done)
+        self.status.setText(f"Lecture du preset {done}/{total}…")
+
+    def on_bank_read(self, presets: list, missing: list) -> None:
+        self.read_button.setText("Lire la banque du G-System")
+        self.progress.hide()
+        if not presets:
+            self.status.setText("Aucun preset reçu.")
+            return
+        self.window.load_from_device(presets)
+        self.status.setText(f"{len(presets)} presets lus, {len(missing)} emplacement(s) vide(s).")
+
     def add_to_bank(self) -> None:
-        presets = [item.data(Qt.UserRole) for item in self.received.selectedItems()]
+        presets = [item.data(Qt.UserRole) for item in self.received.selectedItems() if item.data(Qt.UserRole)]
         changes = {p.user_slot: p for p in presets if p.user_slot is not None}
         if changes and self.window.confirm_overwrite(changes):
             self.window.model.set_slots(changes, f"Réception MIDI de {len(changes)} preset(s)")
@@ -195,7 +250,10 @@ class MidiPanel(QWidget):
             atomic_write(Path(path), b"".join(self.capture))
 
     def shutdown(self) -> None:
+        if self.reader.busy:
+            self.reader.cancel()
         self.midi.close()
+        self.reader.close_output()
 
 
 class MainWindow(QMainWindow):
@@ -461,6 +519,19 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"{used} presets chargés"
                                      + (f", {bad} avec une somme de contrôle invalide" if bad else ""))
 
+    def load_from_device(self, presets: list[Preset]) -> None:
+        slots: list[Preset | None] = [None] * USER_SLOTS
+        for p in presets:
+            if p.user_slot is not None:
+                slots[p.user_slot] = p
+        self.model.set_library(Library(slots))
+        self.device_read_at = datetime.now()
+        self.table.selectRow(0)
+        self.update_title()
+        self.set_mode(0)
+        self.statusBar().showMessage(f"{len(presets)} presets lus depuis le G-System. "
+                                     "Pensez à les enregistrer (Fichier → Exporter la banque en .syx).")
+
     def save(self) -> None:
         if not self.resolve_pending_edit():
             return
@@ -517,7 +588,13 @@ class MainWindow(QMainWindow):
     def update_title(self, *_args) -> None:
         path = self.model.library.path
         dirty = "" if self.model.undo_stack.isClean() else " *"
-        self.setWindowTitle(f"{path.name if path else 'Nouvelle banque'}{dirty} — G-System Editor")
+        if path is not None:
+            title = path.name
+        elif getattr(self, "device_read_at", None) and self.model.library.sqs is None:
+            title = f"G-System (lu à {self.device_read_at:%H:%M})"
+        else:
+            title = "Nouvelle banque"
+        self.setWindowTitle(f"{title}{dirty} — G-System Editor")
 
     def closeEvent(self, event) -> None:
         if not self.maybe_discard():

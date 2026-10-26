@@ -1,17 +1,36 @@
-"""MIDI input via rtmidi (ALSA on Linux, CoreMIDI on macOS).
+"""MIDI link to the G-System via rtmidi (ALSA on Linux, CoreMIDI on macOS).
 
-Receive-only for now: nothing is ever sent to the unit until the transfer
-protocol has been validated on real hardware.
+Only read requests are sent for now: the Universal Device Inquiry and the
+preset request (``55 45``). Nothing that writes to the unit is implemented
+until the write messages have been validated on the hardware.
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, Signal
+from collections import deque
+
+from PySide6.QtCore import QObject, QTimer, Signal
+
+from .sysex import MODEL_G_SYSTEM, TC_MANUFACTURER, USER_PRESET_BASE, USER_SLOTS, Preset, is_preset_dump
 
 try:
     import rtmidi
 except ImportError:  # pragma: no cover - reported in the UI
     rtmidi = None
+
+DEVICE_INQUIRY = bytes.fromhex("F07E7F0601F7")
+REQUEST_PRESET = 0x45
+REQUEST_TIMEOUT_MS = 1500
+
+
+def preset_request(number: int, device_id: int = 0) -> bytes:
+    return bytes((0xF0, *TC_MANUFACTURER, device_id, MODEL_G_SYSTEM, REQUEST_PRESET, 0x01,
+                  number >> 7, number & 0x7F, 0xF7))
+
+
+def is_gsystem_identity(msg: bytes) -> bool:
+    return msg[:2] == b"\xf0\x7e" and msg[3:5] == b"\x06\x02" and msg[5:8] == TC_MANUFACTURER \
+        and msg[8] == MODEL_G_SYSTEM
 
 
 class MidiInput(QObject):
@@ -57,3 +76,86 @@ class MidiInput(QObject):
     def _on_message(self, event, _data=None) -> None:
         msg, _delta = event
         self.message.emit(bytes(msg))
+
+
+class GSystemReader(QObject):
+    """Fetches user presets one request at a time, read-only."""
+
+    progress = Signal(int, int)  # done, total
+    preset_received = Signal(object)  # Preset
+    finished = Signal(list, list)  # presets, numbers without reply
+
+    def __init__(self, midi_in: MidiInput, parent=None) -> None:
+        super().__init__(parent)
+        self.midi_in = midi_in
+        self._out = None
+        self._queue: deque[int] = deque()
+        self._current: int | None = None
+        self._received: list[Preset] = []
+        self._missing: list[int] = []
+        self._total = 0
+        self._timer = QTimer(self, singleShot=True)
+        self._timer.timeout.connect(self._timed_out)
+        midi_in.message.connect(self._on_message)
+
+    @property
+    def busy(self) -> bool:
+        return self._current is not None
+
+    def open_output(self, port_name: str) -> None:
+        self.close_output()
+        out = rtmidi.MidiOut()
+        names = out.get_ports()
+        out.open_port(names.index(port_name))
+        self._out = out
+
+    def close_output(self) -> None:
+        if self._out is not None:
+            self._out.close_port()
+            self._out.delete()
+        self._out = None
+
+    def identify(self) -> None:
+        self._out.send_message(list(DEVICE_INQUIRY))
+
+    def read_bank(self, slots=range(USER_SLOTS)) -> None:
+        self._queue = deque(USER_PRESET_BASE + s for s in slots)
+        self._total = len(self._queue)
+        self._received, self._missing = [], []
+        self._next()
+
+    def cancel(self) -> None:
+        self._queue.clear()
+        self._timer.stop()
+        self._finish()
+
+    def _next(self) -> None:
+        if not self._queue:
+            self._finish()
+            return
+        self._current = self._queue.popleft()
+        self._out.send_message(list(preset_request(self._current)))
+        self._timer.start(REQUEST_TIMEOUT_MS)
+
+    def _finish(self) -> None:
+        self._current = None
+        self.finished.emit(self._received, self._missing)
+
+    def _on_message(self, msg: bytes) -> None:
+        if self._current is None or not is_preset_dump(msg):
+            return
+        preset = Preset.from_sysex(msg, strict=False)
+        if preset.number != self._current:
+            return
+        self._timer.stop()
+        self._received.append(preset)
+        self.preset_received.emit(preset)
+        self.progress.emit(self._total - len(self._queue), self._total)
+        self._next()
+
+    def _timed_out(self) -> None:
+        # Empty slots do not answer.
+        self._missing.append(self._current)
+        self.progress.emit(self._total - len(self._queue), self._total)
+        self._next()
+
