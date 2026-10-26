@@ -186,6 +186,20 @@ describe("bank", () => {
     expect(bank.preset(3)?.name).toBe("A");
   });
 
+  it("tracks presets to write into the unit", () => {
+    const bank = new BankStore();
+    const seen: (number[] | null)[] = [];
+    bank.onChange = (slots) => seen.push(slots);
+    bank.markPending([3, 7]);
+    bank.markPending([7]);
+    expect([...bank.pending]).toEqual([3, 7]);
+    expect(seen).toEqual([[3, 7]]);
+    bank.clearPending(3);
+    expect([...bank.pending]).toEqual([7]);
+    bank.load([], "autre banque");
+    expect(bank.pending.size).toBe(0);
+  });
+
   it("exports renumbered presets", () => {
     const bank = new BankStore();
     bank.load([null, makePreset("B", 150)], "t");

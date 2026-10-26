@@ -98,10 +98,14 @@ export class BankStore {
   /** Called with the slots that changed, or null when the whole bank was replaced. */
   onChange: ((slots: number[] | null) => void) | null = null;
 
-  load(presets: Slots, title: string, sqs: SqsFile | null = null): void {
+  /** Slots changed in the editor and not yet written into the unit. */
+  pending = new Set<number>();
+
+  load(presets: Slots, title: string, sqs: SqsFile | null = null, pending: Iterable<number> = []): void {
     this.presets = [...presets, ...new Array(Math.max(0, USER_SLOTS - presets.length)).fill(null)].slice(0, USER_SLOTS);
     this.sqs = sqs;
     this.title = title;
+    this.pending = new Set(pending);
     this.undo.clear();
     this.onChange?.(null);
   }
@@ -125,6 +129,16 @@ export class BankStore {
       const sqs = new SqsFile(bytes);
       this.load(sqs.userPresets(), name, sqs);
     }
+  }
+
+  markPending(slots: Iterable<number>): void {
+    const changed = [...slots].filter((s) => !this.pending.has(s));
+    changed.forEach((s) => this.pending.add(s));
+    if (changed.length) this.onChange?.(changed);
+  }
+
+  clearPending(slot: number): void {
+    if (this.pending.delete(slot)) this.onChange?.([slot]);
   }
 
   preset(slot: number): Preset | null {

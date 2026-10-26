@@ -52,6 +52,8 @@ export interface Session {
   title: string;
   syx: Uint8Array;
   sqs: Uint8Array | null;
+  /** Slots still to be written into the unit. */
+  pending: number[];
 }
 
 /** Keep the current bank between launches (the app may be closed at any time on Android). */
@@ -59,6 +61,7 @@ export function storeSession(session: Session): void {
   try {
     localStorage.setItem(SESSION_KEY, JSON.stringify({
       title: session.title, syx: toBase64(session.syx), sqs: session.sqs ? toBase64(session.sqs) : null,
+      pending: session.pending,
     }));
   } catch {
     // Storage full or unavailable: the session simply is not restored.
@@ -70,7 +73,7 @@ export function loadSession(): Session | null {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const s = JSON.parse(raw);
-    return { title: s.title, syx: fromBase64(s.syx), sqs: s.sqs ? fromBase64(s.sqs) : null };
+    return { title: s.title, syx: fromBase64(s.syx), sqs: s.sqs ? fromBase64(s.sqs) : null, pending: s.pending ?? [] };
   } catch {
     return null;
   }

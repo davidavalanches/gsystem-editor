@@ -42,6 +42,7 @@ export class App {
       },
       menu: () => this.fileMenu(),
       readUnit: () => (this.link?.busy ? this.link.cancel() : this.startRead("all")),
+      sync: () => this.syncPending(),
     });
 
     const rail = el("nav", "rail");
@@ -142,17 +143,25 @@ export class App {
     if (!session) return;
     const presets: (Preset | null)[] = new Array(USER_SLOTS).fill(null);
     for (const p of readSyx(session.syx)) if (p.userSlot !== null) presets[p.userSlot] = p;
-    this.bank.load(presets, session.title, session.sqs ? new SqsFile(session.sqs) : null);
+    this.bank.load(presets, session.title, session.sqs ? new SqsFile(session.sqs) : null, session.pending);
   }
 
   private scheduleSave(): void {
     if (this.saveTimer) clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => {
-      storeSession({ title: this.bank.title, syx: this.bank.exportSyx(), sqs: this.bank.sqs?.toBytes() ?? null });
+      storeSession({ title: this.bank.title, syx: this.bank.exportSyx(), sqs: this.bank.sqs?.toBytes() ?? null,
+        pending: [...this.bank.pending] });
     }, 500);
   }
 
+  /** True when it is fine to replace the bank (no unsynchronised presets, or the user agrees to drop them). */
+  private canReplaceBank(): boolean {
+    const n = this.bank.pending.size;
+    return !n || confirm(`${n} preset(s) modifié(s) n'ont pas encore été écrits dans le G-System. Les abandonner ?`);
+  }
+
   private async open(): Promise<void> {
+    if (!this.canReplaceBank()) return;
     const file = await pickFile(".sqs,.SQS,.syx,.SYX");
     if (!file) return;
     try {
@@ -207,7 +216,11 @@ export class App {
       const link = new GSystemLink(await midi.open(port.id));
       link.sysexId = this.sysexId;
       this.link = link;
-      link.onIdentity = (version) => this.setConnected(true, `G-System ${version}`, port.name);
+      link.onIdentity = (version) => {
+        this.setConnected(true, `G-System ${version}`, port.name);
+        const n = this.bank.pending.size;
+        if (n) this.notify(`${n} preset(s) modifié(s) hors connexion : touchez « Synchroniser » pour les écrire dans le G-System`);
+      };
       link.onParam = (b, p, v) => this.preset.applyFromUnit(b, p, v);
       link.onPresetSelected = (slot) => this.unitPreset(slot);
       link.onPresetRead = (p) => {
@@ -288,17 +301,27 @@ export class App {
     this.writeToUnit(changes);
   }
 
+  /** Write the presets changed while disconnected. */
+  private syncPending(): void {
+    const changes = new Map([...this.bank.pending].sort((a, b) => a - b).map((s) => [s, this.bank.preset(s)] as [number, Preset | null]));
+    this.writeToUnit(changes);
+  }
+
   private writeQueue: { slot: number; preset: Preset }[] = [];
   private writeTotal = 0;
   private verifying: { slot: number; preset: Preset } | null = null;
 
   /** Write presets into the unit one at a time, each read back before the next. */
   private writeToUnit(changes: Map<number, Preset | null>): void {
-    const names = [...changes.values()].filter(Boolean).map((p) => `« ${p!.name} »`);
+    const writable = [...changes].filter(([slot, preset]) => preset && !isAvoided(slot)).map(([slot]) => slot);
     if (!this.link || !STORE_TO_UNIT) {
-      this.notify(`${names.join(", ") || "Modification"} enregistré(s) dans la banque de l'éditeur (G-System non connecté)`);
+      this.bank.markPending(writable);
+      this.notify(writable.length
+        ? `${writable.length} preset(s) enregistré(s) dans l'éditeur, à synchroniser au prochain branchement du G-System`
+        : "Enregistré dans la banque de l'éditeur");
       return;
     }
+    this.bank.markPending(writable);
     if (this.link.busy || this.writeQueue.length) {
       alert("Le G-System est occupé : les presets sont enregistrés dans l'éditeur. "
         + "Refaites l'opération une fois la lecture ou l'écriture en cours terminée pour les écrire dans le pédalier.");
@@ -331,6 +354,7 @@ export class App {
     if (!this.link || this.link.busy) return;
     let slots: number[];
     if (mode === "all") {
+      if (!this.canReplaceBank()) return;
       if (!this.bank.undo.isClean && !confirm("La banque affichée a des modifications non exportées. Les abandonner ?")) return;
       this.bank.load(new Array(USER_SLOTS).fill(null), `G-System (lu le ${new Date().toLocaleString("fr-FR")})`);
       slots = [...Array(USER_SLOTS).keys()];
@@ -356,6 +380,7 @@ export class App {
       const got = presets[0];
       if (got && sameBytes(got.data, expected.preset.data)) {
         this.writeQueue.shift();
+        this.bank.clearPending(expected.slot);
         if (this.writeQueue.length) {
           this.nextWrite();
         } else {
@@ -368,7 +393,7 @@ export class App {
         alert(`Le G-System n'a pas confirmé l'enregistrement de « ${expected.preset.name} » en ${slotLabel(expected.slot)}`
           + (got ? " : le preset relu est différent." : " : l'emplacement ne répond pas (G-System bloqué ? éteignez-le et rallumez-le).")
           + (left ? `\n${left} autre(s) écriture(s) annulée(s).` : "")
-          + "\nLes presets restent enregistrés dans la banque de l'éditeur.");
+          + "\nLes presets restent enregistrés dans l'éditeur et dans la liste « à synchroniser ».");
       }
       return;
     }

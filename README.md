@@ -55,6 +55,11 @@ Pour le développement : `npm run dev`, puis ouvrir l'URL affichée dans Chrome.
 - **Store** : enregistre dans la banque de l'éditeur et, si le G-System est connecté, l'écrit dans le pédalier
   (séquence de Vyzor, adressée au SysEx ID du G-System, réglable dans la vue MIDI), puis le relit pour vérifier.
   Les banques **27 à 29** sont exclues de l'écriture : sur ce G-System, y écrire le bloque (zone mémoire défaillante).
+- **Hors connexion** : sans G-System branché, chaque Store ou opération sur les banques est ajouté à une liste
+  « à synchroniser » (gardée d'une session à l'autre, presets marqués en orange). Une fois le G-System connecté,
+  « Synchroniser (n) » les écrit tous, chacun vérifié.
+- **Tester sur ordinateur** : `./scripts/gsystem-editor.sh` ouvre la même application dans Chrome/Chromium
+  (vue téléphone : F12 puis mode appareil, 740×360).
 - **Banques entières** (menu ⋮) : échanger la banque affichée avec une autre, ou la copier sur une autre ;
   appliqué dans l'éditeur (annulable) puis écrit preset par preset dans le G-System, chacun vérifié.
 - **Live** : chaque modification part dans la mémoire de travail du G-System (rien n'est stocké),

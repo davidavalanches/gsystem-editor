@@ -14,6 +14,7 @@ export interface BanksActions {
   open(slot: number): void;
   menu(): MenuItem[];
   readUnit(): void;
+  sync(): void;
 }
 
 export class BanksView {
@@ -25,6 +26,8 @@ export class BanksView {
   private readonly title = el("div", "header-title");
   private readonly sub = el("div");
   private readonly readButton = el("button", "pill primary", "Lire le G-System");
+  private readonly syncButton = el("button", "pill sync");
+  private connected = false;
   private readonly list = el("div", "bank-list");
   private readonly slots = el("div", "slots");
   private bankButtons: HTMLButtonElement[] = [];
@@ -34,11 +37,15 @@ export class BanksView {
     this.readButton.type = "button";
     this.readButton.disabled = true;
     this.readButton.addEventListener("click", () => actions.readUnit());
+    this.syncButton.type = "button";
+    this.syncButton.title = "Écrire dans le G-System les presets modifiés hors connexion (chacun vérifié)";
+    this.syncButton.addEventListener("click", () => actions.sync());
     const titles = el("div", "grow");
     titles.append(this.title, this.sub);
     const more = iconButton(ICONS.more, "Plus d'actions : ouvrir, exporter, annuler", () => showMenu(more, actions.menu()));
     const header = el("header", "header");
-    header.append(titles, iconButton(ICONS.search, "Rechercher un preset", () => void this.search()), this.readButton, more);
+    header.append(titles, iconButton(ICONS.search, "Rechercher un preset", () => void this.search()),
+      this.syncButton, this.readButton, more);
 
     this.list.setAttribute("role", "listbox");
     this.list.setAttribute("aria-label", "Banques");
@@ -57,7 +64,9 @@ export class BanksView {
   }
 
   setConnected(connected: boolean): void {
+    this.connected = connected;
     this.readButton.disabled = !connected;
+    this.renderHeader();
   }
 
   /** Reading progress, or null when no read is running. */
@@ -80,6 +89,8 @@ export class BanksView {
       const selected = b === this.bankIndex;
       button.setAttribute("aria-selected", String(selected));
       button.classList.toggle("avoided", AVOIDED_BANKS.has(b));
+      button.classList.toggle("has-pending",
+        [...Array(PRESETS_PER_BANK).keys()].some((i) => this.bank.pending.has(b * PRESETS_PER_BANK + i)));
       button.title = AVOIDED_BANKS.has(b) ? "Banque exclue de l'écriture dans le G-System (zone mémoire défaillante)" : "";
       const used = [...Array(PRESETS_PER_BANK).keys()].map((i) => !!this.bank.preset(b * PRESETS_PER_BANK + i));
       const num = el("span", used.some(Boolean) ? "bank-num used" : "bank-num", String(b).padStart(2, "0"));
@@ -93,6 +104,10 @@ export class BanksView {
 
   private renderHeader(): void {
     this.title.textContent = this.bank.title + (this.bank.undo.isClean ? "" : " *");
+    const pending = this.bank.pending.size;
+    this.syncButton.hidden = !pending;
+    this.syncButton.textContent = `Synchroniser (${pending})`;
+    this.syncButton.disabled = !this.connected || !!this.reading;
     if (this.reading) {
       const [done, total] = this.reading;
       this.sub.className = "reading";
@@ -106,13 +121,15 @@ export class BanksView {
       const bad = this.bank.presets.filter((p) => p && !p.checksumOk).length;
       this.sub.className = "header-sub";
       this.sub.textContent = `${used} presets sur 200 · `
-        + (bad ? `${bad} somme(s) de contrôle à corriger` : "sommes de contrôle valides");
+        + (pending ? `${pending} à synchroniser avec le G-System`
+          : bad ? `${bad} somme(s) de contrôle à corriger` : "sommes de contrôle valides");
     }
   }
 
   private slotRow(slot: number): HTMLElement {
     const p = this.bank.preset(slot);
-    const classes = ["slot", p ? "" : "empty", slot === this.current ? "current" : "", p && !p.checksumOk ? "warn" : ""];
+    const classes = ["slot", p ? "" : "empty", slot === this.current ? "current" : "", p && !p.checksumOk ? "warn" : "",
+      this.bank.pending.has(slot) ? "pending" : ""];
     const row = el("button", classes.filter(Boolean).join(" "));
     row.type = "button";
     row.setAttribute("aria-label", `${slotLabel(slot)} ${p ? p.name : "vide"}`);

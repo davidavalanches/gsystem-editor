@@ -193,7 +193,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 .slot.empty { border-style: dashed; background: transparent; }
 .slot.current { background: var(--current); border-color: var(--line-3); box-shadow: inset 3px 0 0 var(--red); }
-.slot-code { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--dim); width: 34px; flex-shrink: 0; }
+.slot-code { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--dim); width: 46px; flex-shrink: 0; white-space: nowrap; }
 .slot-name { flex: 1; min-width: 0; font-family: var(--mono); font-size: 15px; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
 .slot.empty .slot-name { color: var(--faint); }
 .slot.current .slot-name { color: var(--lcd); }
@@ -422,3 +422,9 @@ button:disabled { opacity: 0.4; cursor: default; }
 .sysex-id { width: 72px; height: 36px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--bg); color: var(--ink); font: 500 15px var(--mono); }
 
 .bank-list button.avoided .bank-num { color: var(--amber); text-decoration: line-through; text-decoration-thickness: 1px; }
+
+/* Presets changed offline, waiting to be written into the unit. */
+.pill.sync { border-color: var(--amber); color: var(--amber); }
+.slot.pending { border-color: rgba(255, 178, 36, 0.55); }
+.slot.pending .slot-code::after { content: " ●"; color: var(--amber); }
+.bank-list button.has-pending .bank-num::after { content: "●"; font-size: 9px; color: var(--amber); vertical-align: super; margin-left: 2px; }
