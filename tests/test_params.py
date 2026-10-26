@@ -3,10 +3,11 @@ import pytest
 from gsystem.params import (
     BLOCKS,
     FIELD_COUNT,
+    block,
     diff_fields,
     field_offset,
+    freq,
     read_field,
-    unassigned_fields,
     write_field,
 )
 from gsystem.sysex import PRESET_DATA_LEN
@@ -26,14 +27,6 @@ def test_field_round_trip(value):
     assert len(data) == PRESET_DATA_LEN
 
 
-def test_eq_snippet_decodes_as_signed_fields():
-    # "EQ orange" snippet saved by Vyzor in Preset.ini, found at field 114.
-    snippet = bytes([10, 0, 0, 253, 255, 255, 12, 0, 0, 10, 0, 0, 2, 0, 0, 31, 0, 0,
-                     18, 0, 0, 251, 255, 255, 48, 0, 0, 26, 0, 0, 1, 0, 0])
-    data = BLANK[:field_offset(114)] + snippet + BLANK[field_offset(125):]
-    assert [read_field(data, i) for i in range(114, 125)] == [10, -3, 12, 10, 2, 31, 18, -5, 48, 26, 1]
-
-
 def test_write_rejects_overflow():
     with pytest.raises(ValueError):
         write_field(BLANK, 0, 1 << 23)
@@ -44,15 +37,41 @@ def test_diff_fields():
     assert diff_fields(BLANK, changed) == [(3, 0, 9), (100, 0, -2)]
 
 
-def test_params_reference_valid_unique_fields():
-    seen = set()
+def test_blocks_are_contiguous_and_do_not_overlap():
+    expected = 3
     for b in BLOCKS:
-        params = list(b.params) + ([b.enable] if b.enable else [])
-        for p in params:
-            assert 0 <= p.field < FIELD_COUNT and p.lo <= p.hi
-            assert p.field not in seen, p.key
-            seen.add(p.field)
+        assert b.count_field == expected, b.key
+        expected = b.first_field + b.size
+    assert expected == 125
 
 
-def test_every_field_belongs_somewhere_or_is_reported():
-    assert all(0 <= i < FIELD_COUNT for i in unassigned_fields())
+@pytest.mark.parametrize("b", BLOCKS, ids=lambda b: b.key)
+def test_every_type_fits_its_slot(b):
+    for t in b.types or (None,):
+        data = write_field(BLANK, b.first_field, b.types.index(t)) if t else BLANK
+        assert len(b.param_list(data)) <= b.size
+
+
+def test_eq_snippet_decodes():
+    # "EQ orange" snippet saved by Vyzor (count + 10 parameters), at field 114.
+    snippet = bytes([10, 0, 0, 253, 255, 255, 12, 0, 0, 10, 0, 0, 2, 0, 0, 31, 0, 0,
+                     18, 0, 0, 251, 255, 255, 48, 0, 0, 26, 0, 0, 1, 0, 0])
+    data = BLANK[:field_offset(114)] + snippet + BLANK[field_offset(125):]
+    eq = block("eq")
+    values = {p.name: read_field(data, f) for f, p in eq.fields(data)}
+    assert values["Gain1"] == -3 and values["EQ"] == 1
+    assert eq.enable_field(data) == 124
+
+
+def test_type_selects_parameter_set():
+    filt = block("filter")
+    wah = write_field(BLANK, filt.first_field, 5)       # Auto Wah
+    formant = write_field(BLANK, filt.first_field, 8)   # Auto Formant
+    assert filt.effect_type(wah).name == "Auto Wah"
+    assert [p.name for _, p in filt.fields(wah)][-1] == "AutoOn"
+    assert "Bright" in [p.name for _, p in filt.fields(formant)]
+    assert filt.enable_field(wah) == filt.first_field + 1
+
+
+def test_frequency_display_matches_manual():
+    assert freq(34) == "1.02 kHz" and freq(54) == "10.24 kHz" and freq(18) == "160 Hz"

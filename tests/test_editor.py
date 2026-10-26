@@ -27,7 +27,7 @@ def editor(app):
 
 def test_switch_edits_buffer_not_bank(editor):
     ed, model = editor
-    eq_on = block("eq").enable.field
+    eq_on = block("eq").enable_field(ed.buffer.data)
     ed.switches["eq"].click()
     assert read_field(ed.buffer.data, eq_on) == 1 and ed.is_dirty()
     assert read_field(model.preset(0).data, eq_on) == 0

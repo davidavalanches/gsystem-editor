@@ -29,24 +29,21 @@ from PySide6.QtWidgets import (
 
 from .params import (
     BLOCKS,
-    CONFIRMED,
     FIELD_COUNT,
-    LIKELY,
+    HEADER_FIELDS,
     NUMERIC_FIELDS,
     SWITCH_BLOCKS,
     Block,
     Param,
     block,
+    describe_field,
     diff_fields,
     field_offset,
     read_field,
-    unassigned_fields,
     write_field,
 )
 from .sysex import NAME_LEN, USER_SLOTS, Preset, SysexError
 
-CONFIDENCE_COLORS = {CONFIRMED: QColor(60, 170, 80), LIKELY: QColor(60, 130, 220)}
-GUESS_COLOR = QColor(230, 140, 30)
 FIELD_MIN, FIELD_MAX = -(1 << 23), (1 << 23) - 1
 
 # Preset sub-views, as in the hardware's effect sections.
@@ -58,14 +55,8 @@ VIEWS = (
     ("pitch", "Pitch", ("pitch",)),
     ("delay", "Delay", ("delay",)),
     ("reverb", "Reverb", ("reverb",)),
-    ("modifiers", "Modifiers", ("modifiers",)),
-    ("levels", "Niveaux", ("levels",)),
+    ("modifiers", "Modifiers", ()),
 )
-
-
-def confidence_dot(confidence: str) -> str:
-    color = CONFIDENCE_COLORS.get(confidence, GUESS_COLOR).name()
-    return f'<span style="color:{color}">●</span>'
 
 
 class BlockSwitch(QAbstractButton):
@@ -107,24 +98,28 @@ class BlockSwitch(QAbstractButton):
 
 
 class ParamControl(QWidget):
-    """Dial, combo or switch bound to one preset field."""
+    """Dial or value list bound to one preset field."""
 
     edited = Signal(int, int)  # field, value
 
-    def __init__(self, param: Param, parent=None) -> None:
+    def __init__(self, index: int, param: Param, parent=None) -> None:
         super().__init__(parent)
+        self.index = index
         self.param = param
-        self.title = QLabel(f"{confidence_dot(param.confidence)} {param.label}")
-        self.title.setAlignment(Qt.AlignCenter)
-        self.title.setToolTip(f"Champ #{param.field} — identification : {param.confidence}")
+        title = QLabel(param.name)
+        title.setAlignment(Qt.AlignCenter)
+        title.setToolTip(f"Champ #{index} — plage {param.lo} à {param.hi}")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
-        layout.addWidget(self.title)
+        layout.addWidget(title)
         self.combo = self.dial = None
+        self.readout = QLabel()
+        self.readout.setAlignment(Qt.AlignCenter)
         if param.choices:
             self.combo = QComboBox()
-            self.combo.addItems(list(param.choices))
-            self.combo.currentIndexChanged.connect(lambda i: self.edited.emit(param.field, param.lo + i))
+            for value in range(param.lo, param.hi + 1):
+                self.combo.addItem(param.format(value), value)
+            self.combo.currentIndexChanged.connect(lambda i: self.edited.emit(index, self.combo.itemData(i)))
             layout.addWidget(self.combo)
         else:
             self.dial = QDial()
@@ -133,39 +128,34 @@ class ParamControl(QWidget):
             em = self.fontMetrics().height()
             self.dial.setMinimumSize(int(em * 3.5), int(em * 3.5))
             self.dial.valueChanged.connect(self._dial_moved)
+            self.dial.sliderReleased.connect(lambda: self.edited.emit(index, self.dial.value()))
             layout.addWidget(self.dial, 1, Qt.AlignCenter)
-        self.spin = QSpinBox()
-        self.spin.setRange(FIELD_MIN, FIELD_MAX)
-        self.spin.setSuffix(f" {param.unit}" if param.unit else "")
-        self.spin.setAlignment(Qt.AlignCenter)
-        self.spin.editingFinished.connect(lambda: self.edited.emit(param.field, self.spin.value()))
-        if param.choices:
-            self.spin.hide()
-        layout.addWidget(self.spin)
+            layout.addWidget(self.readout)
 
     def _dial_moved(self, value: int) -> None:
-        self.spin.setValue(value)
-        self.edited.emit(self.param.field, value)
+        self.readout.setText(self.param.format(value))
+        if not self.dial.isSliderDown():
+            self.edited.emit(self.index, value)
 
     def set_value(self, value: int) -> None:
-        for widget in (self.dial, self.combo, self.spin):
-            if widget is not None:
-                widget.blockSignals(True)
-        if self.dial is not None:
-            self.dial.setValue(value)
-            # Values outside the documented range mean the mapping is wrong: show it.
-            out_of_range = not self.param.lo <= value <= self.param.hi
-            self.spin.setStyleSheet("color: rgb(220,60,40);" if out_of_range else "")
         if self.combo is not None:
-            self.combo.setCurrentIndex(value - self.param.lo)
-        self.spin.setValue(value)
-        for widget in (self.dial, self.combo, self.spin):
-            if widget is not None:
-                widget.blockSignals(False)
+            self.combo.blockSignals(True)
+            i = self.combo.findData(value)
+            if i < 0:
+                self.combo.addItem(f"? {value}", value)
+                i = self.combo.count() - 1
+            self.combo.setCurrentIndex(i)
+            self.combo.blockSignals(False)
+        else:
+            self.dial.blockSignals(True)
+            self.dial.setValue(value)
+            self.dial.blockSignals(False)
+            out_of_range = not self.param.lo <= value <= self.param.hi
+            self.readout.setText(self.param.format(value) + ("  ⚠ hors plage" if out_of_range else ""))
 
 
 class RawFieldEditor(QWidget):
-    """Plain spinbox for a field whose meaning is not identified yet."""
+    """Plain spinbox for a field whose meaning is not decoded yet."""
 
     edited = Signal(int, int)
 
@@ -175,81 +165,88 @@ class RawFieldEditor(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)
         label = QLabel(f"#{index}")
-        label.setToolTip(f"Champ #{index}, octet {field_offset(index)} — non identifié")
+        label.setToolTip(f"Champ #{index}, octet {field_offset(index)}")
         self.spin = QSpinBox()
         self.spin.setRange(FIELD_MIN, FIELD_MAX)
         self.spin.editingFinished.connect(lambda: self.edited.emit(index, self.spin.value()))
         layout.addWidget(label)
         layout.addWidget(self.spin, 1)
 
-    def set_value(self, value: int) -> None:
+    def load(self, data: bytes) -> None:
         self.spin.blockSignals(True)
-        self.spin.setValue(value)
+        self.spin.setValue(read_field(data, self.index))
         self.spin.blockSignals(False)
 
 
 class BlockPanel(QGroupBox):
+    """Controls of one effect block, rebuilt when the effect type changes."""
+
     edited = Signal(int, int)
 
-    def __init__(self, blk: Block, compact: bool = False, parent=None) -> None:
+    def __init__(self, blk: Block, columns: int = 6, parent=None) -> None:
         super().__init__(blk.label, parent)
-        self.controls: list[ParamControl | RawFieldEditor] = []
-        layout = QVBoxLayout(self)
-        known = QGridLayout()
-        columns = 4 if compact else 6
-        params = [p for p in blk.params]
-        for i, param in enumerate(params):
-            ctrl = ParamControl(param)
-            ctrl.edited.connect(self.edited)
-            self.controls.append(ctrl)
-            known.addWidget(ctrl, i // columns, i % columns)
-        layout.addLayout(known)
-        identified = {p.field for p in params} | ({blk.enable.field} if blk.enable else set())
-        unknown = [f for f in blk.all_fields() if f not in identified]
-        if unknown and not compact:
-            box = QGroupBox(f"Champs non identifiés ({len(unknown)})")
-            grid = QGridLayout(box)
-            for i, index in enumerate(unknown):
-                raw = RawFieldEditor(index)
-                raw.edited.connect(self.edited)
-                self.controls.append(raw)
-                grid.addWidget(raw, i // 4, i % 4)
-            layout.addWidget(box)
-        elif unknown:
-            layout.addWidget(QLabel(f"+ {len(unknown)} champ(s) non identifié(s)"))
-        if not params and compact:
-            layout.addWidget(QLabel("Paramètres pas encore identifiés"))
-        layout.addStretch(1)
+        self.blk = blk
+        self.columns = columns
+        self.signature: tuple | None = None
+        self.controls: list[ParamControl] = []
+        self.grid = QGridLayout(self)
 
     def load(self, data: bytes) -> None:
+        fields = self.blk.fields(data)
+        signature = tuple((f, p.name) for f, p in fields)
+        if signature != self.signature:
+            self._rebuild(fields)
+            self.signature = signature
         for ctrl in self.controls:
-            index = ctrl.param.field if isinstance(ctrl, ParamControl) else ctrl.index
-            ctrl.set_value(read_field(data, index))
+            ctrl.set_value(read_field(data, ctrl.index))
+
+    def _rebuild(self, fields) -> None:
+        for ctrl in self.controls:
+            self.grid.removeWidget(ctrl)
+            ctrl.deleteLater()
+        self.controls = []
+        for i, (index, param) in enumerate(fields):
+            ctrl = ParamControl(index, param)
+            ctrl.setFont(self.font())
+            ctrl.edited.connect(self.edited)
+            self.controls.append(ctrl)
+            self.grid.addWidget(ctrl, i // self.columns, i % self.columns)
+
+
+class RawPanel(QGroupBox):
+    """Fields not decoded yet (routing, levels, modifiers), editable as numbers."""
+
+    edited = Signal(int, int)
+
+    def __init__(self, title: str, fields, parent=None) -> None:
+        super().__init__(title, parent)
+        grid = QGridLayout(self)
+        self.editors = []
+        for i, index in enumerate(fields):
+            raw = RawFieldEditor(index)
+            raw.edited.connect(self.edited)
+            self.editors.append(raw)
+            grid.addWidget(raw, i // 4, i % 4)
+
+    def load(self, data: bytes) -> None:
+        for raw in self.editors:
+            raw.load(data)
 
 
 class RawTable(QTableWidget):
-    """All 165 fields with their identification, editable."""
+    """All 165 fields with their meaning for the current preset, editable."""
 
     edited = Signal(int, int)
 
     def __init__(self, parent=None) -> None:
-        super().__init__(FIELD_COUNT, 5, parent)
-        self.setHorizontalHeaderLabels(("Champ", "Octet", "Valeur", "Bloc", "Paramètre"))
+        super().__init__(FIELD_COUNT, 6, parent)
+        self.setHorizontalHeaderLabels(("Champ", "Octet", "Valeur", "Affichage", "Bloc", "Paramètre"))
         self.verticalHeader().hide()
         self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
-        owners = {}
-        for blk in BLOCKS:
-            for f in blk.all_fields():
-                owners[f] = (blk.label, "")
-            for p in list(blk.params) + ([blk.enable] if blk.enable else []):
-                owners[p.field] = (blk.label, f"{p.label} ({p.confidence})")
-        for f in unassigned_fields():
-            owners[f] = ("?", "")
+        self.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
         for i in range(FIELD_COUNT):
-            blk_label, name = owners[i]
-            for col, text in enumerate((str(i), str(field_offset(i)), "", blk_label, name)):
-                item = QTableWidgetItem(text)
+            for col in range(6):
+                item = QTableWidgetItem(str(i) if col == 0 else str(field_offset(i)) if col == 1 else "")
                 if col != 2:
                     item.setFlags(item.flags() & ~Qt.ItemIsEditable)
                 self.setItem(i, col, item)
@@ -258,10 +255,18 @@ class RawTable(QTableWidget):
 
     def load(self, data: bytes) -> None:
         self._loading = True
+        shown = {}
+        for blk in BLOCKS:
+            for f, p in blk.fields(data):
+                shown[f] = p
         for i in range(FIELD_COUNT):
             value = read_field(data, i)
             raw = data[field_offset(i) : field_offset(i) + 3].hex(" ").upper()
             self.item(i, 2).setText(str(value) if i < NUMERIC_FIELDS else f"{value}  [{raw}]")
+            self.item(i, 3).setText(shown[i].format(value) if i in shown else "")
+            blk_label, name = describe_field(data, i)
+            self.item(i, 4).setText(blk_label)
+            self.item(i, 5).setText(name)
         self._loading = False
 
     def _changed(self, item: QTableWidgetItem) -> None:
@@ -340,15 +345,8 @@ class PresetEditor(QWidget):
         switch_row = QHBoxLayout()
         switch_row.addStretch(1)
         for key in SWITCH_BLOCKS:
-            blk = block(key)
-            sw = BlockSwitch(blk.label)
-            if blk.enable is None:
-                sw.setEnabled(False)
-                sw.setToolTip(f"{blk.label} : interrupteur pas encore identifié")
-            else:
-                sw.setToolTip(f"{blk.label} on/off — champ #{blk.enable.field} ({blk.enable.confidence})")
-                sw.toggled.connect(lambda on, f=blk.enable.field, k=blk.label: self.set_field(
-                    f, int(on), f"{k} {'on' if on else 'off'}"))
+            sw = BlockSwitch(block(key).label)
+            sw.toggled.connect(lambda on, k=key: self._toggle_block(k, on))
             self.switches[key] = sw
             switch_row.addWidget(sw)
         switch_row.addStretch(1)
@@ -367,9 +365,7 @@ class PresetEditor(QWidget):
         self.view_buttons.idClicked.connect(self.pages.setCurrentIndex)
         self.view_buttons.button(0).setChecked(True)
 
-        legend = QLabel(f"{confidence_dot(CONFIRMED)} confirmé   {confidence_dot(LIKELY)} probable   "
-                        f"<span style='color:{GUESS_COLOR.name()}'>●</span> hypothèse à vérifier sur le G-System")
-
+        legend = QLabel("Paramètres, plages et listes de valeurs : tables du firmware G-System 4.02.")
         layout = QVBoxLayout(self)
         layout.addLayout(header)
         layout.addLayout(switch_row)
@@ -398,13 +394,23 @@ class PresetEditor(QWidget):
             return self.compare
         content = QWidget()
         grid = QGridLayout(content)
-        chosen = [b for b in BLOCKS if b.key != "modifiers"] if blocks is None else [block(k) for k in blocks]
-        compact = blocks is None
-        for i, blk in enumerate(chosen):
-            panel = BlockPanel(blk, compact=compact)
-            panel.edited.connect(lambda f, v: self.set_field(f, v, f"Champ #{f}"))
-            self.panels.append(panel)
-            grid.addWidget(panel, i // 2 if compact else i, i % 2 if compact else 0)
+        if key == "modifiers":
+            for i, (title, fields) in enumerate((
+                    ("En-tête du preset", HEADER_FIELDS),
+                    ("Routage, niveaux et assignations (pas encore décodés)", range(NUMERIC_FIELDS, FIELD_COUNT)))):
+                panel = RawPanel(title, fields)
+                panel.edited.connect(lambda f, v: self.set_field(f, v, f"Champ #{f}"))
+                self.panels.append(panel)
+                grid.addWidget(panel, i, 0)
+        else:
+            compact = blocks is None
+            chosen = BLOCKS if compact else [block(k) for k in blocks]
+            for i, blk in enumerate(chosen):
+                panel = BlockPanel(blk, columns=4 if compact else 6)
+                panel.edited.connect(lambda f, v, b=blk: self.set_field(f, v, f"{b.label} · {describe_field(self.buffer.data, f)[1]}"))
+                self.panels.append(panel)
+                grid.addWidget(panel, i // 2 if compact else i, i % 2 if compact else 0)
+        grid.setRowStretch(grid.rowCount(), 1)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(content)
@@ -451,10 +457,10 @@ class PresetEditor(QWidget):
         for w in (self.name, self.pages, *self.switches.values()):
             w.setEnabled(editable)
         for key, sw in self.switches.items():
-            enable = block(key).enable
-            sw.setEnabled(editable and enable is not None)
+            field = block(key).enable_field(preset.data) if editable else None
+            sw.setEnabled(field is not None)
             sw.blockSignals(True)
-            sw.setChecked(editable and enable is not None and read_field(preset.data, enable.field) == 1)
+            sw.setChecked(field is not None and read_field(preset.data, field) == 1)
             sw.blockSignals(False)
         self.name.setText(preset.name if preset else "— emplacement vide —")
         if preset is not None:
@@ -464,6 +470,12 @@ class PresetEditor(QWidget):
         self.state.setText("● modifié" if self.is_dirty() else "")
         if preset is not None:
             self.buffer_changed.emit(preset)
+
+    def _toggle_block(self, key: str, on: bool) -> None:
+        blk = block(key)
+        field = blk.enable_field(self.buffer.data) if self.buffer is not None else None
+        if field is not None:
+            self.set_field(field, int(on), f"{blk.label} {'on' if on else 'off'}")
 
     def set_field(self, index: int, value: int, text: str) -> None:
         if self.buffer is None or read_field(self.buffer.data, index) == value:
@@ -524,10 +536,6 @@ class ComparePanel(QWidget):
         layout = QVBoxLayout(self)
         layout.addLayout(row)
         layout.addWidget(self.table, 1)
-        self.names = {}
-        for blk in BLOCKS:
-            for p in list(blk.params) + ([blk.enable] if blk.enable else []):
-                self.names[p.field] = f"{blk.label} · {p.label}"
 
     def set_reference(self, slot: int, preset: Preset) -> None:
         self.reference = preset
@@ -547,5 +555,6 @@ class ComparePanel(QWidget):
                              + (" + le nom" if name_changed else ""))
         self.table.setRowCount(len(diffs))
         for row, (index, a, b) in enumerate(diffs):
-            for col, text in enumerate((f"#{index}", self.names.get(index, ""), str(a), str(b))):
+            blk_label, name = describe_field(self.reference.data, index)
+            for col, text in enumerate((f"#{index}", f"{blk_label} · {name}".strip(" ·"), str(a), str(b))):
                 self.table.setItem(row, col, QTableWidgetItem(text))
