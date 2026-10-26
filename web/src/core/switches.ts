@@ -6,13 +6,17 @@
  * parameters (style Toggle / Hold, or for Preset the bank and the preset,
  * or for MIDI CC the controller number). The function order is the manual's
  * table; the unit's own values bear it out (#1-#5 Filter, Comp, Loop 1-3;
- * #8-#10 Mod, Pitch, Delay; #14-#18 Preset 1-5 of the current bank) and
- * switching #1 to Hold on the unit set the style byte to 1.
+ * #8-#10 Mod, Pitch, Delay; #14-#18 Preset 1-5 of the current bank), switching
+ * #1 to Hold on the unit set the style byte to 1, the unit showed the user's
+ * Preset 38-5 and 00-4 switches as decoded, and a switch set to Tap Tempo from
+ * the editor showed as such.
  */
 
 export const SWITCH_BLOCK = 5;
 export const SWITCH_FIRST = 226;
 export const SWITCH_COUNT = 18;
+/** Switches with a fixed function (not in the unit's Switches menu), by index. */
+export const FIXED_SWITCHES: ReadonlyMap<number, string> = new Map([[5, "EDIT"], [6, "UP"], [12, "DOWN"]]);
 
 export const FUNCTIONS = ["None", "Filter", "Comp", "Loop 1", "Loop 2", "Loop 3", "Loop 4", "Insert", "Relay", "Gate",
   "Boost", "Mod", "Pitch", "Delay", "Reverb", "EQ", "Preset", "Tap Tempo", "Tuner Mute", "MIDI CC"] as const;

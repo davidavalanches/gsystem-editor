@@ -2,7 +2,7 @@
 
 import { GLOBAL_GROUPS, formatGlobal, globalKey, globalRaw, globalValue, type GlobalParam } from "../core/globals";
 import {
-  FUNCTIONS, STYLES, SWITCH_BANKS, SWITCH_BLOCK, SWITCH_COUNT, SWITCH_FIRST, decodeSwitch, encodeSwitch, switchKind,
+  FIXED_SWITCHES, FUNCTIONS, STYLES, SWITCH_BANKS, SWITCH_BLOCK, SWITCH_COUNT, SWITCH_FIRST, decodeSwitch, encodeSwitch, switchKind,
   withFunction, type SwitchSetting,
 } from "../core/switches";
 import { el } from "./dom";
@@ -75,6 +75,11 @@ export class SettingsView {
     const key = globalKey(SWITCH_BLOCK, param);
     const row = el("div", "setting switch-setting");
     row.append(el("span", "switch-number", `#${n + 1}`));
+    const fixed = FIXED_SWITCHES.get(n);
+    if (fixed) {
+      row.append(el("span", "setting-help", `${fixed} — fonction fixe`));
+      return row;
+    }
     const control = el("div", "setting-control");
     row.append(control);
     const select = (label: string, options: string[]) => {
