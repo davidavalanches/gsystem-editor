@@ -16,7 +16,7 @@ user's banks; unit conversions come from the G-System manual.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable
 
 from .sysex import PRESET_DATA_LEN

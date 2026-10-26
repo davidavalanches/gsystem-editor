@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontMetricsF, QPainter, QPen, QUndoCommand, QUndoStack
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QFont, QUndoCommand, QUndoStack
 from PySide6.QtWidgets import (
-    QAbstractButton,
     QButtonGroup,
     QComboBox,
     QDial,
-    QFrame,
     QGridLayout,
     QGroupBox,
+    QInputDialog,
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QLineEdit,
     QMessageBox,
     QPushButton,
     QScrollArea,
@@ -43,7 +41,12 @@ from .params import (
     read_field,
     write_field,
 )
+from .frontpanel import FrontPanel
 from .sysex import NAME_LEN, USER_SLOTS, Preset, SysexError
+
+# The "Levels" table of the firmware (block 1 in parameter messages): switch indices.
+LEVELS_BLOCK_ID = 1
+LEVEL_SWITCHES = {"loop1": 19, "loop2": 20, "loop3": 21, "loop4": 22, "insert": 23, "boost": 10}
 
 FIELD_MIN, FIELD_MAX = -(1 << 23), (1 << 23) - 1
 
@@ -58,44 +61,6 @@ VIEWS = (
     ("reverb", "Reverb", ("reverb",)),
     ("modifiers", "Modifiers", ()),
 )
-
-
-class BlockSwitch(QAbstractButton):
-    """Round footswitch-style toggle with an LED ring."""
-
-    def __init__(self, label: str, parent=None) -> None:
-        super().__init__(parent)
-        self.setText(label)
-        self.setCheckable(True)
-        self.setCursor(Qt.PointingHandCursor)
-
-    def sizeHint(self) -> QSize:
-        em = self.fontMetrics().height()
-        return QSize(int(em * 5.5), int(em * 6.5))
-
-    def paintEvent(self, _event) -> None:
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        em = self.fontMetrics().height()
-        diameter = min(self.width(), self.height() - em * 1.6) - 6
-        circle = QRectF((self.width() - diameter) / 2, 3, diameter, diameter)
-        enabled = self.isEnabled()
-        on = self.isChecked() and enabled
-        led = QColor(255, 60, 40) if on else QColor(70, 30, 30)
-        if not enabled:
-            led = QColor(90, 90, 90)
-        p.setPen(QPen(led.lighter(130) if on else QColor(40, 40, 40), max(2.0, diameter * 0.08)))
-        p.setBrush(QColor(55, 58, 62) if enabled else QColor(120, 120, 120))
-        p.drawEllipse(circle)
-        inner = circle.adjusted(diameter * 0.22, diameter * 0.22, -diameter * 0.22, -diameter * 0.22)
-        p.setPen(Qt.NoPen)
-        p.setBrush(QColor(160, 165, 170) if not self.isDown() else QColor(120, 125, 130))
-        p.drawEllipse(inner)
-        led_rect = QRectF(circle.center().x() - em * 0.3, circle.top() - 1, em * 0.6, em * 0.6)
-        p.setBrush(led)
-        p.drawEllipse(led_rect)
-        p.setPen(self.palette().windowText().color() if enabled else QColor(140, 140, 140))
-        p.drawText(QRectF(0, circle.bottom() + 4, self.width(), em * 1.4), Qt.AlignCenter, self.text())
 
 
 class ParamControl(QWidget):
@@ -310,28 +275,13 @@ class PresetEditor(QWidget):
         self.send_param = None
         self._from_unit = False
 
-        # Virtual LCD: slot number and name.
-        lcd = QFrame()
-        lcd.setObjectName("lcd")
-        lcd.setStyleSheet("#lcd { background: #0d1a0d; border: 3px solid #333; border-radius: 8px; }"
-                          "#lcd QLabel, #lcd QLineEdit, #lcd QSpinBox { color: #9dff7a; background: transparent;"
-                          " border: none; }")
-        mono = QFontDatabase.systemFont(QFontDatabase.FixedFont)
-        self.number = QSpinBox()
-        self.number.setRange(1, USER_SLOTS)
-        self.number.setFont(mono)
-        self.number.valueChanged.connect(lambda v: self.open_slot(v - 1))
-        self.name = QLineEdit()
-        self.name.setMaxLength(NAME_LEN)
-        self.name.setFont(mono)
-        self.name.editingFinished.connect(self._rename)
-        self.state = QLabel()
-        lcd_layout = QHBoxLayout(lcd)
-        lcd_layout.addWidget(self.number)
-        lcd_layout.addWidget(self.name, 1)
-        lcd_layout.addWidget(self.state)
-        self._lcd_widgets = (self.number, self.name)
-        self.rescale(self.font())
+        # Level switches (loops, insert, boost) are live-only: their place in the
+        # preset data is not decoded yet, so their state is unknown until seen.
+        self.level_states: dict[str, bool | None] = {k: None for k in LEVEL_SWITCHES}
+
+        self.panel = FrontPanel()
+        self.panel.pressed.connect(self.press)
+        self.panel.name_clicked.connect(self.rename_dialog)
 
         store = QPushButton("Store")
         store.setToolTip("Enregistrer le preset modifié dans son emplacement de la banque")
@@ -339,28 +289,17 @@ class PresetEditor(QWidget):
         revert = QPushButton("Revenir")
         revert.setToolTip("Abandonner les modifications non stockées")
         revert.clicked.connect(self.revert)
-
         self.live = QPushButton("En direct", checkable=True)
         self.live.setEnabled(False)
         self.live.setToolTip("Envoyer chaque modification au G-System (mémoire de travail, sans Store) "
                              "et suivre les changements faits sur le pédalier")
+        self.live.toggled.connect(lambda _on: self._refresh_panel())
 
         header = QHBoxLayout()
-        header.addWidget(lcd, 1)
+        header.addStretch(1)
         header.addWidget(self.live)
         header.addWidget(store)
         header.addWidget(revert)
-
-        # Block switches.
-        self.switches: dict[str, BlockSwitch] = {}
-        switch_row = QHBoxLayout()
-        switch_row.addStretch(1)
-        for key in SWITCH_BLOCKS:
-            sw = BlockSwitch(block(key).label)
-            sw.toggled.connect(lambda on, k=key: self._toggle_block(k, on))
-            self.switches[key] = sw
-            switch_row.addWidget(sw)
-        switch_row.addStretch(1)
 
         # View selector and pages.
         self.view_buttons = QButtonGroup(self)
@@ -379,20 +318,14 @@ class PresetEditor(QWidget):
         legend = QLabel("Paramètres, plages et listes de valeurs : tables du firmware G-System 4.02.")
         layout = QVBoxLayout(self)
         layout.addLayout(header)
-        layout.addLayout(switch_row)
+        layout.addWidget(self.panel)
         layout.addLayout(view_row)
         layout.addWidget(self.pages, 1)
         layout.addWidget(legend)
         self.open_slot(0)
 
     def rescale(self, base: QFont) -> None:
-        """Keep the LCD larger than the rest of the UI at every zoom level."""
-        mono = QFontDatabase.systemFont(QFontDatabase.FixedFont)
-        mono.setPointSizeF(base.pointSizeF() * 2)
-        mono.setBold(True)
-        for widget in self._lcd_widgets:
-            widget.setFont(mono)
-        self.number.setMinimumWidth(QFontMetricsF(mono).horizontalAdvance("0000") + 40)
+        """The front panel scales with the window; nothing to do for the zoom level."""
 
     def _make_page(self, key: str, blocks) -> QWidget:
         if key == "raw":
@@ -442,6 +375,7 @@ class PresetEditor(QWidget):
             if answer == QMessageBox.Save:
                 self.store()
         self.slot = slot
+        self.level_states = {k: None for k in LEVEL_SWITCHES}
         self.stored = self.bank.preset(slot)
         self.undo_stack.clear()
         self._set_buffer(self.stored, send=False)
@@ -453,9 +387,7 @@ class PresetEditor(QWidget):
             self.open_slot(slot)
 
     def _show_number(self, slot: int) -> None:
-        self.number.blockSignals(True)
-        self.number.setValue(slot + 1)
-        self.number.blockSignals(False)
+        self._refresh_panel()
 
     def is_dirty(self) -> bool:
         if self.buffer is None or self.stored is None:
@@ -467,23 +399,38 @@ class PresetEditor(QWidget):
         if send and previous is not None and preset is not None:
             self._send_changes(previous.data, preset.data)
         self.buffer = preset
-        editable = preset is not None
-        for w in (self.name, self.pages, *self.switches.values()):
-            w.setEnabled(editable)
-        for key, sw in self.switches.items():
-            field = block(key).enable_field(preset.data) if editable else None
-            sw.setEnabled(field is not None)
-            sw.blockSignals(True)
-            sw.setChecked(field is not None and read_field(preset.data, field) == 1)
-            sw.blockSignals(False)
-        self.name.setText(preset.name if preset else "— emplacement vide —")
+        self.pages.setEnabled(preset is not None)
         if preset is not None:
             for panel in self.panels:
                 panel.load(preset.data)
             self.compare.set_reference(self.slot, preset)
-        self.state.setText("● modifié" if self.is_dirty() else "")
+        self._refresh_panel()
         if preset is not None:
             self.buffer_changed.emit(preset)
+
+    def _refresh_panel(self) -> None:
+        preset = self.buffer
+        leds: dict[str, bool | None] = {}
+        enabled = {"up", "down", *(f"preset{i}" for i in range(1, 6))}
+        for key in SWITCH_BLOCKS:
+            field = block(key).enable_field(preset.data) if preset is not None else None
+            if field is not None:
+                leds[key] = read_field(preset.data, field) == 1
+                enabled.add(key)
+        live = self.live.isChecked() and self.send_param is not None
+        for key in LEVEL_SWITCHES:
+            leds[key] = self.level_states[key]
+            if live:
+                enabled.add(key)
+        bank_first = self.slot - self.slot % 5
+        for i in range(1, 6):
+            leds[f"preset{i}"] = self.slot == bank_first + i - 1
+        status = "Store pour garder" if self.is_dirty() else ""
+        if live:
+            status = ("EN DIRECT  " + status).strip()
+        self.panel.set_state(f"{self.slot + 1:03d}", preset.name if preset else "", leds, enabled,
+                             self.is_dirty(), status)
+        self.panel.set_live(live)
 
     def _send_changes(self, before: bytes, after: bytes) -> None:
         if self._from_unit or not self.live.isChecked() or self.send_param is None:
@@ -495,6 +442,12 @@ class PresetEditor(QWidget):
 
     def apply_from_unit(self, block_id: int, param: int, value: int) -> None:
         """A switch or knob was used on the G-System: mirror it in the edit buffer."""
+        if block_id == LEVELS_BLOCK_ID:
+            for key, param_index in LEVEL_SWITCHES.items():
+                if param_index == param:
+                    self.level_states[key] = bool(value)
+                    self._refresh_panel()
+            return
         key = next((k for k, v in self.block_ids.items() if v == block_id), None)
         if key is None or self.buffer is None or not self.live.isChecked():
             return
@@ -513,6 +466,28 @@ class PresetEditor(QWidget):
         if field is not None:
             self.set_field(field, int(on), f"{blk.label} {'on' if on else 'off'}")
 
+    def press(self, key: str) -> None:
+        """A footswitch of the virtual front panel was clicked."""
+        if key in SWITCH_BLOCKS and self.buffer is not None:
+            field = block(key).enable_field(self.buffer.data)
+            if field is not None:
+                self._toggle_block(key, read_field(self.buffer.data, field) != 1)
+        elif key in LEVEL_SWITCHES:
+            if self.send_param is not None and self.live.isChecked():
+                on = not self.level_states[key]
+                self.send_param(LEVELS_BLOCK_ID, LEVEL_SWITCHES[key], int(on))
+                self.level_states[key] = on
+                self._refresh_panel()
+        elif key in ("up", "down"):
+            step = 5 if key == "up" else -5
+            target = self.slot + step
+            if 0 <= target < USER_SLOTS:
+                self.open_slot(target)
+        elif key.startswith("preset"):
+            target = self.slot - self.slot % 5 + int(key[-1]) - 1
+            if target != self.slot:
+                self.open_slot(target)
+
     def set_field(self, index: int, value: int, text: str) -> None:
         if self.buffer is None or read_field(self.buffer.data, index) == value:
             return
@@ -523,13 +498,18 @@ class PresetEditor(QWidget):
         after = Preset(self.buffer.number, data, self.buffer.device_id)
         self.undo_stack.push(SetBufferCommand(self, self.buffer, after, f"{text} = {value}"))
 
-    def _rename(self) -> None:
-        if self.buffer is None or self.name.text().strip() == self.buffer.name:
+    def rename_dialog(self) -> None:
+        if self.buffer is None:
+            return
+        name, ok = QInputDialog.getText(self, "Renommer le preset", f"Nom ({NAME_LEN} caractères max.) :",
+                                        text=self.buffer.name)
+        name = name.strip()
+        if not ok or name == self.buffer.name:
             return
         try:
-            renamed = self.buffer.with_name(self.name.text().strip())
+            renamed = self.buffer.with_name(name)
         except SysexError:
-            self.name.setText(self.buffer.name)
+            QMessageBox.warning(self, "Nom invalide", "Utilisez uniquement des caractères ASCII imprimables.")
             return
         self.undo_stack.push(SetBufferCommand(self, self.buffer, renamed, "Renommer"))
 

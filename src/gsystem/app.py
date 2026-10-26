@@ -18,7 +18,6 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QDockWidget,
     QFileDialog,
-    QFormLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -157,7 +156,8 @@ class LearnBlocksDialog(QDialog):
             self.show_next()
 
     def on_param(self, block_id: int, _param: int, _value: int) -> None:
-        if not self.todo or block_id in self.block_ids.values():
+        # Block 1 is the levels table (loops, boost), not an effect block.
+        if not self.todo or block_id == 1 or block_id in self.block_ids.values():
             return
         self.block_ids[self.todo.pop(0)] = block_id
         self.show_next()

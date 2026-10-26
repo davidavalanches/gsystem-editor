@@ -28,7 +28,7 @@ def editor(app):
 def test_switch_edits_buffer_not_bank(editor):
     ed, model = editor
     eq_on = block("eq").enable_field(ed.buffer.data)
-    ed.switches["eq"].click()
+    ed.press("eq")
     assert read_field(ed.buffer.data, eq_on) == 1 and ed.is_dirty()
     assert read_field(model.preset(0).data, eq_on) == 0
 
@@ -49,7 +49,7 @@ def test_empty_slot_disables_editing(editor):
     ed, model = editor
     model.set_slots({2: None}, "clear")
     ed.open_slot(2)
-    assert ed.buffer is None and not ed.switches["eq"].isEnabled()
+    assert ed.buffer is None and "eq" not in ed.panel.enabled_keys
 
 
 def test_live_mode_sends_and_mirrors(editor):
@@ -69,3 +69,23 @@ def test_live_mode_sends_and_mirrors(editor):
     assert read_field(ed.buffer.data, delay.first_field + 1) == 1 and sent == []
     ed.apply_from_unit(42, 1, 1)  # unknown block: ignored
     assert sent == []
+
+
+def test_level_switches_need_live_mode(editor):
+    ed, _model = editor
+    sent = []
+    ed.send_param = lambda *a: sent.append(a)
+    ed.press("loop2")
+    assert sent == [] and "loop2" not in ed.panel.enabled_keys
+    ed.live.setEnabled(True)
+    ed.live.setChecked(True)
+    ed.press("loop2")
+    assert sent == [(1, 20, 1)] and ed.level_states["loop2"] is True
+    ed.apply_from_unit(1, 20, 0)  # Loop 2 pressed on the unit
+    assert ed.level_states["loop2"] is False
+
+
+def test_bank_navigation(editor):
+    ed, _model = editor
+    ed.press("preset3")
+    assert ed.slot == 2
