@@ -246,6 +246,25 @@ class RawTable(QTableWidget):
         self.edited.emit(item.row(), value)
 
 
+class CurrentPageStack(QStackedWidget):
+    """Stacked widget that takes the height of the visible page only."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.currentChanged.connect(lambda _i: self.updateGeometry())
+
+    def sizeHint(self):
+        page = self.currentWidget()
+        return page.sizeHint() if page else super().sizeHint()
+
+    def minimumSizeHint(self):
+        page = self.currentWidget()
+        return page.minimumSizeHint() if page else super().minimumSizeHint()
+
+
+DEV_VIEWS = ("modifiers", "raw", "compare")
+
+
 class SetBufferCommand(QUndoCommand):
     def __init__(self, editor: PresetEditor, before: Preset, after: Preset, text: str) -> None:
         super().__init__(text)
@@ -306,25 +325,46 @@ class PresetEditor(QWidget):
         # View selector and pages.
         self.view_buttons = QButtonGroup(self)
         view_row = QHBoxLayout()
-        self.pages = QStackedWidget()
+        self.pages = CurrentPageStack()
         self.panels: list = []
+        self.dev_buttons = []
         for i, (key, label, blocks) in enumerate(VIEWS + (("raw", "Brut", None), ("compare", "Comparer", None))):
             btn = QPushButton(label, checkable=True)
             self.view_buttons.addButton(btn, i)
             view_row.addWidget(btn)
+            if key in DEV_VIEWS:
+                btn.hide()
+                self.dev_buttons.append(btn)
             self.pages.addWidget(self._make_page(key, blocks))
         view_row.addStretch(1)
         self.view_buttons.idClicked.connect(self.pages.setCurrentIndex)
         self.view_buttons.button(0).setChecked(True)
 
         legend = QLabel("Paramètres, plages et listes de valeurs : tables du firmware G-System 4.02.")
-        layout = QVBoxLayout(self)
+        legend.setEnabled(False)
+        # One scroll area for the whole page: settings are never squeezed.
+        content = QWidget()
+        layout = QVBoxLayout(content)
         layout.addLayout(header)
         layout.addWidget(self.panel)
         layout.addLayout(view_row)
-        layout.addWidget(self.pages, 1)
+        layout.addWidget(self.pages)
         layout.addWidget(legend)
+        layout.addStretch(1)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        scroll.setWidget(content)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(scroll)
         self.open_slot(0)
+
+    def set_dev_tools(self, visible: bool) -> None:
+        for btn in self.dev_buttons:
+            btn.setVisible(visible)
+        if not visible and self.view_buttons.checkedButton() in self.dev_buttons:
+            self.view_buttons.button(0).click()
 
     def rescale(self, base: QFont) -> None:
         """The front panel scales with the window; nothing to do for the zoom level."""
@@ -356,11 +396,7 @@ class PresetEditor(QWidget):
                 panel.edited.connect(lambda f, v, b=blk: self.set_field(f, v, f"{b.label} · {describe_field(self.buffer.data, f)[1]}"))
                 self.panels.append(panel)
                 grid.addWidget(panel, i // 2 if compact else i, i % 2 if compact else 0)
-        grid.setRowStretch(grid.rowCount(), 1)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(content)
-        return scroll
+        return content
 
     # Buffer handling
 

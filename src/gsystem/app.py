@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, Qt
-from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence, QUndoGroup
+from PySide6.QtGui import QAction, QFont, QKeySequence, QUndoGroup
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -21,11 +21,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QListWidget,
-    QListWidgetItem,
     QMainWindow,
     QMessageBox,
-    QPlainTextEdit,
     QProgressBar,
     QPushButton,
     QSplitter,
@@ -37,11 +34,11 @@ from PySide6.QtWidgets import (
 
 from . import __version__
 from .editor import PresetEditor
-from .params import SWITCH_BLOCKS, block
+from .params import BLOCKS, SWITCH_BLOCKS, block, read_field
 from .midi import GSystemReader, MidiInput, is_gsystem_identity
 from .model import COL_NAME, BankModel, Library, slot_label
-from .sqs import atomic_write, read_syx
-from .sysex import USER_PRESET_BASE, USER_SLOTS, Preset, SysexError, checksum, bytes_to_nibbles, is_preset_dump
+from .sqs import read_syx
+from .sysex import USER_PRESET_BASE, USER_SLOTS, Preset, SysexError
 
 FILE_FILTER = "Banques G-System (*.sqs *.SQS *.syx *.SYX);;Tous les fichiers (*)"
 ZOOM_STEPS = (0.8, 0.9, 1.0, 1.15, 1.3, 1.5, 1.75, 2.0, 2.5)
@@ -57,20 +54,20 @@ def hex_dump(data: bytes, width: int = 16) -> str:
 
 
 class DetailPanel(QWidget):
+    """Readable summary of the selected preset: each effect with its type and state."""
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.title = QLabel()
+        self.title.setWordWrap(True)
         self.info = QLabel()
         self.info.setWordWrap(True)
-        self.hex = QPlainTextEdit(readOnly=True)
-        self.hex.setLineWrapMode(QPlainTextEdit.NoWrap)
+        self.info.setTextFormat(Qt.RichText)
         self.rescale(self.title.font())
-
         layout = QVBoxLayout(self)
         layout.addWidget(self.title)
         layout.addWidget(self.info)
-        layout.addWidget(QLabel("Données brutes (516 octets, décodés) :"))
-        layout.addWidget(self.hex, 1)
+        layout.addStretch(1)
         self.show_preset(None, None)
 
     def rescale(self, base: QFont) -> None:
@@ -78,34 +75,31 @@ class DetailPanel(QWidget):
         title_font.setPointSizeF(base.pointSizeF() * 1.6)
         title_font.setBold(True)
         self.title.setFont(title_font)
-        mono = QFontDatabase.systemFont(QFontDatabase.FixedFont)
-        mono.setPointSizeF(base.pointSizeF())
-        self.hex.setFont(mono)
 
     def show_preset(self, slot: int | None, preset: Preset | None) -> None:
         if slot is None:
             self.title.setText("Aucune sélection")
             self.info.setText("")
-            self.hex.clear()
             return
         if preset is None:
             self.title.setText(f"{slot_label(slot)} — vide")
             self.info.setText("")
-            self.hex.clear()
             return
         self.title.setText(f"{slot_label(slot)} — {preset.name}")
-        computed = checksum(bytes_to_nibbles(preset.data))
-        lines = [f"Numéro MIDI interne : {preset.number}"]
+        rows = []
+        for blk in BLOCKS:
+            kind = blk.effect_type(preset.data)
+            enable = blk.enable_field(preset.data)
+            on = enable is not None and read_field(preset.data, enable) == 1
+            state = "<b style='color:#c0392b'>On</b>" if on else "<span style='color:#888'>Off</span>"
+            rows.append(f"<tr><td>{blk.label}</td><td>{kind.name if kind else ''}</td><td>{state}</td></tr>")
+        warnings = []
+        if not preset.checksum_ok:
+            warnings.append("⚠ Somme de contrôle invalide dans le fichier : elle sera corrigée à l'enregistrement.")
         if preset.user_slot != slot:
-            lines.append(f"⚠ Numéro d'origine différent de l'emplacement (sera renuméroté en {100 + slot}).")
-        if preset.source_checksum is None:
-            lines.append(f"Somme de contrôle : {computed} (recalculée)")
-        elif preset.checksum_ok:
-            lines.append(f"Somme de contrôle : {computed} ✔")
-        else:
-            lines.append(f"⚠ Somme de contrôle stockée {preset.source_checksum}, calculée {computed}")
-        self.info.setText("\n".join(lines))
-        self.hex.setPlainText(hex_dump(preset.data))
+            warnings.append("⚠ Preset déplacé : il sera renuméroté à l'enregistrement.")
+        self.info.setText("<table cellpadding='4'>" + "".join(rows) + "</table>"
+                          + "".join(f"<p>{w}</p>" for w in warnings))
 
 
 # Block ids observed on the hardware; the others are learned with LearnBlocksDialog.
@@ -178,7 +172,6 @@ class MidiPanel(QWidget):
         self.read_mode: str | None = None
         self.reader.param_changed.connect(self.on_param_changed)
         self.reader.preset_selected.connect(lambda slot: self.window.editor.follow_unit(slot))
-        self.capture: list[bytes] = []
 
         self.ports = QComboBox()
         refresh = QPushButton("Actualiser")
@@ -203,12 +196,6 @@ class MidiPanel(QWidget):
         self.learn_button.setToolTip("Identifier le numéro de bloc de chaque switch d'effet")
         self.learn_button.clicked.connect(self.learn_blocks)
         self.learn_button.setEnabled(False)
-        self.received = QListWidget()
-        self.received.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        add = QPushButton("Placer dans la banque…")
-        add.clicked.connect(self.add_to_bank)
-        save_capture = QPushButton("Enregistrer la capture brute…")
-        save_capture.clicked.connect(self.save_capture)
 
         row = QHBoxLayout()
         row.addWidget(self.ports, 1)
@@ -223,14 +210,11 @@ class MidiPanel(QWidget):
         layout.addLayout(read_row)
         layout.addWidget(self.progress)
         layout.addWidget(self.learn_button)
-        layout.addWidget(QLabel("Messages et presets reçus :"))
-        layout.addWidget(self.received, 1)
-        layout.addWidget(add)
-        layout.addWidget(save_capture)
         hint = QLabel("« Live » (mode Preset) modifie uniquement la mémoire de travail du G-System : "
                       "rien n'est stocké dans le pédalier. Changer de preset sur le G-System annule tout.")
         hint.setWordWrap(True)
         layout.addWidget(hint)
+        layout.addStretch(1)
         self.refresh_ports()
 
     def refresh_ports(self) -> None:
@@ -272,7 +256,7 @@ class MidiPanel(QWidget):
         self.status.setText(f"Connecté à « {self.midi.port_name} », identification…")
 
     def on_message(self, msg: bytes) -> None:
-        self.capture.append(msg)
+        self.window.editor.panel.flash_midi()
         if is_gsystem_identity(msg):
             version = f"{msg[14]}.{msg[15]:02d}"
             self.status.setText(f"G-System détecté (version {version}).")
@@ -280,17 +264,6 @@ class MidiPanel(QWidget):
             self.read_selection_button.setEnabled(True)
             self.learn_button.setEnabled(True)
             self.window.set_live_available(True)
-            return
-        if self.reader.busy or msg[5:7] == b"\x55\x22":
-            return
-        if not is_preset_dump(msg):
-            self.received.addItem(msg[:16].hex(" ") + ("…" if len(msg) > 16 else ""))
-            return
-        preset = Preset.from_sysex(msg, strict=False)
-        state = "" if preset.checksum_ok else "  ⚠ somme invalide"
-        item = QListWidgetItem(f"{preset.number:3d}  {preset.name}{state}")
-        item.setData(Qt.UserRole, preset)
-        self.received.addItem(item)
 
     def on_param_changed(self, block_id: int, param: int, value: int) -> None:
         self.window.editor.apply_from_unit(block_id, param, value)
@@ -351,20 +324,6 @@ class MidiPanel(QWidget):
             if changes and self.window.confirm_overwrite(changes):
                 self.window.model.set_slots(changes, f"Lecture de {len(changes)} emplacement(s) du G-System")
         self.status.setText(f"{len(presets)} presets lus, {len(missing)} emplacement(s) vide(s).")
-
-    def add_to_bank(self) -> None:
-        presets = [item.data(Qt.UserRole) for item in self.received.selectedItems() if item.data(Qt.UserRole)]
-        changes = {p.user_slot: p for p in presets if p.user_slot is not None}
-        if changes and self.window.confirm_overwrite(changes):
-            self.window.model.set_slots(changes, f"Réception MIDI de {len(changes)} preset(s)")
-
-    def save_capture(self) -> None:
-        if not self.capture:
-            return
-        default = f"capture-{datetime.now():%Y%m%d-%H%M%S}.syx"
-        path, _ = QFileDialog.getSaveFileName(self, "Enregistrer la capture", default, "SysEx (*.syx)")
-        if path:
-            atomic_write(Path(path), b"".join(self.capture))
 
     def shutdown(self) -> None:
         if self.reader.busy:
@@ -498,6 +457,12 @@ class MainWindow(QMainWindow):
         view.addAction(self.action("Taille normale", lambda: self.apply_zoom(1.3), "Ctrl+0"))
         view.addSeparator()
         view.addAction(midi_dock.toggleViewAction())
+        dev = QAction("Outils de développement", self, checkable=True)
+        dev.setToolTip("Vues Brut, Comparer et Modifiers (données non décodées)")
+        dev.toggled.connect(self.editor.set_dev_tools)
+        dev.toggled.connect(lambda on: self.settings.setValue("dev_tools", on))
+        dev.setChecked(self.settings.value("dev_tools", False, type=bool))
+        view.addAction(dev)
 
         about = self.menuBar().addMenu("&Aide")
         about.addAction(self.action("À propos", lambda: QMessageBox.about(
