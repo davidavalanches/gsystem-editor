@@ -1,0 +1,8 @@
+{
+  "appId": "fr.gsystem.editor",
+  "appName": "G-System Editor",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#1c1d20"
+  }
+}

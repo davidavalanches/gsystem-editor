@@ -1,96 +1,78 @@
 # G-System Editor
 
 Éditeur/bibliothécaire libre pour le multi-effet **TC Electronic G-System**, qui remplace
-Vyzor G-System 2.00 (Psicraft, 2009, plus maintenu). Fonctionne sous Ubuntu et macOS
-(Python + Qt 6, MIDI via ALSA / CoreMIDI).
+Vyzor G-System 2.00 (Psicraft, 2009, plus maintenu).
 
-Ce projet **ne contient aucun code de Vyzor**. Le format des données a été établi
-uniquement à partir des dumps SysEx que produit le G-System et des fichiers de
-banques de l'utilisateur.
+Une seule application web (TypeScript), qui tourne :
 
-## Installation
+- **sur Android** : APK Capacitor, en paysage plein écran, MIDI USB natif (`android.media.midi`) ;
+- **sur ordinateur** (Ubuntu, macOS, Windows) : dans Chrome ou Chromium, via Web MIDI.
 
-```sh
-sudo apt install python3-venv          # Ubuntu, une seule fois
-python3 -m venv .venv
-.venv/bin/pip install -e '.[dev]'
-./install-desktop.sh                   # ajoute « G-System Editor » au menu
-```
+Ce projet **ne contient aucun code de Vyzor**. Le format des données a été établi à partir
+des dumps SysEx du G-System, des fichiers de banques de l'utilisateur, du manuel TC et des
+tables de paramètres du firmware 4.02 (pour l'interopérabilité).
 
-Lancement : `.venv/bin/gsystem-editor [banque.sqs]`
+## Android
 
-## Fonctionnalités (v0.2)
-
-### Éditeur de preset (mode Preset)
-
-- Écran LCD virtuel avec le numéro et le nom du preset (renommage direct).
-- Switches ronds pour activer ou désactiver chaque bloc : Compresseur, Filter, Mod, Pitch, Delay, Reverb, EQ, Noise gate.
-- Vues Tout, Filter, Dyn | EQ, Mod, Pitch, Delay, Reverb, Modifiers et Niveaux, avec boutons rotatifs et valeurs exactes.
-- Vue **Brut** : les 165 champs du preset, modifiables.
-- Vue **Comparer** : les champs qui diffèrent entre deux presets (outil d'identification des paramètres).
-- Tampon d'édition comme sur le G-System : les modifications n'atteignent la banque qu'avec **Store**, avec annulation.
-- Chaque paramètre affiche son niveau d'identification : confirmé, probable ou hypothèse.
-
-### Bibliothèque (mode Banques)
-
-- Ouvre les banques Vyzor `.sqs` et les fichiers SysEx `.syx` (200 emplacements utilisateur).
-- Signale les presets dont la **somme de contrôle** est invalide, et la recalcule toujours à l'enregistrement.
-- Renommer, copier/coller, vider des emplacements, avec **annulation illimitée** (Ctrl+Z).
-- Demande confirmation avant de remplacer un preset existant.
-- Enregistrement **atomique**, avec une **copie de sauvegarde `.bak` horodatée** du fichier remplacé.
-- Garde toutes les autres données du fichier `.sqs`, qui reste lisible par Vyzor.
-- Export `.syx` de toute la banque ou de la sélection, et import `.syx`.
-- Taille d'affichage réglable (Ctrl + / Ctrl − / Ctrl 0), conservée entre les sessions.
-- MIDI en **réception seule** : capture des presets envoyés par le G-System, enregistrement des captures brutes.
-
-En ligne de commande :
+Le téléphone sert d'hôte USB : il faut un **câble OTG** (USB-C/micro-USB → USB-A) entre le
+téléphone et le port USB du G-System.
 
 ```sh
-.venv/bin/gsystem-tool info banque.sqs          # liste + vérification des sommes de contrôle
-.venv/bin/gsystem-tool export banque.sqs out.syx
+npm install                 # Node 22 requis (nvm use 22)
+npm run android             # build web + synchronisation Capacitor
+cd android && ./gradlew assembleDebug
+# APK : android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## Disposition des paramètres
+Variables nécessaires pour Gradle : `JAVA_HOME` (JDK 21 d'Android Studio, `…/android-studio/jbr`)
+et le SDK Android dans `~/Android/Sdk` (`android/local.properties`).
 
-Les 516 octets de données d'un preset = nom (21 octets) + **165 champs de 3 octets**.
-Les champs 0 à 124 sont des entiers signés 24 bits little-endian ; les champs 125 à 164 sont
-des données octet par octet (assignations des switches, pédales et modifiers).
-La correspondance champ ↔ paramètre est dans `src/gsystem/params.py`, avec son niveau de confiance.
+## Ordinateur
 
-## Format d'un preset (observé)
-
-```
-F0 00 20 1F <dev> 55 20 01 <n° hi> <n° lo> <1032 quartets> <somme> F7     (1044 octets)
+```sh
+npm install && npm run build
+./scripts/install-desktop.sh     # ajoute « G-System Editor » au menu (Ubuntu)
+./scripts/gsystem-editor.sh      # ou lancement direct
 ```
 
-| Élément | Détail |
+Pour le développement : `npm run dev`, puis ouvrir l'URL affichée dans Chrome.
+
+## Fonctionnalités
+
+- **Banques** : grille 40 banques × 5 presets, résumé des effets, renommer, copier/coller, vider,
+  annulation (Ctrl+Z / boutons ↶ ↷).
+- **Fichiers** : ouverture des banques Vyzor `.sqs` et des `.syx` ; export `.syx` (téléchargement
+  sur ordinateur, `Documents/G-System/` sur Android). La banque en cours est conservée d'une
+  session à l'autre.
+- **Lecture du G-System** : toute la banque (~2 min 30, la liste se remplit au fur et à mesure)
+  ou seulement la sélection (0,8 s par preset).
+- **Preset** : face avant du G-System (switches avec anneau néon, afficheur banque/position,
+  LCD), vues Tout / Filter / Dyn | EQ / Mod / Pitch / Delay / Reverb avec boutons rotatifs en métal
+  brossé et interrupteurs On/Off, tampon d'édition avec Store / Revenir.
+- **Live** : chaque modification part dans la mémoire de travail du G-System (rien n'est stocké),
+  les switches du pédalier sont reflétés dans l'éditeur, et changer de preset au pied fait suivre
+  l'éditeur (avec relecture du preset).
+
+## Protocole (observé sur le matériel)
+
+| Message | Rôle |
 |---|---|
-| `00 20 1F` | Identifiant fabricant TC Electronic |
-| `55` | Modèle G-System |
-| `20 01` | Dump de preset |
-| Numéro | 14 bits ; les presets utilisateur commencent à 100 (emplacement 1 = 100) |
-| Données | 516 octets, chacun envoyé en deux quartets (poids fort d'abord) |
-| Somme | Somme de tous les quartets, sur 7 bits |
-| Nom | 20 premiers octets ; le bit 7 sert d'indicateur interne (masqué à l'affichage, conservé) |
+| `F0 7E 7F 06 01 F7` | Identification (réponse : firmware, ex. 4.05) |
+| `F0 00 20 1F 00 55 45 01 <n° hi> <n° lo> F7` | Demande d'un preset stocké (réponse en 0,77 s ; une requête à la fois) |
+| `F0 00 20 1F <dev> 55 20 01 <n°> <1032 quartets> <somme> F7` | Dump de preset (1044 octets) |
+| `F0 00 20 1F 7F 55 22 <bloc> <param:2> <valeur:6 quartets> F7` | Écriture d'un paramètre de la mémoire de travail ; envoyé aussi par le G-System |
+| `B0 00 <1\|2>` + `C0 <n>` | Changement de preset envoyé par le G-System (ignoré en entrée sur USB) |
 
-Fichier `.sqs` : conteneur IFF (`LIST` → `FORM BANK` → `SHDR`, `BODY`…). La banque
-« User Bank » contient 200 emplacements de 1310 octets. Les tailles de `FORM` écrites
-par Vyzor sont fausses : il ne faut pas s'y fier.
+Blocs : 1 = niveaux (loops 19–22, insert 23, boost 10), 2 = EQ, 4 = Mod, 7 = Filter, 8 = Pitch,
+9 = Delay, 10 = Comp, 11 = Reverb, 12 = Noise gate.
 
-## Feuille de route
-
-1. **Avec le G-System branché** : capturer les échanges (demande de dump, envoi, réception)
-   pour valider le protocole, puis activer l'envoi avec **relecture et vérification**
-   après chaque écriture.
-2. Correspondance octet ↔ paramètre (ampli, drive, délai, réverb, modulation…), établie en
-   comparant des dumps avant et après chaque changement fait sur le pédalier.
-3. Éditeur de paramètres en temps réel, avec une interface adaptée aux écrans actuels.
-4. Paquets : AppImage (Linux) et `.app` (macOS) via PyInstaller.
+Données d'un preset : nom (21 octets) + 165 champs de 3 octets (entiers signés 24 bits) ; chaque
+bloc d'effet est stocké `[nombre de paramètres][paramètres…]`. Voir `web/src/core/params.ts`.
 
 ## Tests
 
 ```sh
-.venv/bin/python -m pytest
+npm test
 ```
 
 Les tests sur fichiers réels utilisent les banques de `GSYSTEM_SAMPLES` (par défaut
