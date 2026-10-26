@@ -386,7 +386,7 @@ class FrontPanel(QWidget):
         # MIDI activity and live indicators (in place of the input meters).
         led_r = d.height() * 0.07
         for i, (label, on, color) in enumerate((("MIDI", self._midi_flash, QColor(60, 220, 60)),
-                                                ("DIRECT", self.live, QColor(255, 200, 0)))):
+                                                ("LIVE", self.live, QColor(255, 200, 0)))):
             x = d.left() + d.width() * (0.13 + i * 0.045)
             c = QPointF(x, d.top() + d.height() * 0.6)
             p.setBrush(color if on else color.darker(400))

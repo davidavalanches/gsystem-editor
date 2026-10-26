@@ -41,7 +41,7 @@ from .params import SWITCH_BLOCKS, block
 from .midi import GSystemReader, MidiInput, is_gsystem_identity
 from .model import COL_NAME, BankModel, Library, slot_label
 from .sqs import atomic_write, read_syx
-from .sysex import USER_SLOTS, Preset, SysexError, checksum, bytes_to_nibbles, is_preset_dump
+from .sysex import USER_PRESET_BASE, USER_SLOTS, Preset, SysexError, checksum, bytes_to_nibbles, is_preset_dump
 
 FILE_FILTER = "Banques G-System (*.sqs *.SQS *.syx *.SYX);;Tous les fichiers (*)"
 ZOOM_STEPS = (0.8, 0.9, 1.0, 1.15, 1.3, 1.5, 1.75, 2.0, 2.5)
@@ -174,7 +174,10 @@ class MidiPanel(QWidget):
         self.reader = GSystemReader(self.midi, self)
         self.reader.progress.connect(self.on_progress)
         self.reader.finished.connect(self.on_bank_read)
+        self.reader.preset_received.connect(self.on_preset_read)
+        self.read_mode: str | None = None
         self.reader.param_changed.connect(self.on_param_changed)
+        self.reader.preset_selected.connect(lambda slot: self.window.editor.follow_unit(slot))
         self.capture: list[bytes] = []
 
         self.ports = QComboBox()
@@ -184,10 +187,16 @@ class MidiPanel(QWidget):
         self.connect_button.toggled.connect(self.on_connect)
         self.status = QLabel()
         self.status.setWordWrap(True)
-        self.read_button = QPushButton("Lire la banque du G-System")
-        self.read_button.setToolTip("Demande les 200 presets utilisateur un par un (lecture seule)")
+        self.read_button = QPushButton("Lire toute la banque")
+        self.read_button.setToolTip("Demande les 200 presets utilisateur un par un (lecture seule, ~2 min 30). "
+                                    "La liste se remplit au fur et à mesure.")
         self.read_button.clicked.connect(self.read_bank)
         self.read_button.setEnabled(False)
+        self.read_selection_button = QPushButton("Lire la sélection")
+        self.read_selection_button.setToolTip("Relit depuis le G-System seulement les emplacements sélectionnés "
+                                              "dans la liste (0,8 s par preset)")
+        self.read_selection_button.clicked.connect(self.read_selection)
+        self.read_selection_button.setEnabled(False)
         self.progress = QProgressBar()
         self.progress.hide()
         self.learn_button = QPushButton("Apprendre les switches…")
@@ -208,14 +217,17 @@ class MidiPanel(QWidget):
         layout.addLayout(row)
         layout.addWidget(self.connect_button)
         layout.addWidget(self.status)
-        layout.addWidget(self.read_button)
+        read_row = QHBoxLayout()
+        read_row.addWidget(self.read_button)
+        read_row.addWidget(self.read_selection_button)
+        layout.addLayout(read_row)
         layout.addWidget(self.progress)
         layout.addWidget(self.learn_button)
         layout.addWidget(QLabel("Messages et presets reçus :"))
         layout.addWidget(self.received, 1)
         layout.addWidget(add)
         layout.addWidget(save_capture)
-        hint = QLabel("« En direct » (mode Preset) modifie uniquement la mémoire de travail du G-System : "
+        hint = QLabel("« Live » (mode Preset) modifie uniquement la mémoire de travail du G-System : "
                       "rien n'est stocké dans le pédalier. Changer de preset sur le G-System annule tout.")
         hint.setWordWrap(True)
         layout.addWidget(hint)
@@ -240,6 +252,7 @@ class MidiPanel(QWidget):
             self.midi.close()
             self.reader.close_output()
             self.read_button.setEnabled(False)
+            self.read_selection_button.setEnabled(False)
             self.learn_button.setEnabled(False)
             self.window.set_live_available(False)
             self.status.setText("Déconnecté.")
@@ -264,6 +277,7 @@ class MidiPanel(QWidget):
             version = f"{msg[14]}.{msg[15]:02d}"
             self.status.setText(f"G-System détecté (version {version}).")
             self.read_button.setEnabled(True)
+            self.read_selection_button.setEnabled(True)
             self.learn_button.setEnabled(True)
             self.window.set_live_available(True)
             return
@@ -292,23 +306,50 @@ class MidiPanel(QWidget):
             return
         if not self.window.maybe_discard():
             return
-        self.read_button.setText("Annuler la lecture")
-        self.progress.setRange(0, USER_SLOTS)
+        self.window.start_device_read()
+        self._start_read("all", range(USER_SLOTS))
+
+    def read_selection(self) -> None:
+        if self.reader.busy:
+            self.reader.cancel()
+            return
+        slots = self.window.selected_slots()
+        if not slots:
+            QMessageBox.information(self, "Lire la sélection",
+                                    "Sélectionnez d'abord des emplacements dans la liste (mode Banques).")
+            return
+        self._start_read("selection", slots)
+
+    def _start_read(self, mode: str, slots) -> None:
+        self.read_mode = mode
+        button = self.read_button if mode == "all" else self.read_selection_button
+        button.setText("Annuler la lecture")
+        (self.read_selection_button if mode == "all" else self.read_button).setEnabled(False)
+        self.progress.setRange(0, len(slots))
         self.progress.setValue(0)
         self.progress.show()
-        self.reader.read_bank()
+        self.reader.read_bank(slots)
+
+    def on_preset_read(self, preset: Preset) -> None:
+        if self.read_mode == "all":
+            self.window.device_preset_arrived(preset)
 
     def on_progress(self, done: int, total: int) -> None:
         self.progress.setValue(done)
         self.status.setText(f"Lecture du preset {done}/{total}…")
 
     def on_bank_read(self, presets: list, missing: list) -> None:
-        self.read_button.setText("Lire la banque du G-System")
+        mode, self.read_mode = self.read_mode, None
+        self.read_button.setText("Lire toute la banque")
+        self.read_selection_button.setText("Lire la sélection")
+        self.read_button.setEnabled(True)
+        self.read_selection_button.setEnabled(True)
         self.progress.hide()
-        if not presets:
-            self.status.setText("Aucun preset reçu.")
-            return
-        self.window.load_from_device(presets)
+        if mode == "selection":
+            changes = {p.user_slot: p for p in presets if p.user_slot is not None}
+            changes.update({n - USER_PRESET_BASE: None for n in missing})
+            if changes and self.window.confirm_overwrite(changes):
+                self.window.model.set_slots(changes, f"Lecture de {len(changes)} emplacement(s) du G-System")
         self.status.setText(f"{len(presets)} presets lus, {len(missing)} emplacement(s) vide(s).")
 
     def add_to_bank(self) -> None:
@@ -498,6 +539,7 @@ class MainWindow(QMainWindow):
 
     def set_live_available(self, available: bool) -> None:
         self.editor.send_param = self.midi_panel.reader.send_param if available else None
+        self.editor.select_on_unit = self.midi_panel.reader.select_preset if available else None
         self.editor.live.setEnabled(available)
         if not available:
             self.editor.live.setChecked(False)
@@ -610,18 +652,19 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"{used} presets chargés"
                                      + (f", {bad} avec une somme de contrôle invalide" if bad else ""))
 
-    def load_from_device(self, presets: list[Preset]) -> None:
-        slots: list[Preset | None] = [None] * USER_SLOTS
-        for p in presets:
-            if p.user_slot is not None:
-                slots[p.user_slot] = p
-        self.model.set_library(Library(slots))
+    def start_device_read(self) -> None:
+        """Start from an empty bank that fills up as presets arrive from the unit."""
+        self.model.set_library(Library())
         self.device_read_at = datetime.now()
-        self.table.selectRow(0)
         self.update_title()
         self.set_mode(0)
-        self.statusBar().showMessage(f"{len(presets)} presets lus depuis le G-System. "
-                                     "Pensez à les enregistrer (Fichier → Exporter la banque en .syx).")
+        self.statusBar().showMessage("Lecture du G-System… Pensez ensuite à exporter la banque en .syx.")
+
+    def device_preset_arrived(self, preset: Preset) -> None:
+        slot = preset.user_slot
+        if slot is not None:
+            self.model.library.presets[slot] = preset
+            self.model.slot_changed(slot)
 
     def save(self) -> None:
         if not self.resolve_pending_edit():

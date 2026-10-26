@@ -26,7 +26,18 @@ DEVICE_INQUIRY = bytes.fromhex("F07E7F0601F7")
 REQUEST_PRESET = 0x45
 SET_PARAM = 0x22
 WRITE_DEVICE_ID = 0x7F
-REQUEST_TIMEOUT_MS = 1500
+# The unit answers a preset request in about 0.77 s and ignores requests while busy;
+# empty slots do not answer at all.
+REQUEST_TIMEOUT_MS = 1100
+
+
+USER_BANK_SIZE = 100  # Bank Select (CC 0) 1 = user presets 1-100, 2 = 101-200
+
+
+def select_messages(slot: int, channel: int = 0) -> list[bytes]:
+    """Bank Select + Program Change recalling a user preset, as documented in the manual."""
+    bank, program = 1 + slot // USER_BANK_SIZE, slot % USER_BANK_SIZE
+    return [bytes((0xB0 | channel, 0x00, bank)), bytes((0xC0 | channel, program))]
 
 
 def param_message(block_id: int, param: int, value: int) -> bytes:
@@ -107,6 +118,7 @@ class GSystemReader(QObject):
 
     progress = Signal(int, int)  # done, total
     param_changed = Signal(int, int, int)  # block id, parameter, value — sent by the unit
+    preset_selected = Signal(int)  # user slot recalled on the unit
     preset_received = Signal(object)  # Preset
     finished = Signal(list, list)  # presets, numbers without reply
 
@@ -119,6 +131,9 @@ class GSystemReader(QObject):
         self._received: list[Preset] = []
         self._missing: list[int] = []
         self._total = 0
+        # MIDI channel the unit uses; learned from its own messages.
+        self.channel = 0
+        self._bank: int | None = None
         self._timer = QTimer(self, singleShot=True)
         self._timer.timeout.connect(self._timed_out)
         midi_in.message.connect(self._on_message)
@@ -139,6 +154,11 @@ class GSystemReader(QObject):
             self._out.close_port()
             self._out.delete()
         self._out = None
+
+    def select_preset(self, slot: int) -> None:
+        if self._out is not None:
+            for msg in select_messages(slot, self.channel):
+                self._out.send_message(list(msg))
 
     def send_param(self, block_id: int, param: int, value: int) -> None:
         if self._out is not None:
@@ -171,6 +191,15 @@ class GSystemReader(QObject):
         self.finished.emit(self._received, self._missing)
 
     def _on_message(self, msg: bytes) -> None:
+        status = msg[0] & 0xF0 if msg else 0
+        if status == 0xB0 and len(msg) == 3 and msg[1] == 0x00:
+            self.channel, self._bank = msg[0] & 0x0F, msg[2]
+            return
+        if status == 0xC0 and len(msg) == 2:
+            self.channel = msg[0] & 0x0F
+            if self._bank in (1, 2):
+                self.preset_selected.emit((self._bank - 1) * USER_BANK_SIZE + msg[1])
+            return
         change = parse_param_message(msg)
         if change is not None:
             self.param_changed.emit(*change)

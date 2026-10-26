@@ -274,6 +274,7 @@ class PresetEditor(QWidget):
         # Live link: block key -> G-System block id, and a callable(block_id, param, value).
         self.block_ids: dict[str, int] = {}
         self.send_param = None
+        self.select_on_unit = None  # callable(slot): recall that preset on the unit
         self._from_unit = False
 
         # Level switches (loops, insert, boost) are live-only: their place in the
@@ -290,11 +291,11 @@ class PresetEditor(QWidget):
         revert = QPushButton("Revenir")
         revert.setToolTip("Abandonner les modifications non stockées")
         revert.clicked.connect(self.revert)
-        self.live = QPushButton("En direct", checkable=True)
+        self.live = QPushButton("Live", checkable=True)
         self.live.setEnabled(False)
         self.live.setToolTip("Envoyer chaque modification au G-System (mémoire de travail, sans Store) "
                              "et suivre les changements faits sur le pédalier")
-        self.live.toggled.connect(lambda _on: self._refresh_panel())
+        self.live.toggled.connect(self._live_toggled)
 
         header = QHBoxLayout()
         header.addStretch(1)
@@ -375,12 +376,31 @@ class PresetEditor(QWidget):
                 return
             if answer == QMessageBox.Save:
                 self.store()
+        changed = slot != self.slot
         self.slot = slot
         self.level_states = {k: None for k in LEVEL_SWITCHES}
         self.stored = self.bank.preset(slot)
         self.undo_stack.clear()
         self._set_buffer(self.stored, send=False)
         self._show_number(slot)
+        if changed and not self._from_unit and self.live.isChecked() and self.select_on_unit is not None:
+            self.select_on_unit(slot)
+
+    def _live_toggled(self, on: bool) -> None:
+        # Entering Live mode recalls the edited preset on the unit so both match.
+        if on and self.select_on_unit is not None:
+            self.select_on_unit(self.slot)
+        self._refresh_panel()
+
+    def follow_unit(self, slot: int) -> None:
+        """A preset was recalled on the G-System: show it, without sending it back."""
+        if not self.live.isChecked() or slot == self.slot or not 0 <= slot < USER_SLOTS:
+            return
+        self._from_unit = True
+        try:
+            self.open_slot(slot)
+        finally:
+            self._from_unit = False
 
     def reload_if_showing(self, slot: int) -> None:
         """The bank slot changed under us (paste, import, undo): follow it if not edited."""
@@ -428,7 +448,7 @@ class PresetEditor(QWidget):
             leds[f"preset{i}"] = position == i
         status = "Store pour garder" if self.is_dirty() else ""
         if live:
-            status = ("EN DIRECT  " + status).strip()
+            status = ("LIVE  " + status).strip()
         self.panel.set_state(f"{bank:02d}", str(position), preset.name if preset else "", leds, enabled,
                              self.is_dirty(), status)
         self.panel.set_live(live)

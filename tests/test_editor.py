@@ -106,3 +106,27 @@ def test_up_down_change_bank_and_keep_position(app):
 def test_slot_labels():
     from gsystem.model import slot_label
     assert slot_label(0) == "00-1" and slot_label(6) == "01-2" and slot_label(199) == "39-5"
+
+
+def test_live_preset_selection_follows_both_ways(app):
+    presets = [Preset(100 + i, b"P".ljust(21, b" ") + bytes(PRESET_DATA_LEN - 21)) for i in range(200)]
+    ed = PresetEditor(BankModel(Library(presets)))
+    recalled = []
+    ed.select_on_unit = recalled.append
+    ed.send_param = lambda *a: None
+    ed.press("up")
+    assert recalled == []  # not live: the unit is left alone
+    ed.live.setEnabled(True)
+    ed.live.setChecked(True)
+    assert recalled == [5]  # entering Live recalls the edited preset
+    ed.press("preset3")
+    ed.press("up")
+    assert recalled == [5, 7, 12]
+    ed.follow_unit(150)  # preset recalled on the unit
+    assert ed.slot == 150 and recalled == [5, 7, 12]
+
+
+def test_select_messages_match_manual():
+    from gsystem.midi import select_messages
+    assert select_messages(0) == [bytes((0xB0, 0, 1)), bytes((0xC0, 0))]
+    assert select_messages(199, channel=2) == [bytes((0xB2, 0, 2)), bytes((0xC2, 99))]
