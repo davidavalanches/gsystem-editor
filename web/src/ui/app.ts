@@ -1,7 +1,7 @@
 /** Application shell: navigation rail, views, file actions, MIDI connection and Live wiring. */
 
-import { BankStore, PRESETS_PER_BANK } from "../core/bank";
-import { GSystemLink } from "../core/protocol";
+import { BankStore, PRESETS_PER_BANK, slotLabel } from "../core/bank";
+import { DEFAULT_SYSEX_ID, GSystemLink } from "../core/protocol";
 import { SqsFile, readSyx } from "../core/sqs";
 import { USER_PRESET_BASE, USER_SLOTS, sameBytes, type Preset } from "../core/sysex";
 import { midiAccess } from "../midi/transport";
@@ -12,7 +12,11 @@ import { MidiView } from "./midiview";
 import { PresetView } from "./preset";
 import { ICONS, type MenuItem } from "./widgets";
 
-type ReadMode = "all" | "bank" | "refresh";
+type ReadMode = "all" | "bank" | "refresh" | "verify";
+const SYSEX_ID_KEY = "gsystem-editor.sysex-id";
+/** Writing presets into the unit froze it intermittently on firmware 4.05, even with the exact
+ * sequence Vyzor sends (see protocol.ts). Off until the cause is understood. */
+const STORE_TO_UNIT = false;
 type ViewKey = "banks" | "preset" | "midi";
 
 export class App {
@@ -67,11 +71,21 @@ export class App {
       this.scheduleSave();
     };
     this.bank.undo.onChange = () => this.banks.refresh();
-    this.preset.onStore = (slot, p) => {
-      this.bank.setSlots(new Map([[slot, p]]), `Store « ${p.name} »`);
-      // Writing presets into the unit is not validated yet: say where it went.
-      this.notify(`« ${p.name} » enregistré dans la banque de l'éditeur (pas encore dans le G-System)`);
-    };
+    this.preset.onStore = (slot, p) => this.store(slot, p);
+    this.midiView.sysexId.value = String(this.sysexId);
+    this.midiView.sysexId.addEventListener("change", () => {
+      const id = Number(this.midiView.sysexId.value);
+      if (Number.isInteger(id) && id >= 0 && id <= 126) {
+        try {
+          localStorage.setItem(SYSEX_ID_KEY, String(id));
+        } catch {
+          // Not persisted; the value still applies to this session.
+        }
+        if (this.link) this.link.sysexId = id;
+      } else {
+        this.midiView.sysexId.value = String(this.sysexId);
+      }
+    });
     this.preset.onNotice = (text) => this.notify(text);
     this.preset.onSlotChange = (slot) => {
       this.banks.current = slot;
@@ -188,6 +202,7 @@ export class App {
         return;
       }
       const link = new GSystemLink(await midi.open(port.id));
+      link.sysexId = this.sysexId;
       this.link = link;
       link.onIdentity = (version) => this.setConnected(true, `G-System ${version}`, port.name);
       link.onParam = (b, p, v) => this.preset.applyFromUnit(b, p, v);
@@ -196,7 +211,7 @@ export class App {
         if (this.readMode === "all" && p.userSlot !== null) this.bank.setDirect(p.userSlot, p);
       };
       link.onProgress = (done, total) => {
-        if (this.readMode !== "refresh") this.banks.setReading([done, total]);
+        if (this.readMode === "all" || this.readMode === "bank") this.banks.setReading([done, total]);
       };
       link.onReadFinished = (presets, missing) => this.readFinished(presets, missing);
       this.midiView.setStatus(`${port.name}…`, false, "Identification…");
@@ -221,6 +236,35 @@ export class App {
     if (on) this.notify(`${text} connecté`);
   }
 
+  private get sysexId(): number {
+    try {
+      const saved = Number(localStorage.getItem(SYSEX_ID_KEY));
+      return localStorage.getItem(SYSEX_ID_KEY) !== null && Number.isInteger(saved) ? saved : DEFAULT_SYSEX_ID;
+    } catch {
+      return DEFAULT_SYSEX_ID;
+    }
+  }
+
+  /** Store into the editor's bank and, when connected, into the unit, then read it back to check. */
+  private store(slot: number, p: Preset): void {
+    this.bank.setSlots(new Map([[slot, p]]), `Store « ${p.name} »`);
+    if (!this.link || !STORE_TO_UNIT) {
+      this.notify(`« ${p.name} » enregistré dans la banque de l'éditeur`
+        + (this.link ? " (l'écriture dans le G-System est désactivée pour l'instant)" : " (G-System non connecté)"));
+      return;
+    }
+    if (this.link.busy) {
+      alert("Le G-System est occupé (lecture en cours) : le preset est enregistré dans l'éditeur, "
+        + "refaites Store une fois la lecture terminée pour l'écrire dans le pédalier.");
+      return;
+    }
+    this.notify(`Écriture de « ${p.name} » dans le G-System (${slotLabel(slot)})…`);
+    this.verifying = { slot, preset: p };
+    this.link.store(slot, p, () => this.startRead("verify"));
+  }
+
+  private verifying: { slot: number; preset: Preset } | null = null;
+
   private startRead(mode: ReadMode): void {
     if (!this.link || this.link.busy) return;
     let slots: number[];
@@ -230,11 +274,13 @@ export class App {
       slots = [...Array(USER_SLOTS).keys()];
     } else if (mode === "bank") {
       slots = this.banks.bankSlots;
+    } else if (mode === "verify") {
+      slots = [this.verifying!.slot];
     } else {
       slots = [this.preset.slot];
     }
     this.readMode = mode;
-    if (mode !== "refresh") this.banks.setReading([0, slots.length]);
+    if (mode === "all" || mode === "bank") this.banks.setReading([0, slots.length]);
     this.link.readSlots(slots);
   }
 
@@ -242,6 +288,19 @@ export class App {
     const mode = this.readMode;
     this.readMode = null;
     this.banks.setReading(null);
+    if (mode === "verify") {
+      const expected = this.verifying!;
+      this.verifying = null;
+      const got = presets[0];
+      if (got && sameBytes(got.data, expected.preset.data)) {
+        this.notify(`« ${expected.preset.name} » enregistré dans le G-System (${slotLabel(expected.slot)}, vérifié)`);
+      } else {
+        alert(`Le G-System n'a pas confirmé l'enregistrement de « ${expected.preset.name} » en ${slotLabel(expected.slot)}`
+          + (got ? " : le preset relu est différent." : " : l'emplacement ne répond pas.")
+          + "\nLe preset reste enregistré dans la banque de l'éditeur. Vérifiez le SysEx ID dans la vue MIDI.");
+      }
+      return;
+    }
     if (mode === "all") {
       this.bank.undo.setClean();
       this.notify(`${presets.length} presets lus, ${missing.length} emplacement(s) vide(s). Pensez à exporter la banque.`);

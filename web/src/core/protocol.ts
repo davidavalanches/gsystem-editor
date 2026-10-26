@@ -7,12 +7,13 @@
  * - 55 22 <block> <param:2> <value:6 nibbles>: set one parameter of the edit
  *   buffer. The unit sends the same message when a switch or knob is used.
  *   Writing needs SysEx ID 7F; nothing is stored until Store is pressed.
- * - 55 57 00, preset dump (55 20 01 <num>), 55 57 01: Vyzor's transfer wrapping.
- *   On firmware 4.05 this wrapped transfer wrote a preset into an unreadable
- *   (erased) slot and repaired it, but sending a dump to an OCCUPIED slot froze
- *   the unit until power-cycled, wrapped or not, and left the slot unreadable.
- *   Overwriting probably needs a step not identified yet (Vyzor templates also
- *   use 55 28). The app therefore never writes presets into the unit.
+ * - Store, as Vyzor's Sync does it (captured while running Vyzor): editor mode on
+ *   (55 22 01 00 1D … 1), 55 57 00, the preset dump (55 20 01 <num>), 55 57 01,
+ *   all addressed to the unit's own SysEx ID (Global › MIDI › SysEx ID, 1 here).
+ *   This exact sequence succeeded four times, then froze the unit on the next
+ *   store with identical bytes and timing; addressed to 7F, overwriting froze it
+ *   too. A freeze needs a power cycle, leaves the slot unreadable and once
+ *   altered a neighbouring preset. Store to the unit is disabled in the app.
  * - Bank Select + Program Change: sent by the unit when a preset is recalled.
  *   Over USB the unit ignores incoming Program Changes, so the editor auditions
  *   a preset by writing its parameters into the edit buffer instead.
@@ -27,8 +28,10 @@ export const WRITE_DEVICE_ID = 0x7f;
 export const REQUEST_TIMEOUT_MS = 1100;
 export const SEND_INTERVAL_MS = 2;
 /** Pause between the messages of a store transfer, and before reading the slot back (as tested). */
-export const STORE_STEP_MS = 300;
-export const STORE_SETTLE_MS = 1000;
+export const STORE_STEP_MS = 100;
+export const STORE_SETTLE_MS = 1500;
+/** The unit's SysEx ID as found by Vyzor's AutoSense; set in the unit's Global › MIDI menu. */
+export const DEFAULT_SYSEX_ID = 1;
 const USER_BANK_SIZE = 100; // Bank Select (CC 0) 1 = user presets 1-100, 2 = 101-200
 
 /** Block ids of the 55 22 message, captured from the unit's switches and knobs.
@@ -46,14 +49,16 @@ export function presetRequest(number: number, deviceId = 0): Uint8Array {
     number >> 7, number & 0x7f, 0xf7]);
 }
 
-const sysex = (...body: number[]) => new Uint8Array([0xf0, ...TC_MANUFACTURER, WRITE_DEVICE_ID, MODEL_G_SYSTEM, ...body, 0xf7]);
-export const EDITOR_MODE_ON = sysex(SET_PARAM, 0x01, 0x00, 0x1d, 0, 0, 0, 0, 0, 1);
-export const TRANSFER_BEGIN = sysex(0x57, 0x00);
-export const TRANSFER_END = sysex(0x57, 0x01);
-
-/** The messages that store a preset into a user slot, in order. */
-export function storeMessages(slot: number, preset: Preset): Uint8Array[] {
-  return [EDITOR_MODE_ON, TRANSFER_BEGIN, preset.toSysex(userNumber(slot), WRITE_DEVICE_ID), TRANSFER_END];
+/** The messages that store a preset into a user slot, in order. `sysexId` must be the unit's own ID. */
+export function storeMessages(slot: number, preset: Preset, sysexId: number): Uint8Array[] {
+  if (sysexId < 0 || sysexId > 0x7e) throw new RangeError(`SysEx ID out of range: ${sysexId}`);
+  const sysex = (...body: number[]) => new Uint8Array([0xf0, ...TC_MANUFACTURER, sysexId, MODEL_G_SYSTEM, ...body, 0xf7]);
+  return [
+    sysex(SET_PARAM, 0x01, 0x00, 0x1d, 0, 0, 0, 0, 0, 1), // editor mode on
+    sysex(0x57, 0x00), // begin transfer
+    preset.toSysex(userNumber(slot), sysexId),
+    sysex(0x57, 0x01), // end transfer
+  ];
 }
 
 export function paramMessage(blockId: number, param: number, value: number): Uint8Array {
@@ -109,6 +114,8 @@ export class GSystemLink {
   private sending: ReturnType<typeof setInterval> | null = null;
   private bank: number | null = null;
   private storing = false;
+  /** The unit's own SysEx ID, required for stores. */
+  sysexId = DEFAULT_SYSEX_ID;
 
   constructor(private transport: Transport) {
     transport.onMessage = (msg) => this.handle(msg);
@@ -139,7 +146,7 @@ export class GSystemLink {
 
   /** Store a preset into a user slot of the unit; `done` runs once the unit has had time to write it. */
   store(slot: number, preset: Preset, done: () => void): void {
-    const steps = storeMessages(slot, preset);
+    const steps = storeMessages(slot, preset, this.sysexId);
     this.storing = true;
     const step = () => {
       const msg = steps.shift();

@@ -81,8 +81,8 @@ export class PresetView {
     this.liveButton.disabled = true;
     this.liveButton.addEventListener("click", () => this.setLive(!this.live));
     this.storeButton.type = "button";
-    this.storeButton.title = "Enregistrer le preset dans la banque de l'éditeur (l'écriture dans le G-System "
-      + "n'est pas encore disponible)";
+    this.storeButton.title = "Enregistrer le preset dans la banque de l'éditeur "
+      + "(l'écriture dans le G-System est désactivée pour l'instant)";
     this.storeButton.addEventListener("click", () => this.store());
 
     const header = el("header", "header preset-header");

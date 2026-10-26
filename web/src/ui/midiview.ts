@@ -10,6 +10,8 @@ export class MidiView {
   readonly connectButton = el("button", "pill primary", "Connecter");
   readonly readAllButton = el("button", "pill", "Lire toute la banque");
   readonly readBankButton = el("button", "pill", "Lire la banque affichée");
+  /** The unit's SysEx ID (Global › MIDI › SysEx ID on the G-System), needed to store presets. */
+  readonly sysexId = el("input", "sysex-id");
 
   constructor() {
     for (const b of [this.connectButton, this.readAllButton, this.readBankButton]) b.type = "button";
@@ -22,7 +24,14 @@ export class MidiView {
     line.append(this.dot, this.state);
     const actions = el("div", "actions");
     actions.append(this.connectButton, this.readAllButton, this.readBankButton);
-    status.append(el("h2", "", "G-System"), line, this.detail, actions);
+    this.sysexId.type = "number";
+    this.sysexId.min = "0";
+    this.sysexId.max = "126";
+    this.sysexId.inputMode = "numeric";
+    const idRow = el("label", "sysex-row", "SysEx ID du G-System");
+    idRow.append(this.sysexId);
+    idRow.title = "Réglage Global › MIDI › SysEx ID du pédalier (1 par défaut). Nécessaire pour Store.";
+    status.append(el("h2", "", "G-System"), line, this.detail, actions, idRow);
 
     const help = el("div", "card");
     help.append(

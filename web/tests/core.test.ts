@@ -135,13 +135,14 @@ describe("protocol (captures from the unit)", () => {
     expect(paramMessage(BLOCK_IDS.gate, 2, -29)).toEqual(gate);
   });
 
-  it("wraps a store exactly like the transfer that worked on the unit", () => {
-    const msgs = storeMessages(136, makePreset("Fragile", 300));
-    expect(msgs.map((m) => m.length)).toEqual([17, 9, PRESET_DUMP_LEN, 9]);
-    expect(msgs[1]).toEqual(hex("f000201f7f555700f7"));
-    expect(msgs[3]).toEqual(hex("f000201f7f555701f7"));
-    expect(Preset.fromSysex(msgs[2]).number).toBe(236); // renumbered to its slot
-    expect(msgs[2][4]).toBe(0x7f);
+  it("stores exactly like Vyzor's Sync captured on the unit", () => {
+    const msgs = storeMessages(136, makePreset("Fragile", 300), 1);
+    expect(msgs[0]).toEqual(hex("f000201f015522 01001d000000000001 f7"));
+    expect(msgs[1]).toEqual(hex("f000201f01555700f7"));
+    expect([...msgs[2].slice(0, 10)]).toEqual([0xf0, 0, 0x20, 0x1f, 0x01, 0x55, 0x20, 0x01, 0x01, 0x6c]); // n° 236
+    expect(msgs[2].length).toBe(PRESET_DUMP_LEN);
+    expect(msgs[3]).toEqual(hex("f000201f01555701f7"));
+    expect(() => storeMessages(0, makePreset(), 0x7f)).toThrow(RangeError);
   });
 
   it("knows every block id", () => {
