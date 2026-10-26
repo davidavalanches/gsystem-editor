@@ -50,3 +50,22 @@ def test_empty_slot_disables_editing(editor):
     model.set_slots({2: None}, "clear")
     ed.open_slot(2)
     assert ed.buffer is None and not ed.switches["eq"].isEnabled()
+
+
+def test_live_mode_sends_and_mirrors(editor):
+    ed, _model = editor
+    sent = []
+    ed.block_ids = {"delay": 9}
+    ed.send_param = lambda *a: sent.append(a)
+    ed.live.setEnabled(True)
+    ed.live.setChecked(True)
+    delay = block("delay")
+    ed.set_field(delay.first_field + 1, 1, "delay on")
+    assert sent == [(9, 1, 1)]
+    ed.undo_stack.undo()
+    assert sent[-1] == (9, 1, 0)
+    sent.clear()
+    ed.apply_from_unit(9, 1, 1)  # switch pressed on the unit
+    assert read_field(ed.buffer.data, delay.first_field + 1) == 1 and sent == []
+    ed.apply_from_unit(42, 1, 1)  # unknown block: ignored
+    assert sent == []

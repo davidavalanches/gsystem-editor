@@ -38,6 +38,7 @@ from .params import (
     block,
     describe_field,
     diff_fields,
+    owner,
     field_offset,
     read_field,
     write_field,
@@ -304,6 +305,10 @@ class PresetEditor(QWidget):
         self.slot = 0
         self.buffer: Preset | None = None
         self.stored: Preset | None = None
+        # Live link: block key -> G-System block id, and a callable(block_id, param, value).
+        self.block_ids: dict[str, int] = {}
+        self.send_param = None
+        self._from_unit = False
 
         # Virtual LCD: slot number and name.
         lcd = QFrame()
@@ -335,8 +340,14 @@ class PresetEditor(QWidget):
         revert.setToolTip("Abandonner les modifications non stockées")
         revert.clicked.connect(self.revert)
 
+        self.live = QPushButton("En direct", checkable=True)
+        self.live.setEnabled(False)
+        self.live.setToolTip("Envoyer chaque modification au G-System (mémoire de travail, sans Store) "
+                             "et suivre les changements faits sur le pédalier")
+
         header = QHBoxLayout()
         header.addWidget(lcd, 1)
+        header.addWidget(self.live)
         header.addWidget(store)
         header.addWidget(revert)
 
@@ -433,7 +444,7 @@ class PresetEditor(QWidget):
         self.slot = slot
         self.stored = self.bank.preset(slot)
         self.undo_stack.clear()
-        self._set_buffer(self.stored)
+        self._set_buffer(self.stored, send=False)
         self._show_number(slot)
 
     def reload_if_showing(self, slot: int) -> None:
@@ -451,7 +462,10 @@ class PresetEditor(QWidget):
             return self.buffer is not self.stored
         return self.buffer.data != self.stored.data
 
-    def _set_buffer(self, preset: Preset | None) -> None:
+    def _set_buffer(self, preset: Preset | None, send: bool = True) -> None:
+        previous = self.buffer
+        if send and previous is not None and preset is not None:
+            self._send_changes(previous.data, preset.data)
         self.buffer = preset
         editable = preset is not None
         for w in (self.name, self.pages, *self.switches.values()):
@@ -470,6 +484,28 @@ class PresetEditor(QWidget):
         self.state.setText("● modifié" if self.is_dirty() else "")
         if preset is not None:
             self.buffer_changed.emit(preset)
+
+    def _send_changes(self, before: bytes, after: bytes) -> None:
+        if self._from_unit or not self.live.isChecked() or self.send_param is None:
+            return
+        for index, _old, new in diff_fields(before, after):
+            blk = owner(index)
+            if blk is not None and blk.key in self.block_ids and index != blk.count_field:
+                self.send_param(self.block_ids[blk.key], index - blk.first_field, new)
+
+    def apply_from_unit(self, block_id: int, param: int, value: int) -> None:
+        """A switch or knob was used on the G-System: mirror it in the edit buffer."""
+        key = next((k for k, v in self.block_ids.items() if v == block_id), None)
+        if key is None or self.buffer is None or not self.live.isChecked():
+            return
+        blk = block(key)
+        if param >= blk.size:
+            return
+        self._from_unit = True
+        try:
+            self.set_field(blk.first_field + param, value, f"G-System · {blk.label}")
+        finally:
+            self._from_unit = False
 
     def _toggle_block(self, key: str, on: bool) -> None:
         blk = block(key)

@@ -1,8 +1,12 @@
 """MIDI link to the G-System via rtmidi (ALSA on Linux, CoreMIDI on macOS).
 
-Only read requests are sent for now: the Universal Device Inquiry and the
-preset request (``55 45``). Nothing that writes to the unit is implemented
-until the write messages have been validated on the hardware.
+Messages used, all observed on the hardware:
+
+- Universal Device Inquiry, answered with the firmware version.
+- ``55 45 01 <num>``: request a stored preset (read-only), answered by a dump.
+- ``55 22 <block> <param:2> <value:6 nibbles>``: set one parameter of the edit
+  buffer. The unit sends the same message when a switch or knob is used.
+  Writing needs SysEx ID 7F; nothing is stored until Store is pressed.
 """
 
 from __future__ import annotations
@@ -20,7 +24,27 @@ except ImportError:  # pragma: no cover - reported in the UI
 
 DEVICE_INQUIRY = bytes.fromhex("F07E7F0601F7")
 REQUEST_PRESET = 0x45
+SET_PARAM = 0x22
+WRITE_DEVICE_ID = 0x7F
 REQUEST_TIMEOUT_MS = 1500
+
+
+def param_message(block_id: int, param: int, value: int) -> bytes:
+    raw = value & 0xFFFFFF
+    nibbles = bytes((raw >> shift) & 0x0F for shift in range(20, -1, -4))
+    return bytes((0xF0, *TC_MANUFACTURER, WRITE_DEVICE_ID, MODEL_G_SYSTEM, SET_PARAM, block_id,
+                  param >> 7, param & 0x7F)) + nibbles + b"\xf7"
+
+
+def parse_param_message(msg: bytes) -> tuple[int, int, int] | None:
+    """(block id, parameter, value) of a 55 22 message, else None."""
+    if len(msg) != 17 or msg[1:4] != TC_MANUFACTURER or msg[5] != MODEL_G_SYSTEM or msg[6] != SET_PARAM:
+        return None
+    raw = 0
+    for nibble in msg[10:16]:
+        raw = raw << 4 | (nibble & 0x0F)
+    value = raw - (1 << 24) if raw & 0x800000 else raw
+    return msg[7], msg[8] << 7 | msg[9], value
 
 
 def preset_request(number: int, device_id: int = 0) -> bytes:
@@ -79,9 +103,10 @@ class MidiInput(QObject):
 
 
 class GSystemReader(QObject):
-    """Fetches user presets one request at a time, read-only."""
+    """Requests to the unit: identification, preset reading and parameter changes."""
 
     progress = Signal(int, int)  # done, total
+    param_changed = Signal(int, int, int)  # block id, parameter, value — sent by the unit
     preset_received = Signal(object)  # Preset
     finished = Signal(list, list)  # presets, numbers without reply
 
@@ -115,6 +140,10 @@ class GSystemReader(QObject):
             self._out.delete()
         self._out = None
 
+    def send_param(self, block_id: int, param: int, value: int) -> None:
+        if self._out is not None:
+            self._out.send_message(list(param_message(block_id, param, value)))
+
     def identify(self) -> None:
         self._out.send_message(list(DEVICE_INQUIRY))
 
@@ -142,6 +171,10 @@ class GSystemReader(QObject):
         self.finished.emit(self._received, self._missing)
 
     def _on_message(self, msg: bytes) -> None:
+        change = parse_param_message(msg)
+        if change is not None:
+            self.param_changed.emit(*change)
+            return
         if self._current is None or not is_preset_dump(msg):
             return
         preset = Preset.from_sysex(msg, strict=False)

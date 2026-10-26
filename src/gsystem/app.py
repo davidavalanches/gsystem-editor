@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +14,8 @@ from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QDockWidget,
     QFileDialog,
     QFormLayout,
@@ -35,6 +38,7 @@ from PySide6.QtWidgets import (
 
 from . import __version__
 from .editor import PresetEditor
+from .params import SWITCH_BLOCKS, block
 from .midi import GSystemReader, MidiInput, is_gsystem_identity
 from .model import COL_NAME, BankModel, Library, slot_label
 from .sqs import atomic_write, read_syx
@@ -105,6 +109,60 @@ class DetailPanel(QWidget):
         self.hex.setPlainText(hex_dump(preset.data))
 
 
+# Block ids observed on the hardware; the others are learned with LearnBlocksDialog.
+KNOWN_BLOCK_IDS = {"mod": 4, "delay": 9}
+
+
+class LearnBlocksDialog(QDialog):
+    """Asks the user to press each effect switch and records the block id it sends."""
+
+    def __init__(self, reader, block_ids: dict[str, int], parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Apprendre les switches du G-System")
+        self.block_ids = dict(block_ids)
+        self.todo = [k for k in SWITCH_BLOCKS if k not in self.block_ids]
+        self.prompt = QLabel()
+        self.prompt.setWordWrap(True)
+        font = self.prompt.font()
+        font.setPointSizeF(font.pointSizeF() * 1.4)
+        self.prompt.setFont(font)
+        self.log = QLabel()
+        self.log.setWordWrap(True)
+        skip = QPushButton("Passer ce switch")
+        skip.clicked.connect(self.skip)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("Appuyez sur chaque switch demandé, une seule fois. Rien n'est enregistré "
+                                "sur le G-System : vous pourrez rétablir l'état du switch ensuite."))
+        layout.addWidget(self.prompt)
+        layout.addWidget(skip)
+        layout.addWidget(self.log)
+        layout.addWidget(buttons)
+        reader.param_changed.connect(self.on_param)
+        self.show_next()
+
+    def show_next(self) -> None:
+        known = ", ".join(f"{block(k).label} = {v}" for k, v in sorted(self.block_ids.items(), key=lambda kv: kv[1]))
+        self.log.setText(f"Connus : {known}")
+        if self.todo:
+            self.prompt.setText(f"Appuyez sur le switch <b>{block(self.todo[0]).label.upper()}</b>")
+        else:
+            self.prompt.setText("Terminé. Cliquez sur OK pour enregistrer.")
+
+    def skip(self) -> None:
+        if self.todo:
+            self.todo.pop(0)
+            self.show_next()
+
+    def on_param(self, block_id: int, _param: int, _value: int) -> None:
+        if not self.todo or block_id in self.block_ids.values():
+            return
+        self.block_ids[self.todo.pop(0)] = block_id
+        self.show_next()
+
+
 class MidiPanel(QWidget):
     """Connection to the G-System: identification, bank reading and raw capture."""
 
@@ -116,6 +174,7 @@ class MidiPanel(QWidget):
         self.reader = GSystemReader(self.midi, self)
         self.reader.progress.connect(self.on_progress)
         self.reader.finished.connect(self.on_bank_read)
+        self.reader.param_changed.connect(self.on_param_changed)
         self.capture: list[bytes] = []
 
         self.ports = QComboBox()
@@ -131,6 +190,10 @@ class MidiPanel(QWidget):
         self.read_button.setEnabled(False)
         self.progress = QProgressBar()
         self.progress.hide()
+        self.learn_button = QPushButton("Apprendre les switches…")
+        self.learn_button.setToolTip("Identifier le numéro de bloc de chaque switch d'effet")
+        self.learn_button.clicked.connect(self.learn_blocks)
+        self.learn_button.setEnabled(False)
         self.received = QListWidget()
         self.received.setSelectionMode(QAbstractItemView.ExtendedSelection)
         add = QPushButton("Placer dans la banque…")
@@ -147,12 +210,13 @@ class MidiPanel(QWidget):
         layout.addWidget(self.status)
         layout.addWidget(self.read_button)
         layout.addWidget(self.progress)
+        layout.addWidget(self.learn_button)
         layout.addWidget(QLabel("Messages et presets reçus :"))
         layout.addWidget(self.received, 1)
         layout.addWidget(add)
         layout.addWidget(save_capture)
-        hint = QLabel("Lecture seule : l'éditeur ne fait que des demandes de lecture. "
-                      "L'écriture vers le G-System viendra après validation sur le matériel.")
+        hint = QLabel("« En direct » (mode Preset) modifie uniquement la mémoire de travail du G-System : "
+                      "rien n'est stocké dans le pédalier. Changer de preset sur le G-System annule tout.")
         hint.setWordWrap(True)
         layout.addWidget(hint)
         self.refresh_ports()
@@ -176,6 +240,8 @@ class MidiPanel(QWidget):
             self.midi.close()
             self.reader.close_output()
             self.read_button.setEnabled(False)
+            self.learn_button.setEnabled(False)
+            self.window.set_live_available(False)
             self.status.setText("Déconnecté.")
             return
         if self.ports.currentIndex() < 0:
@@ -198,8 +264,10 @@ class MidiPanel(QWidget):
             version = f"{msg[14]}.{msg[15]:02d}"
             self.status.setText(f"G-System détecté (version {version}).")
             self.read_button.setEnabled(True)
+            self.learn_button.setEnabled(True)
+            self.window.set_live_available(True)
             return
-        if self.reader.busy:
+        if self.reader.busy or msg[5:7] == b"\x55\x22":
             return
         if not is_preset_dump(msg):
             self.received.addItem(msg[:16].hex(" ") + ("…" if len(msg) > 16 else ""))
@@ -209,6 +277,14 @@ class MidiPanel(QWidget):
         item = QListWidgetItem(f"{preset.number:3d}  {preset.name}{state}")
         item.setData(Qt.UserRole, preset)
         self.received.addItem(item)
+
+    def on_param_changed(self, block_id: int, param: int, value: int) -> None:
+        self.window.editor.apply_from_unit(block_id, param, value)
+
+    def learn_blocks(self) -> None:
+        dialog = LearnBlocksDialog(self.reader, self.window.editor.block_ids, self)
+        if dialog.exec() == QDialog.Accepted:
+            self.window.set_block_ids(dialog.block_ids)
 
     def read_bank(self) -> None:
         if self.reader.busy:
@@ -288,6 +364,11 @@ class MainWindow(QMainWindow):
         self.splitter = splitter
 
         self.editor = PresetEditor(self.model)
+        try:
+            learned = json.loads(self.settings.value("block_ids", "{}"))
+        except (TypeError, ValueError):
+            learned = {}
+        self.editor.block_ids = {**KNOWN_BLOCK_IDS, **learned}
         self.editor.store_requested.connect(
             lambda slot, preset: self.model.set_slots({slot: preset}, f"Store « {preset.name} »"))
         self.model.dataChanged.connect(lambda top, _bottom: self.editor.reload_if_showing(top.row()))
@@ -414,6 +495,16 @@ class MainWindow(QMainWindow):
         if not index.isValid():
             return None, None
         return index.row(), self.model.preset(index.row())
+
+    def set_live_available(self, available: bool) -> None:
+        self.editor.send_param = self.midi_panel.reader.send_param if available else None
+        self.editor.live.setEnabled(available)
+        if not available:
+            self.editor.live.setChecked(False)
+
+    def set_block_ids(self, block_ids: dict[str, int]) -> None:
+        self.editor.block_ids = dict(block_ids)
+        self.settings.setValue("block_ids", json.dumps(block_ids))
 
     def set_mode(self, mode: int) -> None:
         self.modes.button(mode).setChecked(True)

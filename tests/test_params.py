@@ -75,3 +75,12 @@ def test_type_selects_parameter_set():
 
 def test_frequency_display_matches_manual():
     assert freq(34) == "1.02 kHz" and freq(54) == "10.24 kHz" and freq(18) == "160 Hz"
+
+
+def test_param_message_matches_hardware_capture():
+    from gsystem.midi import param_message, parse_param_message
+    # Captured from the unit: Delay (block 9) Enable (param 1) set to Off.
+    captured = bytes.fromhex("f000201f7f5522090001000000000000f7")
+    assert param_message(9, 1, 0) == captured
+    assert parse_param_message(captured) == (9, 1, 0)
+    assert parse_param_message(param_message(4, 12, -90)) == (4, 12, -90)
