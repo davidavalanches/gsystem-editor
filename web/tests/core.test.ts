@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { BankStore, bankPosition, slotLabel } from "../src/core/bank";
 import { BLOCKS, block, diffFields, fieldOffset, FIELD_COUNT, freq, readField, writeField } from "../src/core/params";
-import { BLOCK_IDS, MidiParser, identityVersion, paramMessage, parseParamMessage, presetRequest } from "../src/core/protocol";
+import { BLOCK_IDS, MidiParser, identityVersion, paramMessage, parseParamMessage, presetRequest, storeMessages } from "../src/core/protocol";
 import { SqsFile, USER_BANK_KIND, readSyx, writeSyx } from "../src/core/sqs";
 import {
   ChecksumError, PRESET_DATA_LEN, PRESET_DUMP_LEN, Preset, SysexError, bytesToNibbles, nibblesToBytes,
@@ -133,6 +133,15 @@ describe("protocol (captures from the unit)", () => {
     const gate = hex("f000201f7f55220c00020f0f0f0f0e03f7");
     expect(parseParamMessage(gate)).toEqual([BLOCK_IDS.gate, 2, -29]);
     expect(paramMessage(BLOCK_IDS.gate, 2, -29)).toEqual(gate);
+  });
+
+  it("wraps a store exactly like the transfer that worked on the unit", () => {
+    const msgs = storeMessages(136, makePreset("Fragile", 300));
+    expect(msgs.map((m) => m.length)).toEqual([17, 9, PRESET_DUMP_LEN, 9]);
+    expect(msgs[1]).toEqual(hex("f000201f7f555700f7"));
+    expect(msgs[3]).toEqual(hex("f000201f7f555701f7"));
+    expect(Preset.fromSysex(msgs[2]).number).toBe(236); // renumbered to its slot
+    expect(msgs[2][4]).toBe(0x7f);
   });
 
   it("knows every block id", () => {

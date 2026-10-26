@@ -7,12 +7,18 @@
  * - 55 22 <block> <param:2> <value:6 nibbles>: set one parameter of the edit
  *   buffer. The unit sends the same message when a switch or knob is used.
  *   Writing needs SysEx ID 7F; nothing is stored until Store is pressed.
+ * - 55 57 00, preset dump (55 20 01 <num>), 55 57 01: Vyzor's transfer wrapping.
+ *   On firmware 4.05 this wrapped transfer wrote a preset into an unreadable
+ *   (erased) slot and repaired it, but sending a dump to an OCCUPIED slot froze
+ *   the unit until power-cycled, wrapped or not, and left the slot unreadable.
+ *   Overwriting probably needs a step not identified yet (Vyzor templates also
+ *   use 55 28). The app therefore never writes presets into the unit.
  * - Bank Select + Program Change: sent by the unit when a preset is recalled.
  *   Over USB the unit ignores incoming Program Changes, so the editor auditions
  *   a preset by writing its parameters into the edit buffer instead.
  */
 
-import { MODEL_G_SYSTEM, Preset, TC_MANUFACTURER, USER_PRESET_BASE, USER_SLOTS, isPresetDump } from "./sysex";
+import { MODEL_G_SYSTEM, Preset, TC_MANUFACTURER, USER_PRESET_BASE, USER_SLOTS, isPresetDump, userNumber } from "./sysex";
 
 export const DEVICE_INQUIRY = new Uint8Array([0xf0, 0x7e, 0x7f, 0x06, 0x01, 0xf7]);
 export const REQUEST_PRESET = 0x45;
@@ -20,6 +26,9 @@ export const SET_PARAM = 0x22;
 export const WRITE_DEVICE_ID = 0x7f;
 export const REQUEST_TIMEOUT_MS = 1100;
 export const SEND_INTERVAL_MS = 2;
+/** Pause between the messages of a store transfer, and before reading the slot back (as tested). */
+export const STORE_STEP_MS = 300;
+export const STORE_SETTLE_MS = 1000;
 const USER_BANK_SIZE = 100; // Bank Select (CC 0) 1 = user presets 1-100, 2 = 101-200
 
 /** Block ids of the 55 22 message, captured from the unit's switches and knobs.
@@ -35,6 +44,16 @@ export const LEVEL_SWITCHES: Record<string, number> = {
 export function presetRequest(number: number, deviceId = 0): Uint8Array {
   return new Uint8Array([0xf0, ...TC_MANUFACTURER, deviceId, MODEL_G_SYSTEM, REQUEST_PRESET, 0x01,
     number >> 7, number & 0x7f, 0xf7]);
+}
+
+const sysex = (...body: number[]) => new Uint8Array([0xf0, ...TC_MANUFACTURER, WRITE_DEVICE_ID, MODEL_G_SYSTEM, ...body, 0xf7]);
+export const EDITOR_MODE_ON = sysex(SET_PARAM, 0x01, 0x00, 0x1d, 0, 0, 0, 0, 0, 1);
+export const TRANSFER_BEGIN = sysex(0x57, 0x00);
+export const TRANSFER_END = sysex(0x57, 0x01);
+
+/** The messages that store a preset into a user slot, in order. */
+export function storeMessages(slot: number, preset: Preset): Uint8Array[] {
+  return [EDITOR_MODE_ON, TRANSFER_BEGIN, preset.toSysex(userNumber(slot), WRITE_DEVICE_ID), TRANSFER_END];
 }
 
 export function paramMessage(blockId: number, param: number, value: number): Uint8Array {
@@ -89,13 +108,14 @@ export class GSystemLink {
   private sendQueue: Uint8Array[] = [];
   private sending: ReturnType<typeof setInterval> | null = null;
   private bank: number | null = null;
+  private storing = false;
 
   constructor(private transport: Transport) {
     transport.onMessage = (msg) => this.handle(msg);
   }
 
   get busy(): boolean {
-    return this.current !== null;
+    return this.current !== null || this.storing;
   }
 
   identify(): void {
@@ -115,6 +135,25 @@ export class GSystemLink {
         }
       }, SEND_INTERVAL_MS);
     }
+  }
+
+  /** Store a preset into a user slot of the unit; `done` runs once the unit has had time to write it. */
+  store(slot: number, preset: Preset, done: () => void): void {
+    const steps = storeMessages(slot, preset);
+    this.storing = true;
+    const step = () => {
+      const msg = steps.shift();
+      if (!msg) {
+        setTimeout(() => {
+          this.storing = false;
+          done();
+        }, STORE_SETTLE_MS);
+        return;
+      }
+      this.transport.send(msg);
+      setTimeout(step, STORE_STEP_MS);
+    };
+    step();
   }
 
   readSlots(slots: Iterable<number>): void {
