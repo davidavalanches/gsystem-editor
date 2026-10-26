@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=G-System Editor
+Comment=Éditeur libre pour TC Electronic G-System
+Exec=@BIN@ %f
+Terminal=false
+Categories=Audio;AudioVideo;Music;
+MimeType=application/x-sysex;
