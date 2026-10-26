@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -14,8 +13,6 @@ from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
     QComboBox,
-    QDialog,
-    QDialogButtonBox,
     QDockWidget,
     QFileDialog,
     QHBoxLayout,
@@ -34,8 +31,8 @@ from PySide6.QtWidgets import (
 
 from . import __version__
 from .editor import PresetEditor
-from .params import BLOCKS, SWITCH_BLOCKS, block, read_field
-from .midi import GSystemReader, MidiInput, is_gsystem_identity
+from .params import BLOCKS, read_field
+from .midi import BLOCK_IDS, GSystemReader, MidiInput, is_gsystem_identity
 from .model import BankModel, Library, slot_label
 from .sqs import read_syx
 from .sysex import USER_PRESET_BASE, USER_SLOTS, Preset, SysexError
@@ -102,67 +99,6 @@ class DetailPanel(QWidget):
                           + "".join(f"<p>{w}</p>" for w in warnings))
 
 
-# Block ids observed on the hardware; the others are learned with LearnBlocksDialog.
-KNOWN_BLOCK_IDS = {"mod": 4, "delay": 9}
-
-
-class LearnBlocksDialog(QDialog):
-    """Asks the user to press each effect switch and records the block id it sends."""
-
-    def __init__(self, reader, block_ids: dict[str, int], parent=None) -> None:
-        super().__init__(parent)
-        self.setWindowTitle("Apprendre les switches du G-System")
-        self.block_ids = dict(block_ids)
-        self.todo = [k for k in SWITCH_BLOCKS if k not in self.block_ids]
-        self.prompt = QLabel()
-        self.prompt.setWordWrap(True)
-        font = self.prompt.font()
-        font.setPointSizeF(font.pointSizeF() * 1.4)
-        self.prompt.setFont(font)
-        self.log = QLabel()
-        self.log.setWordWrap(True)
-        skip = QPushButton("Passer ce switch")
-        skip.clicked.connect(self.skip)
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Appuyez sur chaque switch demandé, une seule fois. Rien n'est enregistré "
-                                "sur le G-System : vous pourrez rétablir l'état du switch ensuite."))
-        layout.addWidget(self.prompt)
-        layout.addWidget(skip)
-        layout.addWidget(self.log)
-        layout.addWidget(buttons)
-        reader.param_changed.connect(self.on_param)
-        self.show_next()
-
-    def show_next(self) -> None:
-        known = ", ".join(f"{block(k).label} = {v}" for k, v in sorted(self.block_ids.items(), key=lambda kv: kv[1]))
-        self.log.setText(f"Connus : {known}")
-        if self.todo:
-            key = self.todo[0]
-            if key in ("eq", "gate"):
-                # No footswitch for these blocks on the unit.
-                self.prompt.setText(f"Sur le G-System, modifiez un réglage du bloc <b>{block(key).label.upper()}</b> "
-                                    "(mode édition), puis revenez au réglage d'origine")
-            else:
-                self.prompt.setText(f"Appuyez sur le switch <b>{block(key).label.upper()}</b>")
-        else:
-            self.prompt.setText("Terminé. Cliquez sur OK pour enregistrer.")
-
-    def skip(self) -> None:
-        if self.todo:
-            self.todo.pop(0)
-            self.show_next()
-
-    def on_param(self, block_id: int, _param: int, _value: int) -> None:
-        # Block 1 is the levels table (loops, boost), not an effect block.
-        if not self.todo or block_id == 1 or block_id in self.block_ids.values():
-            return
-        self.block_ids[self.todo.pop(0)] = block_id
-        self.show_next()
-
-
 class MidiPanel(QWidget):
     """Connection to the G-System: identification, bank reading and raw capture."""
 
@@ -198,10 +134,6 @@ class MidiPanel(QWidget):
         self.read_selection_button.setEnabled(False)
         self.progress = QProgressBar()
         self.progress.hide()
-        self.learn_button = QPushButton("Apprendre les switches…")
-        self.learn_button.setToolTip("Identifier le numéro de bloc de chaque switch d'effet")
-        self.learn_button.clicked.connect(self.learn_blocks)
-        self.learn_button.setEnabled(False)
 
         row = QHBoxLayout()
         row.addWidget(self.ports, 1)
@@ -215,7 +147,6 @@ class MidiPanel(QWidget):
         read_row.addWidget(self.read_selection_button)
         layout.addLayout(read_row)
         layout.addWidget(self.progress)
-        layout.addWidget(self.learn_button)
         hint = QLabel("« Live » (mode Preset) modifie uniquement la mémoire de travail du G-System : "
                       "rien n'est stocké dans le pédalier. Changer de preset sur le G-System annule tout.")
         hint.setWordWrap(True)
@@ -243,7 +174,6 @@ class MidiPanel(QWidget):
             self.reader.close_output()
             self.read_button.setEnabled(False)
             self.read_selection_button.setEnabled(False)
-            self.learn_button.setEnabled(False)
             self.window.set_live_available(False)
             self.status.setText("Déconnecté.")
             return
@@ -268,16 +198,10 @@ class MidiPanel(QWidget):
             self.status.setText(f"G-System détecté (version {version}).")
             self.read_button.setEnabled(True)
             self.read_selection_button.setEnabled(True)
-            self.learn_button.setEnabled(True)
             self.window.set_live_available(True)
 
     def on_param_changed(self, block_id: int, param: int, value: int) -> None:
         self.window.editor.apply_from_unit(block_id, param, value)
-
-    def learn_blocks(self) -> None:
-        dialog = LearnBlocksDialog(self.reader, self.window.editor.block_ids, self)
-        if dialog.exec() == QDialog.Accepted:
-            self.window.set_block_ids(dialog.block_ids)
 
     def read_bank(self) -> None:
         if self.reader.busy:
@@ -395,11 +319,7 @@ class MainWindow(QMainWindow):
 
         self.editor = PresetEditor(self.model)
         self.editor.notice.connect(lambda text: self.statusBar().showMessage(text, 8000))
-        try:
-            learned = json.loads(self.settings.value("block_ids", "{}"))
-        except (TypeError, ValueError):
-            learned = {}
-        self.editor.block_ids = {**KNOWN_BLOCK_IDS, **learned}
+        self.editor.block_ids = dict(BLOCK_IDS)
         self.editor.store_requested.connect(
             lambda slot, preset: self.model.set_slots({slot: preset}, f"Store « {preset.name} »"))
         self.model.dataChanged.connect(
@@ -540,10 +460,6 @@ class MainWindow(QMainWindow):
         self.editor.live.setEnabled(available)
         if not available:
             self.editor.live.setChecked(False)
-
-    def set_block_ids(self, block_ids: dict[str, int]) -> None:
-        self.editor.block_ids = dict(block_ids)
-        self.settings.setValue("block_ids", json.dumps(block_ids))
 
     def set_mode(self, mode: int) -> None:
         self.modes.button(mode).setChecked(True)

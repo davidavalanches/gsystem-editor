@@ -123,7 +123,7 @@ def test_preset_change_in_live_mode_pushes_to_edit_buffer(app):
     delay = block("delay")
     assert sent[0] == (9, 0, 0)  # effect type first
     assert len(sent) == len(delay.fields(ed.buffer.data))
-    assert "non appris" in notices[-1]
+    assert "non envoyés" in notices[-1]
     sent.clear()
     ed.press("preset3")
     assert {s[0] for s in sent} == {9}
@@ -142,4 +142,14 @@ def test_unlearned_block_warns_in_live_mode(editor):
     ed.live.setChecked(True)
     notices.clear()
     ed.press("pitch")
-    assert notices and "pas encore appris" in notices[0]
+    assert notices and "inconnu" in notices[0]
+
+
+def test_block_ids_match_hardware_captures():
+    from gsystem.midi import BLOCK_IDS, param_message, parse_param_message
+    assert set(BLOCK_IDS) == {b.key for b in __import__("gsystem.params", fromlist=["BLOCKS"]).BLOCKS}
+    # Captured: Reverb Decay 3.9 s, then Noise gate threshold -29 dB.
+    assert param_message(BLOCK_IDS["reverb"], 2, 39) == bytes.fromhex("f000201f7f55220b0002000000000207f7")
+    gate = bytes.fromhex("f000201f7f55220c00020f0f0f0f0e03f7")
+    assert parse_param_message(gate) == (BLOCK_IDS["gate"], 2, -29)
+    assert param_message(BLOCK_IDS["gate"], 2, -29) == gate

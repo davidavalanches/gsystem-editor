@@ -37,6 +37,10 @@ REQUEST_TIMEOUT_MS = 1100
 USER_BANK_SIZE = 100  # Bank Select (CC 0) 1 = user presets 1-100, 2 = 101-200
 SEND_INTERVAL_MS = 2  # pacing for bursts of parameter messages
 
+# Block ids of the 55 22 parameter message, captured from the unit's switches and knobs.
+# Block 1 is the levels table (loops, insert, boost).
+BLOCK_IDS = {"eq": 2, "mod": 4, "filter": 7, "pitch": 8, "delay": 9, "comp": 10, "reverb": 11, "gate": 12}
+
 
 def param_message(block_id: int, param: int, value: int) -> bytes:
     raw = value & 0xFFFFFF

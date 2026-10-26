@@ -446,7 +446,7 @@ class PresetEditor(QWidget):
                 self.send_param(block_id, index - blk.first_field, read_field(self.buffer.data, index))
         message = f"« {self.buffer.name} » chargé dans la mémoire de travail du G-System"
         if skipped:
-            message += f" (blocs non appris, non envoyés : {', '.join(skipped)})"
+            message += f" (blocs inconnus, non envoyés : {', '.join(skipped)})"
         self.notice.emit(message)
 
     def follow_unit(self, slot: int) -> None:
@@ -548,8 +548,7 @@ class PresetEditor(QWidget):
         """A footswitch of the virtual front panel was clicked."""
         if key in SWITCH_BLOCKS and self.buffer is not None:
             if self.live.isChecked() and key not in self.block_ids:
-                self.notice.emit(f"{block(key).label} : bloc pas encore appris, le G-System ne suivra pas. "
-                                 "Utilisez « Apprendre les switches… » dans le panneau MIDI.")
+                self.notice.emit(f"{block(key).label} : numéro de bloc inconnu, le G-System ne suivra pas.")
             field = block(key).enable_field(self.buffer.data)
             if field is not None:
                 self._toggle_block(key, read_field(self.buffer.data, field) != 1)
