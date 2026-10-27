@@ -3,7 +3,7 @@
 import { AVOIDED_BANKS, BANK_COUNT, BankStore, PRESETS_PER_BANK, isAvoided, slotLabel } from "../core/bank";
 import { GLOBAL_RANGES } from "../core/globals";
 import { DEFAULT_SYSEX_ID, GSystemLink } from "../core/protocol";
-import { SqsFile, readSyx } from "../core/sqs";
+import { SqsFile, USER_BANK_KIND, readSyx } from "../core/sqs";
 import { USER_PRESET_BASE, USER_SLOTS, sameBytes, type Preset } from "../core/sysex";
 import { midiAccess } from "../midi/transport";
 import { BanksView } from "./banks";
@@ -133,7 +133,8 @@ export class App {
   private fileMenu(): MenuItem[] {
     return [
       { label: "Ouvrir un fichier (.sqs, .syx)…", action: () => void this.open() },
-      { label: "Exporter la banque (.syx)", action: () => void this.exportSyx() },
+      { label: "Exporter toutes les banques (.syx)", action: () => void this.exportSyx() },
+      { label: "Exporter toutes les banques (.sqs)…", action: () => void this.exportSqs() },
       { label: "Lire cette banque du G-System", action: () => this.startRead("bank"), disabled: !this.link },
       { label: "Échanger cette banque avec…", action: () => void this.bankOperation("swap") },
       { label: "Copier cette banque sur…", action: () => void this.bankOperation("copy") },
@@ -181,13 +182,46 @@ export class App {
     }
   }
 
-  private async exportSyx(): Promise<void> {
+  private exportName(ext: string): string {
     const base = this.bank.title.replace(/\.(sqs|syx)$/i, "").replace(/[^\w\- ]+/g, "_").trim() || "banque";
     const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
+    return `${base}-${stamp}.${ext}`;
+  }
+
+  private async exportSyx(): Promise<void> {
     try {
-      const where = await saveFile(`${base}-${stamp}.syx`, this.bank.exportSyx());
+      const where = await saveFile(this.exportName("syx"), this.bank.exportSyx());
       this.bank.undo.setClean();
       this.notify(`Banque exportée : ${where}`);
+    } catch (e) {
+      alert(`Export impossible : ${(e as Error).message}`);
+    }
+  }
+
+  /**
+   * All 200 user presets as a Vyzor .sqs set. The file is built on an existing .sqs: the one the bank came
+   * from, else one the user picks once (its other sections, such as Vyzor's own data, are kept as they are).
+   */
+  private async exportSqs(): Promise<void> {
+    if (!this.bank.sqs) {
+      if (!confirm("La banque ne vient pas d'un fichier .sqs. Choisissez un fichier .sqs de Vyzor qui servira de modèle : "
+        + "ses 200 presets seront remplacés par ceux de la banque, le fichier choisi n'est pas modifié.")) return;
+      const file = await pickFile(".sqs,.SQS");
+      if (!file) return;
+      try {
+        const template = new SqsFile(file.bytes);
+        template.bank(USER_BANK_KIND);
+        this.bank.sqs = template;
+      } catch (e) {
+        alert(`Ce fichier ne peut pas servir de modèle : ${(e as Error).message}`);
+        return;
+      }
+    }
+    try {
+      const where = await saveFile(this.exportName("sqs"), this.bank.exportSqs()!);
+      this.bank.undo.setClean();
+      this.notify(`Banques exportées : ${where}`);
+      this.scheduleSave();
     } catch (e) {
       alert(`Export impossible : ${(e as Error).message}`);
     }
