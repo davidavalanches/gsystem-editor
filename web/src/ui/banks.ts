@@ -3,6 +3,7 @@
 import { AVOIDED_BANKS, BANK_COUNT, PRESETS_PER_BANK, slotLabel, type BankStore } from "../core/bank";
 import { ROUTINGS, presetLevels } from "../core/levels";
 import { block, readField } from "../core/params";
+import { msToBpm, presetTempoMs } from "../core/tempo";
 import { NAME_LEN, type Preset } from "../core/sysex";
 import { askText } from "./dialog";
 import { el } from "./dom";
@@ -165,7 +166,7 @@ export class BanksView {
     const main = el("span", "slot-main");
     main.append(head, strip);
     row.append(main);
-    if (lv) row.append(routingBadge(lv.routing));
+    if (p && lv) row.append(routingBadge(lv.routing, presetTempoMs(p.data)));
     row.addEventListener("click", () => this.actions.open(slot));
     onLongPress(row, (x, y) => showMenu({ x, y }, this.slotMenu(slot)));
     return row;
@@ -229,11 +230,13 @@ export class BanksView {
   }
 }
 
-function routingBadge(routing: number): HTMLElement {
+/** Routing and tempo of a preset, at the right of its row. */
+function routingBadge(routing: number, tempoMs: number | null): HTMLElement {
   const name = ROUTINGS[routing] ?? `Routing ${routing}`;
   const badge = el("span", "slot-routing");
-  badge.title = `Routing : ${name}`;
+  badge.title = `Routing : ${name}` + (tempoMs ? ` · tempo ${msToBpm(tempoMs)} BPM (${tempoMs} ms)` : "");
   badge.insertAdjacentHTML("afterbegin", routingIcon(routing));
   badge.append(el("span", "slot-routing-name", name === "Semi Parallel" ? "Semi Par." : name));
+  if (tempoMs) badge.append(el("span", "slot-tempo", `${msToBpm(tempoMs)} BPM`));
   return badge;
 }

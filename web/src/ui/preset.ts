@@ -11,10 +11,11 @@ import {
 } from "../core/levels";
 import { BLOCKS, Param, block, diffFields, owner, readField, writeField, type Block } from "../core/params";
 import { BLOCK_IDS, LEVELS_BLOCK_ID, LEVEL_SWITCHES } from "../core/protocol";
+import { TAP_MAX_MS, TAP_MIN_MS, bpmToMs, msToBpm, presetTempoMs, writeTempoMs } from "../core/tempo";
 import { NAME_LEN, Preset, SysexError, USER_SLOTS } from "../core/sysex";
 import { askText } from "./dialog";
 import { el } from "./dom";
-import { ICONS, iconButton, routingIcon } from "./widgets";
+import { ICONS, iconButton } from "./widgets";
 
 /** Tile order of the design: the unit's effect sections. */
 const TILES: [string, string][] = [
@@ -29,8 +30,11 @@ const SHORT_SOURCES = ["—", "VOL", "EXP", "ENC A", "ENC B", "ENC C"];
 const ROUTING = "routing";
 const OUTPUTS = [0, 1].map((side) =>
   new Param(side ? "Output R" : "Output L", OUTPUT_MIN, 0, [], (v) => `${v} dB`));
-/** Selection keys of the output rows (field indexes are below 165). */
+/** Preset tempo in BPM, over the tap times' range. */
+const TEMPO = new Param("Tempo", msToBpm(TAP_MAX_MS), msToBpm(TAP_MIN_MS), [], (v) => `${v} BPM`);
+/** Selection keys of the output and tempo rows (field indexes are below 165). */
 const OUTPUT_ROW = 1000;
+const TEMPO_ROW = 1002;
 const isModifierField = (index: number) => index >= MODIFIER_FIELD && index < MODIFIER_FIELD + MODIFIER_SLOTS;
 const LEVEL_LABELS: [string, string][] = [
   ["loop1", "L1"], ["loop2", "L2"], ["loop3", "L3"], ["loop4", "L4"], ["insert", "INS"], ["boost", "BST"],
@@ -285,6 +289,13 @@ export class PresetView {
     this.pushBuffer(this.buffer.withData(writeOutputs(this.buffer.data, outputs)));
   }
 
+  /** Tempo in BPM: written to the tap times of Filter, Mod and Delay. */
+  private setTempo(bpm: number): void {
+    if (!this.buffer) return;
+    const data = writeTempoMs(this.buffer.data, bpmToMs(bpm));
+    if (diffFields(this.buffer.data, data).length) this.pushBuffer(this.buffer.withData(data));
+  }
+
   private pushBuffer(after: Preset): void {
     this.undoStack.push([this.buffer!, after]);
     this.redoStack = [];
@@ -428,8 +439,8 @@ export class PresetView {
     if (this.buffer) {
       const routing = presetLevels(this.buffer.data).routing;
       const [left, right] = presetOutputs(this.buffer.data);
-      type.insertAdjacentHTML("afterbegin", routingIcon(routing));
-      type.append(ROUTINGS[routing] ?? String(routing));
+      const ms = presetTempoMs(this.buffer.data);
+      type.append([ROUTINGS[routing] ?? String(routing), ms ? `${msToBpm(ms)} BPM` : ""].filter(Boolean).join(" · "));
       tile.title = `L ${left} dB · R ${right} dB`;
       tile.setAttribute("aria-label", `Routing ${ROUTINGS[routing] ?? routing}, sorties ${left} et ${right} dB`);
     }
@@ -522,10 +533,17 @@ export class PresetView {
     select.value = String(presetLevels(preset.data).routing);
     select.addEventListener("change", () => this.setRouting(Number(select.value)));
     this.paramsHead.append(select, el("div", "grow"));
-    this.paramsList.replaceChildren(...presetOutputs(preset.data).map((v, side) =>
+    const rows = presetOutputs(preset.data).map((v, side) =>
       this.paramRow(OUTPUT_ROW + side, OUTPUTS[side], v, () =>
         this.openValueSheet(`Routing · ${OUTPUTS[side].name}`, `field #${OUTPUTS_FIELD}`, OUTPUTS[side], v,
-          (next) => this.setOutput(side, next)))));
+          (next) => this.setOutput(side, next))));
+    const ms = presetTempoMs(preset.data);
+    if (ms !== null) {
+      const bpm = msToBpm(ms);
+      rows.push(this.paramRow(TEMPO_ROW, TEMPO, bpm, () =>
+        this.openValueSheet(`Tempo · ${ms} ms`, "tap Filter, Mod, Delay", TEMPO, bpm, (next) => this.setTempo(next))));
+    }
+    this.paramsList.replaceChildren(...rows);
   }
 
   private renderModifiers(): void {
