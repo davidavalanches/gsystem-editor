@@ -146,10 +146,11 @@ export class BanksView {
         strip.append(item);
       }
     }
-    const text = el("span", "slot-text");
-    text.append(el("span", "slot-name", p ? p.name || "(sans nom)" : "vide"), strip);
-    row.append(el("span", "slot-code", String((slot % PRESETS_PER_BANK) + 1)), text);
-    row.insertAdjacentHTML("beforeend", ICONS.chevron);
+    // Position and name on one line, so the footswitch strip gets the full width of the row.
+    const head = el("span", "slot-head");
+    head.append(el("span", "slot-code", String((slot % PRESETS_PER_BANK) + 1)),
+      el("span", "slot-name", p ? p.name || "(sans nom)" : "vide"));
+    row.append(head, strip);
     row.addEventListener("click", () => this.actions.open(slot));
     onLongPress(row, (x, y) => showMenu({ x, y }, this.slotMenu(slot)));
     return row;
