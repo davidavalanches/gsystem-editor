@@ -23,6 +23,8 @@ import { readField, writeField } from "./params";
 export const LEVELS_FIELD = 0;
 /** Routing names in the firmware's order. */
 export const ROUTINGS = ["Serial", "Parallel", "Semi Parallel", "Serial2"] as const;
+/** Bits of the loop, insert and boost switches in field 0, by the keys of protocol's LEVEL_SWITCHES. */
+export const LEVEL_BITS: Record<string, number> = { loop1: 9, loop2: 10, loop3: 11, loop4: 12, insert: 13, boost: 2 };
 export const OUTPUTS_FIELD = 2;
 export const OUTPUT_MIN = -100;
 /** Block 1 parameters of the routing and the output levels, for Live mode. */
@@ -65,4 +67,14 @@ export function writeOutputs(data: Uint8Array, [left, right]: readonly [number, 
 export function writeRouting(data: Uint8Array, routing: number): Uint8Array {
   const raw = (readField(data, LEVELS_FIELD) & 0xfffffc) | (routing & 3);
   return writeField(data, LEVELS_FIELD, signed(raw, 24));
+}
+
+export function levelOn(data: Uint8Array, key: string): boolean {
+  return ((readField(data, LEVELS_FIELD) >> LEVEL_BITS[key]) & 1) === 1;
+}
+
+export function writeLevel(data: Uint8Array, key: string, on: boolean): Uint8Array {
+  const bit = 1 << LEVEL_BITS[key];
+  const raw = readField(data, LEVELS_FIELD) & 0xffffff;
+  return writeField(data, LEVELS_FIELD, signed(on ? raw | bit : raw & ~bit, 24));
 }

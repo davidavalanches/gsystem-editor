@@ -7,14 +7,35 @@ import {
 } from "../core/switches";
 import { el } from "./dom";
 
+/** The last values read from the unit, kept to show them while it is not connected. */
+const CACHE_KEY = "gsystem-globals";
+
+interface Cache {
+  at: string;
+  raw: [string, number][];
+}
+
+function loadCache(): Cache | null {
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY) ?? "null") as Cache | null;
+    return c && Array.isArray(c.raw) ? c : null;
+  } catch {
+    return null;
+  }
+}
+
 export class SettingsView {
   readonly el = el("section", "view");
+  private body: HTMLElement | null = null;
   /** Raw values read from the unit, by globalKey. */
   private readonly raw = new Map<string, number>();
   private readonly rows = new Map<string, () => void>();
   private readonly readButton = el("button", "pill", "Relire");
   private readonly note = el("p", "settings-note");
   private connected = false;
+  /** When the values shown were read, if they come from the cache. */
+  private readAt: string | null = null;
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
   onRead: (() => void) | null = null;
   onChange: ((block: number, param: number, raw: number) => void) | null = null;
 
@@ -37,12 +58,19 @@ export class SettingsView {
     for (let n = 0; n < SWITCH_COUNT; n++) switches.append(this.switchRow(n));
     body.append(switches);
     this.el.append(header, body);
+    const cache = loadCache();
+    if (cache) {
+      for (const [key, raw] of cache.raw) this.raw.set(key, raw);
+      this.readAt = cache.at;
+    }
+    this.body = body;
     this.setConnected(false);
   }
 
   setConnected(on: boolean): void {
     this.connected = on;
-    if (!on) this.raw.clear();
+    // Offline, the last values read stay on screen, read-only.
+    this.body?.classList.toggle("offline", !on);
     this.readButton.disabled = !on;
     this.refresh();
   }
@@ -53,8 +81,21 @@ export class SettingsView {
     const draw = this.rows.get(key);
     if (!draw) return;
     this.raw.set(key, raw);
+    this.readAt = null;
     draw();
     this.refreshNote();
+    this.scheduleCache();
+  }
+
+  private scheduleCache(): void {
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => {
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ at: new Date().toISOString(), raw: [...this.raw] }));
+      } catch {
+        // Storage unavailable: the values are simply not kept.
+      }
+    }, 500);
   }
 
   private refresh(): void {
@@ -63,8 +104,12 @@ export class SettingsView {
   }
 
   private refreshNote(): void {
+    const at = this.readAt ? new Date(this.readAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "";
     this.note.textContent = !this.connected
-      ? "Connectez le G-System (vue MIDI) : ces réglages sont lus et modifiés directement dans le pédalier."
+      ? this.raw.size
+        ? `G-System non connecté : dernières valeurs lues${at ? ` (${at})` : ""}, en lecture seule. `
+          + "Connectez-le (vue MIDI) pour les relire et les modifier."
+        : "Connectez le G-System (vue MIDI) : ces réglages sont lus et modifiés directement dans le pédalier."
       : this.raw.size ? "Chaque changement est appliqué immédiatement par le G-System (ce ne sont pas des réglages de preset)."
         : "Lecture des réglages…";
   }
@@ -101,6 +146,7 @@ export class SettingsView {
       return raw === undefined ? null : decodeSwitch(raw);
     };
     const send = (next: SwitchSetting) => {
+      if (!this.connected) return;
       const raw = encodeSwitch(next);
       if (raw === this.raw.get(key)) return;
       this.raw.set(key, raw);
@@ -144,6 +190,7 @@ export class SettingsView {
     row.append(label, control);
 
     const send = (value: number) => {
+      if (!this.connected) return;
       const raw = this.raw.get(key);
       if (raw === undefined) return;
       const next = globalRaw(g, raw, Math.max(g.lo, Math.min(g.hi, value)));

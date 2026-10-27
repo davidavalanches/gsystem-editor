@@ -6,8 +6,8 @@ import {
   modifierTargets, valueAt, writeModifier, type Modifier, type ModifierTarget,
 } from "../core/modifiers";
 import {
-  LEVELS_FIELD, OUTPUTS_FIELD, OUTPUT_MIN, OUTPUT_PARAMS, ROUTINGS, ROUTING_PARAM, presetLevels, presetOutputs, writeOutputs,
-  writeRouting,
+  LEVEL_BITS, LEVELS_FIELD, OUTPUTS_FIELD, OUTPUT_MIN, OUTPUT_PARAMS, ROUTINGS, ROUTING_PARAM, levelOn, presetLevels,
+  presetOutputs, writeLevel, writeOutputs, writeRouting,
 } from "../core/levels";
 import { BLOCKS, Param, block, diffFields, owner, readField, writeField, type Block } from "../core/params";
 import { BLOCK_IDS, LEVELS_BLOCK_ID, LEVEL_SWITCHES } from "../core/protocol";
@@ -15,7 +15,7 @@ import { TAP_MAX_MS, TAP_MIN_MS, bpmToMs, msToBpm, presetTempoMs, writeTempoMs }
 import { NAME_LEN, Preset, SysexError, USER_SLOTS } from "../core/sysex";
 import { askText } from "./dialog";
 import { el } from "./dom";
-import { ICONS, iconButton } from "./widgets";
+import { ICONS, iconButton, routingIcon } from "./widgets";
 
 /** Tile order of the design: the unit's effect sections. */
 const TILES: [string, string][] = [
@@ -73,8 +73,6 @@ export class PresetView {
   private paramIndex: number | null = null;
   private live = false;
   private fromUnit = false;
-  /** Loops, insert and boost: their place in the preset is not decoded, so their state is unknown until seen. */
-  private levels: Record<string, boolean | null> = {};
   sendParam: ((blockId: number, param: number, value: number) => void) | null = null;
   onStore: ((slot: number, preset: Preset) => void) | null = null;
   onNotice: ((text: string) => void) | null = null;
@@ -82,6 +80,7 @@ export class PresetView {
 
   private readonly number = el("div", "dot-number");
   private readonly nameButton = el("button", "preset-name");
+  private readonly tempoButton = el("button", "preset-tempo");
   private readonly liveButton = el("button", "pill live");
   private readonly storeButton = el("button", "pill store", "Store");
   private readonly undoButton = iconButton(ICONS.undo, "Annuler", () => this.undo());
@@ -92,10 +91,12 @@ export class PresetView {
   private readonly body = el("div", "preset-body");
 
   constructor(private bank: BankStore) {
-    this.resetLevels();
     this.nameButton.type = "button";
     this.nameButton.title = "Renommer le preset";
     this.nameButton.addEventListener("click", () => void this.rename());
+    this.tempoButton.type = "button";
+    this.tempoButton.title = "Tempo du preset";
+    this.tempoButton.addEventListener("click", () => this.openTempoSheet());
     this.liveButton.type = "button";
     this.liveButton.innerHTML = '<span class="live-dot"></span>Live';
     this.liveButton.title = "Envoyer chaque modification au G-System (mémoire de travail, sans Store) "
@@ -110,14 +111,14 @@ export class PresetView {
     const header = el("header", "header preset-header");
     header.append(
       iconButton(ICONS.prev, "Preset précédent", () => this.openSlot((this.slot + USER_SLOTS - 1) % USER_SLOTS)),
-      this.number, this.nameButton,
+      this.number, this.nameButton, this.tempoButton,
       iconButton(ICONS.next, "Preset suivant", () => this.openSlot((this.slot + 1) % USER_SLOTS)),
       el("div", "separator"), this.undoButton, this.liveButton, this.storeButton,
     );
 
     const column = el("section", "blocks-column");
     column.setAttribute("aria-label", "Blocs d'effets");
-    this.levelBar.setAttribute("aria-label", "Loops, insert et boost (en Live)");
+    this.levelBar.setAttribute("aria-label", "Loops, insert et boost du preset");
     column.append(this.tiles, this.levelBar);
     const params = el("section", "params-section");
     params.setAttribute("aria-label", "Paramètres");
@@ -169,6 +170,12 @@ export class PresetView {
       if (blk && index !== blk.countField) this.sendParam!(BLOCK_IDS[blk.key], index - blk.firstField, value);
       else if (isModifierField(index)) this.sendParam!(MODIFIER_BLOCK_ID, MODIFIER_PARAM_BASE + index - MODIFIER_FIELD, value);
       else if (index === LEVELS_FIELD || index === OUTPUTS_FIELD) this.sendRouting(after, index);
+      if (index === LEVELS_FIELD) {
+        for (const key of Object.keys(LEVEL_BITS)) {
+          const on = levelOn(after, key);
+          if (on !== levelOn(before, key)) this.sendParam!(LEVELS_BLOCK_ID, LEVEL_SWITCHES[key], Number(on));
+        }
+      }
     }
   }
 
@@ -192,8 +199,15 @@ export class PresetView {
       return;
     }
     if (blockId === LEVELS_BLOCK_ID) {
-      for (const [key, index] of Object.entries(LEVEL_SWITCHES)) if (index === param) this.levels[key] = Boolean(value);
-      this.renderLevels();
+      const key = Object.keys(LEVEL_SWITCHES).find((k) => LEVEL_SWITCHES[k] === param);
+      if (key && this.buffer && this.live) {
+        this.fromUnit = true;
+        try {
+          this.setLevel(key, Boolean(value));
+        } finally {
+          this.fromUnit = false;
+        }
+      }
       return;
     }
     const key = Object.keys(BLOCK_IDS).find((k) => BLOCK_IDS[k] === blockId);
@@ -241,7 +255,6 @@ export class PresetView {
     const changed = slot !== this.slot;
     this.slot = slot;
     this.closeSheet();
-    this.resetLevels();
     this.stored = this.bank.preset(slot);
     this.undoStack = [];
     this.redoStack = [];
@@ -348,16 +361,11 @@ export class PresetView {
     if (field !== null) this.setField(field, Number(readField(this.buffer.data, field) !== 1));
   }
 
-  private toggleLevel(key: string): void {
-    if (!this.isLive) return;
-    const on = !this.levels[key];
-    this.sendParam!(LEVELS_BLOCK_ID, LEVEL_SWITCHES[key], Number(on));
-    this.levels[key] = on;
-    this.renderLevels();
-  }
-
-  private resetLevels(): void {
-    this.levels = Object.fromEntries(Object.keys(LEVEL_SWITCHES).map((k) => [k, null]));
+  /** Loops, insert and boost are stored in the preset: edited like any field, sent to the unit in Live mode. */
+  private setLevel(key: string, on: boolean): void {
+    if (this.buffer && levelOn(this.buffer.data, key) !== on) {
+      this.pushBuffer(this.buffer.withData(writeLevel(this.buffer.data, key, on)));
+    }
   }
 
   private isOn(blk: Block): boolean {
@@ -376,6 +384,12 @@ export class PresetView {
     this.nameButton.innerHTML = "";
     this.nameButton.append(el("span", "name", this.buffer ? this.buffer.name || "(sans nom)" : "— vide —"),
       el("span", this.isDirty || this.isLive ? "status alert" : "status", status));
+    const ms = this.buffer ? presetTempoMs(this.buffer.data) : null;
+    this.tempoButton.hidden = ms === null;
+    if (ms !== null) {
+      this.tempoButton.replaceChildren(el("span", "bpm", String(msToBpm(ms))), el("span", "unit", "BPM"));
+      this.tempoButton.setAttribute("aria-label", `Tempo ${msToBpm(ms)} BPM, toucher pour régler`);
+    }
     this.liveButton.classList.toggle("active", this.isLive);
     this.liveButton.setAttribute("aria-pressed", String(this.isLive));
     this.storeButton.classList.toggle("dirty", this.isDirty);
@@ -459,14 +473,14 @@ export class PresetView {
 
   private renderLevels(): void {
     this.levelBar.replaceChildren(...LEVEL_LABELS.map(([key, label]) => {
-      const state = this.levels[key];
-      const b = el("button", `level${state ? " on" : ""}${state === null ? " unknown" : ""}`, label);
+      const on = this.buffer ? levelOn(this.buffer.data, key) : false;
+      const b = el("button", on ? "level on" : "level", label);
       b.type = "button";
-      b.disabled = !this.isLive;
-      b.title = `${label === "INS" ? "Insert (loop 5)" : label === "BST" ? "Boost" : `Loop ${label.slice(1)}`}`
-        + (state === null ? " — état inconnu tant qu'il n'a pas été changé" : "");
-      b.setAttribute("aria-pressed", String(!!state));
-      b.addEventListener("click", () => this.toggleLevel(key));
+      b.disabled = !this.buffer;
+      b.title = label === "INS" ? "Insert (loop 5)" : label === "BST"
+        ? `Boost ${this.buffer ? presetLevels(this.buffer.data).boostLevel : 0} dB` : `Loop ${label.slice(1)}`;
+      b.setAttribute("aria-pressed", String(on));
+      b.addEventListener("click", () => this.setLevel(key, !on));
       return b;
     }));
   }
@@ -518,6 +532,12 @@ export class PresetView {
       this.paramRow(index, p, readField(preset.data, index), () => this.openSheet(index), pedals.get(index))));
   }
 
+  private openTempoSheet(): void {
+    const ms = this.buffer ? presetTempoMs(this.buffer.data) : null;
+    if (ms === null) return;
+    this.openValueSheet(`Tempo · ${ms} ms`, "tap Filter, Mod, Delay", TEMPO, msToBpm(ms), (next) => this.setTempo(next));
+  }
+
   /** Routing type and output levels: global menus on the unit, but stored in each preset. */
   private renderRouting(): void {
     this.paramsHead.replaceChildren(el("span", "label", "Routing"));
@@ -527,22 +547,28 @@ export class PresetView {
       this.paramsList.replaceChildren(el("p", "empty-note", "Emplacement vide."));
       return;
     }
-    const select = el("select", "type-select");
-    select.setAttribute("aria-label", "Type de routing");
-    ROUTINGS.forEach((r, i) => select.append(new Option(r, String(i))));
-    select.value = String(presetLevels(preset.data).routing);
-    select.addEventListener("change", () => this.setRouting(Number(select.value)));
-    this.paramsHead.append(select, el("div", "grow"));
-    const rows = presetOutputs(preset.data).map((v, side) =>
+    this.paramsHead.append(el("div", "grow"));
+    // One button per routing, a single one lit: one tap instead of opening a list.
+    const current = presetLevels(preset.data).routing;
+    const choice = el("div", "routing-choice");
+    choice.setAttribute("role", "radiogroup");
+    choice.setAttribute("aria-label", "Type de routing");
+    ROUTINGS.forEach((name, i) => {
+      const b = el("button", i === current ? "on" : "");
+      b.type = "button";
+      b.setAttribute("role", "radio");
+      b.setAttribute("aria-checked", String(i === current));
+      b.insertAdjacentHTML("afterbegin", routingIcon(i));
+      b.append(el("span", "", name === "Semi Parallel" ? "Semi Par." : name));
+      b.addEventListener("click", () => this.setRouting(i));
+      choice.append(b);
+    });
+    const rows: HTMLElement[] = [choice, ...presetOutputs(preset.data).map((v, side) =>
       this.paramRow(OUTPUT_ROW + side, OUTPUTS[side], v, () =>
         this.openValueSheet(`Routing · ${OUTPUTS[side].name}`, `field #${OUTPUTS_FIELD}`, OUTPUTS[side], v,
-          (next) => this.setOutput(side, next))));
+          (next) => this.setOutput(side, next))))];
     const ms = presetTempoMs(preset.data);
-    if (ms !== null) {
-      const bpm = msToBpm(ms);
-      rows.push(this.paramRow(TEMPO_ROW, TEMPO, bpm, () =>
-        this.openValueSheet(`Tempo · ${ms} ms`, "tap Filter, Mod, Delay", TEMPO, bpm, (next) => this.setTempo(next))));
-    }
+    if (ms !== null) rows.push(this.paramRow(TEMPO_ROW, TEMPO, msToBpm(ms), () => this.openTempoSheet()));
     this.paramsList.replaceChildren(...rows);
   }
 

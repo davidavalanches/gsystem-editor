@@ -224,8 +224,11 @@ button:disabled { opacity: 0.4; cursor: default; }
 .slot:last-child { border-bottom: 0; }
 .slot-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 /* Routing of the preset, at the right of its row. */
-.slot-routing { flex-shrink: 0; width: 58px; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--soft); }
-.slot-tempo { font-family: var(--mono); font-size: 10px; font-weight: 500; line-height: 1; color: var(--soft); white-space: nowrap; }
+.slot-routing { flex-shrink: 0; width: 62px; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--soft); }
+.slot-tempo { display: flex; align-items: baseline; justify-content: center; gap: 3px; width: 100%; padding: 3px 0 2px; border-radius: 2px; background: var(--lcd); color: var(--lcd-ink); font-family: var(--lcd-font); line-height: 0.9; white-space: nowrap; }
+.slot-tempo .bpm { font-size: 17px; }
+.slot-tempo .unit { font-size: 10px; }
+.slot-routing-line { display: flex; margin-top: 2px; }
 .slot-routing-name { font-family: var(--mono); font-size: 9px; line-height: 1; color: var(--dim); text-transform: uppercase; white-space: nowrap; }
 .slot.current { background: var(--current); box-shadow: inset 3px 0 0 var(--accent); }
 .slot-head { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
@@ -257,6 +260,10 @@ button:disabled { opacity: 0.4; cursor: default; }
 .dot-number .position { font-size: 14px; }
 .preset-name { flex: 1; min-width: 0; height: 40px; margin-left: 8px; padding: 0 10px; display: flex; flex-direction: column; justify-content: center; border: 0; border-radius: 0; background: var(--lcd); color: var(--lcd-ink); text-align: left; }
 .preset-name .name { font-family: var(--lcd-font); font-size: 22px; line-height: 0.95; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+/* Tempo of the preset, on its own LCD right of the name. */
+.preset-tempo { flex-shrink: 0; height: 40px; min-width: 44px; margin-left: 3px; padding: 0 5px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border: 0; border-radius: 0; background: var(--lcd); color: var(--lcd-ink); font-family: var(--lcd-font); line-height: 0.9; }
+.preset-tempo .bpm { font-size: 20px; }
+.preset-tempo .unit { font-size: 12px; }
 .preset-name .status { font-family: var(--lcd-font); font-size: 15px; line-height: 0.95; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .preset-name .status.alert { color: var(--lcd-ink); }
 .separator { width: 1px; height: 28px; background: #2e3034; margin: 0 4px; flex-shrink: 0; }
@@ -273,10 +280,10 @@ button:disabled { opacity: 0.4; cursor: default; }
 .tile {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 14px;
   min-height: 0;
   min-width: 0;
-  padding: 0 6px 0 9px;
+  padding: 0 6px 0 11px;
   border: 0;
   border-bottom: 1px solid var(--groove);
   border-radius: 0;
@@ -323,6 +330,11 @@ button:disabled { opacity: 0.4; cursor: default; }
 /* Pedal and encoder assignments, under the effect tiles. */
 .tile.wide { grid-column: 1 / -1; flex-direction: column; align-items: flex-start; justify-content: center; gap: 3px; padding: 0 12px; }
 /* Half-width tiles under the blocks: Modifiers and Routing. */
+/* Routing choice: four buttons in a row, one lit. */
+.routing-choice { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; padding: 6px 0 8px; }
+.routing-choice button { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; padding: 7px 2px 6px; border: 0; border-radius: 6px; background: var(--surface-2); color: var(--muted); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.routing-choice button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.routing-choice button.on { background: var(--accent); color: #fff; box-shadow: 0 0 10px rgba(255, 90, 71, 0.35); }
 .tile.stack { flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; padding: 0 10px; }
 .tile-routing { display: flex; align-items: center; gap: 6px; color: var(--soft); }
 .tile-count { font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--amber); }
@@ -350,7 +362,6 @@ button:disabled { opacity: 0.4; cursor: default; }
 .level::before { content: ""; width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--line-3); }
 .level.on { color: var(--ink); }
 .level.on::before { background: var(--red); border: 0; box-shadow: 0 0 6px rgba(240, 83, 62, 0.8); }
-.level.unknown::before { border: 1px dashed var(--amber); }
 
 .params-section { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); }
 .params-head { display: flex; align-items: center; gap: 8px; height: 46px; flex-shrink: 0; padding: 0 10px 0 14px; border-bottom: 1px solid var(--bg); }
@@ -567,3 +578,6 @@ button:disabled { opacity: 0.4; cursor: default; }
 .switches-card .setting-control { flex-wrap: wrap; }
 .switches-card .setting-control .type-select { width: 140px; }
 .switches-card .setting-control .type-select.narrow { width: 64px; }
+
+/* Settings read earlier, shown while the G-System is not connected: visible but not editable. */
+.settings-body.offline .setting-control { pointer-events: none; opacity: 0.75; }

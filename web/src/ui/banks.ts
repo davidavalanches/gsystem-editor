@@ -235,8 +235,14 @@ function routingBadge(routing: number, tempoMs: number | null): HTMLElement {
   const name = ROUTINGS[routing] ?? `Routing ${routing}`;
   const badge = el("span", "slot-routing");
   badge.title = `Routing : ${name}` + (tempoMs ? ` · tempo ${msToBpm(tempoMs)} BPM (${tempoMs} ms)` : "");
-  badge.insertAdjacentHTML("afterbegin", routingIcon(routing));
-  badge.append(el("span", "slot-routing-name", name === "Semi Parallel" ? "Semi Par." : name));
-  if (tempoMs) badge.append(el("span", "slot-tempo", `${msToBpm(tempoMs)} BPM`));
+  // The tempo first, on a small LCD like the preset name's; the routing below it.
+  if (tempoMs) {
+    const tempo = el("span", "slot-tempo");
+    tempo.append(el("span", "bpm", String(msToBpm(tempoMs))), el("span", "unit", "BPM"));
+    badge.append(tempo);
+  }
+  const routingLine = el("span", "slot-routing-line");
+  routingLine.insertAdjacentHTML("afterbegin", routingIcon(routing));
+  badge.append(routingLine, el("span", "slot-routing-name", name === "Semi Parallel" ? "Semi Par." : name));
   return badge;
 }
