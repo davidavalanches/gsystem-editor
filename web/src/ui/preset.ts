@@ -94,7 +94,8 @@ export class PresetView {
   private readonly tempoButton = el("button", "preset-tempo");
   private readonly liveButton = el("button", "pill live");
   private readonly storeButton = el("button", "pill store", "Store");
-  private readonly undoButton = iconButton(ICONS.undo, "Annuler", () => this.undo());
+  /** Back to the preset as stored, in one go (Ctrl+Z still undoes step by step). */
+  private readonly undoButton = iconButton(ICONS.undo, "Revenir au preset avant modification", () => this.revert());
   private readonly tiles = el("div", "blocks");
   private readonly levelBar = el("div", "levels");
   private readonly favoriteBar = el("div", "favorites");
@@ -376,6 +377,15 @@ export class PresetView {
     this.setBuffer(after);
   }
 
+  /** Drop every change since the preset was opened or stored; in Live mode the unit follows. */
+  revert(): void {
+    if (!this.isDirty || !this.stored) return;
+    this.closeSheet();
+    this.undoStack = [];
+    this.redoStack = [];
+    this.setBuffer(this.stored);
+  }
+
   undo(): void {
     const step = this.undoStack.pop();
     if (!step) return;
@@ -395,13 +405,6 @@ export class PresetView {
     this.onStore?.(this.slot, this.buffer);
     this.stored = this.buffer;
     this.render();
-  }
-
-  revert(): void {
-    if (!this.isDirty) return;
-    this.undoStack = [];
-    this.redoStack = [];
-    this.setBuffer(this.stored);
   }
 
   private async rename(): Promise<void> {
@@ -455,7 +458,7 @@ export class PresetView {
     this.liveButton.setAttribute("aria-pressed", String(this.isLive));
     this.storeButton.classList.toggle("dirty", this.isDirty);
     this.storeButton.disabled = !this.isDirty;
-    this.undoButton.disabled = !this.undoStack.length;
+    this.undoButton.disabled = !this.isDirty;
     this.renderTiles();
     this.renderLevels();
     this.renderParams();
