@@ -89,12 +89,12 @@ export class SettingsView {
       return s;
     };
     const fn = select("fonction", [...FUNCTIONS]);
-    const style = select("style", STYLES);
+    const style = toggle(`Switch #${n + 1} : style`, STYLES, (i) => { const c = current(); if (c) send({ ...c, p1: i }); });
     const bank = select("banque", SWITCH_BANKS);
     const preset = select("preset", ["1", "2", "3", "4", "5"]);
     preset.classList.add("narrow");
     const cc = select("CC", Array.from({ length: 120 }, (_, i) => `CC ${i}`));
-    control.append(fn, style, bank, preset, cc);
+    control.append(fn, style.el, bank, preset, cc);
 
     const current = (): SwitchSetting | null => {
       const raw = this.raw.get(key);
@@ -112,7 +112,6 @@ export class SettingsView {
       s.value = String(v);
     };
     fn.addEventListener("change", () => { const c = current(); if (c) send(withFunction(c, Number(fn.value))); });
-    style.addEventListener("change", () => { const c = current(); if (c) send({ ...c, p1: Number(style.value) }); });
     bank.addEventListener("change", () => { const c = current(); if (c) send({ ...c, p1: Number(bank.value) }); });
     cc.addEventListener("change", () => { const c = current(); if (c) send({ ...c, p1: Number(cc.value) }); });
     preset.addEventListener("change", () => { const c = current(); if (c) send({ ...c, p2: Number(preset.value) }); });
@@ -122,12 +121,12 @@ export class SettingsView {
       fn.disabled = c === null;
       if (c === null) fn.selectedIndex = -1;
       const kind = c ? switchKind(c.fn) : "none";
-      style.hidden = kind !== "style";
+      style.el.hidden = kind !== "style";
       bank.hidden = preset.hidden = kind !== "preset";
       cc.hidden = kind !== "cc";
       if (!c) return;
       set(fn, c.fn);
-      if (kind === "style") set(style, c.p1);
+      if (kind === "style") style.draw(c.p1);
       if (kind === "preset") { set(bank, c.p1); set(preset, c.p2); }
       if (kind === "cc") set(cc, c.p1);
     };
@@ -159,7 +158,14 @@ export class SettingsView {
     };
 
     let draw: () => void;
-    if (g.choices) {
+    if (g.choices?.length === 2) {
+      const t = toggle(g.name, g.choices, (i) => send(g.lo + i));
+      control.append(t.el);
+      draw = () => {
+        const v = current();
+        t.draw(v === null ? null : v - g.lo);
+      };
+    } else if (g.choices) {
       const select = el("select", "type-select");
       select.setAttribute("aria-label", g.name);
       g.choices.forEach((c, i) => select.append(new Option(c, String(g.lo + i))));
@@ -189,6 +195,39 @@ export class SettingsView {
     this.rows.set(key, () => draw());
     return row;
   }
+}
+
+/**
+ * Toggle switch for a setting with two values: on/off pairs show the switch alone,
+ * other pairs (Preset / Global, Toggle / Hold…) name both sides.
+ * draw(null) leaves it disabled until the unit's value is known; a value outside
+ * the pair shows neither side.
+ */
+function toggle(ariaLabel: string, choices: readonly string[], onChange: (index: number) => void) {
+  const wrap = el("div", "toggle");
+  const button = el("button", "toggle-switch");
+  button.type = "button";
+  button.setAttribute("role", "switch");
+  button.setAttribute("aria-label", ariaLabel);
+  button.append(el("span", "toggle-knob"));
+  const onOff = choices[0] === "Off" && choices[1] === "On";
+  const sides = onOff ? [] : choices.map((c) => el("span", "toggle-side", c));
+  const state = el("span", "toggle-side", "");
+  if (onOff) wrap.append(state, button);
+  else wrap.append(sides[0], button, sides[1]);
+  let index: number | null = null;
+  button.addEventListener("click", () => { if (index !== null) onChange(index === 1 ? 0 : 1); });
+  const draw = (i: number | null) => {
+    index = i === 0 || i === 1 ? i : null;
+    button.disabled = i === null;
+    button.setAttribute("aria-checked", index === null ? "mixed" : String(index === 1));
+    button.classList.toggle("on", index === 1);
+    sides.forEach((s, k) => s.classList.toggle("active", index === k));
+    state.textContent = index === null ? (i === null ? "" : String(i)) : choices[index];
+    state.classList.toggle("active", index === 1);
+  };
+  draw(null);
+  return { el: wrap, draw };
 }
 
 /** − / + button that repeats while held. */
