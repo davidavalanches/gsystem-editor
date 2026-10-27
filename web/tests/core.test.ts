@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { BankStore, bankPosition, slotLabel } from "../src/core/bank";
+import { LEVELS_FIELD, presetLevels } from "../src/core/levels";
 import { BLOCKS, block, diffFields, fieldOffset, FIELD_COUNT, freq, readField, writeField } from "../src/core/params";
 import {
   MODIFIER_FIELD, MODIFIER_SLOTS, UNASSIGNED, decodeModifier, encodeModifier, modifierTargets, writeModifier,
@@ -215,6 +216,21 @@ describe("modifiers", () => {
     expect(names("reverb")).toEqual(["30:Decay", "31:Lo Lev", "32:Mix", "33:OutLev"]);
     expect(names("mod")).toEqual(["7:Speed", "8:HiCut", "9:Mix", "10:OutLev"]);
     expect(modifierTargets(data, true).filter((t) => t.key === "novadrive").map((t) => t.slot)).toEqual([34, 35, 36, 37]);
+  });
+});
+
+describe("levels", () => {
+  const levels = (raw: number) => presetLevels(writeField(BLANK, LEVELS_FIELD, (raw << 8) >> 8));
+
+  it("decodes the unit's own presets", () => {
+    // "Chute - drive": the unit reported loop 2 on (insert lock was on, so its insert state was not recalled).
+    expect(levels(0xc62508)).toMatchObject({ loops: [false, true, false, false], boost: false, boostLevel: 0, routing: 0 });
+    // "Fragile - clean" as Vyzor sent it: insert and boost on, boost level 2.
+    expect(levels(0xad202c)).toEqual({ loops: [false, false, false, false], insert: true, boost: true, boostLevel: 2, routing: 0 });
+  });
+
+  it("reads a factory preset: loops off, 6 dB boost", () => {
+    expect(levels(0x68)).toEqual({ loops: [false, false, false, false], insert: false, boost: false, boostLevel: 6, routing: 0 });
   });
 });
 

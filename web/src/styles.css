@@ -210,7 +210,7 @@ button:disabled { opacity: 0.4; cursor: default; }
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 3px;
+  gap: 6px;
   padding: 2px 10px 2px 12px;
   border: 0;
   border-bottom: 1px solid var(--groove);
@@ -227,10 +227,14 @@ button:disabled { opacity: 0.4; cursor: default; }
 .slot-name { min-width: 0; font-family: var(--mono); font-size: 15px; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
 .slot.empty .slot-name { color: #8a8d92; }
 .slot.warn .slot-name { color: var(--amber); }
-/* Effect states of a preset: small labelled footswitches. */
-.fs-strip { display: flex; gap: 2px; }
-.fs-item { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; }
-.fs-label { font-family: var(--display); font-size: 7.5px; line-height: 1; letter-spacing: 0.02em; color: var(--dim); white-space: nowrap; }
+/* Effect, loop and boost states of a preset: an LED and its label, lit when on. */
+.fs-strip { display: flex; gap: 10px; max-width: 560px; }
+.fs-group { flex: 8; min-width: 0; display: flex; justify-content: space-between; gap: 4px; }
+.fs-group + .fs-group { flex: 6; padding-left: 10px; border-left: 1px solid var(--line); }
+.fs-item { flex: none; display: flex; align-items: center; gap: 3px; }
+.fs-led { width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; background: #1c1d1f; box-shadow: inset 0 0 0 1px #505357; }
+.fs-item.on .fs-led { background: radial-gradient(circle at 40% 35%, #ffb09e, #f03a22 55%, #a51a0c); box-shadow: 0 0 5px rgba(255, 64, 32, 0.7); }
+.fs-label { font-family: var(--mono); font-size: 10px; font-weight: 500; line-height: 1; color: var(--faint); white-space: nowrap; }
 .fs-item.on .fs-label { color: #f2f2f2; }
 
 /* Preset */
@@ -290,13 +294,10 @@ button:disabled { opacity: 0.4; cursor: default; }
   box-shadow: 0 0 0 calc(var(--size) * 0.05) #6f7378, 0 0 0 calc(var(--size) * 0.08) #2c2e31,
     0 0 calc(var(--size) * 0.22) rgba(255, 64, 32, 0.5), inset 0 0 calc(var(--size) * 0.08) rgba(110, 0, 0, 0.8);
 }
-.footswitch.mini { --size: 26px; }
-/* 5" phones (360 px high): the five rows must fit without scrolling. */
+/* 5" phones (360 px high): the five rows fit without scrolling. */
 @media (max-height: 380px) {
-  .footswitch.mini { --size: 22px; }
-  .slot { gap: 2px; padding-top: 0; padding-bottom: 0; }
+  .slot { gap: 4px; padding-top: 0; padding-bottom: 0; }
   .slot-head { line-height: 1.15; }
-  .fs-item { gap: 2px; }
 }
 .footswitch:disabled { opacity: 1; filter: grayscale(1) brightness(0.7); }
 .tile-label { flex: 1; min-width: 0; align-self: stretch; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 0; border: 0; background: transparent; text-align: left; }

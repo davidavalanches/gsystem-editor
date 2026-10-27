@@ -1,15 +1,16 @@
 /** Banks view: the 40 banks on the left, the 5 presets of the chosen bank on the right. */
 
 import { AVOIDED_BANKS, BANK_COUNT, PRESETS_PER_BANK, slotLabel, type BankStore } from "../core/bank";
+import { presetLevels } from "../core/levels";
 import { block, readField } from "../core/params";
 import { NAME_LEN, type Preset } from "../core/sysex";
 import { askText } from "./dialog";
 import { el } from "./dom";
 import { ICONS, iconButton, onLongPress, showMenu, type MenuItem } from "./widgets";
 
-/** Footswitch strip of a preset row: the unit's effect sections, as on the Preset view. */
-const STRIP: [string, string][] = [["filter", "FILTER"], ["comp", "COMP"], ["mod", "MOD"], ["pitch", "PITCH"],
-  ["delay", "DELAY"], ["reverb", "REVERB"], ["eq", "EQ"], ["gate", "GATE"]];
+/** State strip of a preset row: the effect blocks, in the unit's display abbreviations. */
+const STRIP: [string, string][] = [["filter", "FLT"], ["comp", "COM"], ["mod", "MOD"], ["pitch", "PIT"],
+  ["delay", "DLY"], ["reverb", "REV"], ["eq", "EQ"], ["gate", "GAT"]];
 
 export interface BanksActions {
   open(slot: number): void;
@@ -136,17 +137,25 @@ export class BanksView {
     row.setAttribute("aria-label", `${slotLabel(slot)} ${p ? p.name : "vide"}`);
     const strip = el("span", "fs-strip");
     if (p) {
+      const item = (code: string, name: string, on: boolean) => {
+        const i = el("span", on ? "fs-item on" : "fs-item");
+        i.title = `${name} ${on ? "on" : "off"}`;
+        i.append(el("span", "fs-led"), el("span", "fs-label", code));
+        return i;
+      };
+      const effects = el("span", "fs-group");
       for (const [key, code] of STRIP) {
         const blk = block(key);
         const field = blk.enableField(p.data);
-        const on = field !== null && readField(p.data, field) === 1;
-        const item = el("span", on ? "fs-item on" : "fs-item");
-        item.title = `${blk.label} ${on ? "on" : "off"}`;
-        item.append(el("span", "fs-label", code), el("span", on ? "footswitch mini on" : "footswitch mini"));
-        strip.append(item);
+        effects.append(item(code, blk.label, field !== null && readField(p.data, field) === 1));
       }
+      const lv = presetLevels(p.data);
+      const loops = el("span", "fs-group");
+      lv.loops.forEach((on, i) => loops.append(item(`L${i + 1}`, `Loop ${i + 1}`, on)));
+      loops.append(item("INS", "Insert", lv.insert), item("BST", `Boost ${lv.boostLevel} dB`, lv.boost));
+      strip.append(effects, loops);
     }
-    // Position and name on one line, so the footswitch strip gets the full width of the row.
+    // Position and name on one line, so the state strip gets the full width of the row.
     const head = el("span", "slot-head");
     head.append(el("span", "slot-code", String((slot % PRESETS_PER_BANK) + 1)),
       el("span", "slot-name", p ? p.name || "(sans nom)" : "vide"));
