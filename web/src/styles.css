@@ -227,15 +227,17 @@ button:disabled { opacity: 0.4; cursor: default; }
 .slot-name { min-width: 0; font-family: var(--mono); font-size: 15px; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
 .slot.empty .slot-name { color: #8a8d92; }
 .slot.warn .slot-name { color: var(--amber); }
-/* Effect, loop and boost states of a preset: an LED and its label, lit when on. */
-.fs-strip { display: flex; gap: 10px; max-width: 560px; }
-.fs-group { flex: 8; min-width: 0; display: flex; justify-content: space-between; gap: 4px; }
-.fs-group + .fs-group { flex: 6; padding-left: 10px; border-left: 1px solid var(--line); }
-.fs-item { flex: none; display: flex; align-items: center; gap: 3px; }
-.fs-led { width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; background: #1c1d1f; box-shadow: inset 0 0 0 1px #505357; }
-.fs-item.on .fs-led { background: radial-gradient(circle at 40% 35%, #ffb09e, #f03a22 55%, #a51a0c); box-shadow: 0 0 5px rgba(255, 64, 32, 0.7); }
-.fs-label { font-family: var(--mono); font-size: 10px; font-weight: 500; line-height: 1; color: var(--faint); white-space: nowrap; }
-.fs-item.on .fs-label { color: #f2f2f2; }
+/* What a preset switches on: small lit buttons, wrapping to a second line when needed. */
+.fs-strip { display: flex; flex-wrap: wrap; gap: 4px; }
+.fs-item {
+  display: flex; align-items: center; gap: 5px;
+  padding: 2px 7px 2px 5px;
+  border-radius: 4px;
+  background: linear-gradient(#45474b, #36383b);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px #1c1d1f;
+}
+.fs-led { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #ffb09e, #f03a22 55%, #a51a0c); box-shadow: 0 0 4px rgba(255, 64, 32, 0.8); }
+.fs-label { font-family: var(--mono); font-size: 10px; font-weight: 500; line-height: 1.2; color: #f2f2f2; white-space: nowrap; }
 
 /* Preset */
 
@@ -296,7 +298,9 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 /* 5" phones (360 px high): the five rows fit without scrolling. */
 @media (max-height: 380px) {
-  .slot { gap: 4px; padding-top: 0; padding-bottom: 0; }
+  .slot { gap: 3px; padding-top: 0; padding-bottom: 0; }
+  .fs-strip { gap: 3px; }
+  .fs-item { padding-top: 1px; padding-bottom: 1px; }
   .slot-head { line-height: 1.15; }
 }
 .footswitch:disabled { opacity: 1; filter: grayscale(1) brightness(0.7); }

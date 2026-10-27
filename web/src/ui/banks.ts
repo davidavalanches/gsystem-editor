@@ -8,9 +8,9 @@ import { askText } from "./dialog";
 import { el } from "./dom";
 import { ICONS, iconButton, onLongPress, showMenu, type MenuItem } from "./widgets";
 
-/** State strip of a preset row: the effect blocks, in the unit's display abbreviations. */
-const STRIP: [string, string][] = [["filter", "FLT"], ["comp", "COM"], ["mod", "MOD"], ["pitch", "PIT"],
-  ["delay", "DLY"], ["reverb", "REV"], ["eq", "EQ"], ["gate", "GAT"]];
+/** State strip of a preset row: the effect blocks, named as on the unit's switches. */
+const STRIP: [string, string][] = [["filter", "FILTER"], ["comp", "COMP"], ["mod", "MOD"], ["pitch", "PITCH"],
+  ["delay", "DELAY"], ["reverb", "REVERB"], ["eq", "EQ"], ["gate", "GATE"]];
 
 export interface BanksActions {
   open(slot: number): void;
@@ -135,25 +135,23 @@ export class BanksView {
     const row = el("button", classes.filter(Boolean).join(" "));
     row.type = "button";
     row.setAttribute("aria-label", `${slotLabel(slot)} ${p ? p.name : "vide"}`);
+    // Only what the preset switches on, as small lit buttons (display only).
     const strip = el("span", "fs-strip");
     if (p) {
-      const item = (code: string, name: string, on: boolean) => {
-        const i = el("span", on ? "fs-item on" : "fs-item");
-        i.title = `${name} ${on ? "on" : "off"}`;
-        i.append(el("span", "fs-led"), el("span", "fs-label", code));
-        return i;
+      const lit = (label: string, title = label) => {
+        const chip = el("span", "fs-item");
+        chip.title = title;
+        chip.append(el("span", "fs-led"), el("span", "fs-label", label));
+        strip.append(chip);
       };
-      const effects = el("span", "fs-group");
-      for (const [key, code] of STRIP) {
-        const blk = block(key);
-        const field = blk.enableField(p.data);
-        effects.append(item(code, blk.label, field !== null && readField(p.data, field) === 1));
+      for (const [key, label] of STRIP) {
+        const field = block(key).enableField(p.data);
+        if (field !== null && readField(p.data, field) === 1) lit(label);
       }
       const lv = presetLevels(p.data);
-      const loops = el("span", "fs-group");
-      lv.loops.forEach((on, i) => loops.append(item(`L${i + 1}`, `Loop ${i + 1}`, on)));
-      loops.append(item("INS", "Insert", lv.insert), item("BST", `Boost ${lv.boostLevel} dB`, lv.boost));
-      strip.append(effects, loops);
+      lv.loops.forEach((on, i) => on && lit(`LOOP ${i + 1}`));
+      if (lv.insert) lit("INSERT");
+      if (lv.boost) lit("BOOST", `BOOST ${lv.boostLevel} dB`);
     }
     // Position and name on one line, so the state strip gets the full width of the row.
     const head = el("span", "slot-head");
