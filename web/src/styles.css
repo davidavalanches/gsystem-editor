@@ -274,16 +274,19 @@ button:disabled { opacity: 0.4; cursor: default; }
 .pill.store.dirty { background: var(--ink); color: var(--dark-ink); }
 
 .preset-body { flex: 1; min-height: 0; display: flex; position: relative; }
+.preset-main { flex: 1; min-width: 0; min-height: 0; display: flex; }
+/* Desktop-only parts (see the desktop layout at the end). */
+.bank-grid, .bank-detail, .preset-browser, .preset-inspector { display: none; }
 /* Effect blocks: a 2 × 4 panel of footswitches, like the unit's. */
 .blocks-column { width: 236px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--panel) var(--scanlines); border-right: 1px solid var(--edge); }
 .blocks { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); }
 .tile {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 11px;
   min-height: 0;
   min-width: 0;
-  padding: 0 6px 0 11px;
+  padding: 0 3px 0 10px;
   border: 0;
   border-bottom: 1px solid var(--groove);
   border-radius: 0;
@@ -590,3 +593,88 @@ button:disabled { opacity: 0.4; cursor: default; }
 
 /* Settings read earlier, shown while the G-System is not connected: visible but not editable. */
 .settings-body.offline .setting-control { pointer-events: none; opacity: 0.75; }
+
+/* ── Desktop (PC screen) ───────────────────────────────────────────────
+   Banks: all 40 banks in an 8 × 5 grid, the selected preset's details on the right.
+   Preset: bank browser | effect row over the parameters | docked fine-adjust panel. */
+@media (min-width: 1200px) and (min-height: 700px) {
+  .bank-list, .slots { display: none; }
+  .banks-body { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 19vw, 380px); }
+
+  .bank-grid {
+    display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-template-rows: repeat(5, minmax(0, 1fr));
+    min-height: 0; margin: 16px 0 16px 20px; border: 1px solid var(--edge); border-radius: 10px; overflow: hidden;
+    background: var(--panel) var(--scanlines);
+  }
+  .bank-cell { display: flex; flex-direction: column; gap: 1px; min-height: 0; min-width: 0; padding: 8px 6px 6px; border-right: 1px solid var(--groove); border-bottom: 1px solid var(--groove); }
+  .bank-cell:nth-child(8n) { border-right: 0; }
+  .bank-cell:nth-child(n + 33) { border-bottom: 0; }
+  .bank-cell.used { background: rgba(255, 255, 255, 0.04); }
+  .bank-cell-head { display: flex; align-items: baseline; justify-content: space-between; padding: 0 6px 4px; }
+  .bank-cell-num { font-family: var(--display); font-size: 12px; color: #8a8d92; }
+  .bank-cell.used .bank-cell-num { color: #f2f2f2; }
+  .bank-cell.current .bank-cell-num { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; }
+  .bank-cell.avoided .bank-cell-num { color: var(--amber); text-decoration: line-through; }
+  .bank-cell-count { font-size: 11px; color: var(--dim); }
+  .cell-slot { flex: 1; min-height: 0; display: flex; align-items: center; gap: 8px; width: 100%; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; font-family: var(--mono); font-size: 12.5px; color: #e2e4e6; text-align: left; cursor: pointer; }
+  .cell-slot:hover { background: rgba(255, 255, 255, 0.06); }
+  .cell-slot.empty { color: var(--faint); }
+  .cell-slot.selected { background: var(--line-2); color: #fff; box-shadow: inset 3px 0 0 var(--ink); }
+  .cell-slot.pending .cell-name::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 5px; border-radius: 50%; background: var(--amber); }
+  .cell-pos { flex-shrink: 0; font-size: 11px; color: var(--dim); }
+  .cell-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
+
+  .bank-detail { display: flex; flex-direction: column; gap: 16px; min-height: 0; overflow-y: auto; margin: 16px 20px 16px 16px; }
+  .detail-display { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 16px; border-radius: 10px; background: var(--bar-dark); }
+  .detail-display .dot-number .bank { font-size: 40px; }
+  .detail-display .dot-number .position { font-size: 20px; }
+  .detail-lcd { align-self: stretch; padding: 8px 12px; background: var(--lcd); color: var(--lcd-ink); font-family: var(--lcd-font); font-size: 28px; line-height: 1; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+  .detail-blocks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; background: var(--panel) var(--scanlines); }
+  .detail-block { display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 0; padding: 14px 4px 10px; border-right: 1px solid var(--groove); border-bottom: 1px solid var(--groove); }
+  .detail-block:nth-child(4n) { border-right: 0; }
+  .detail-block:nth-child(n + 5) { border-bottom: 0; }
+  .detail-block .footswitch { --size: 30px; }
+  .detail-code { font-family: var(--display); font-size: 9.5px; letter-spacing: 0.04em; color: #f2f2f2; }
+  .detail-type { max-width: 100%; font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .detail-block.on .detail-type { color: var(--ink); }
+  .detail-facts { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0; font-size: 13px; }
+  .detail-facts dt { color: var(--dim); }
+  .detail-facts dd { margin: 0; }
+  .detail-empty { color: var(--dim); }
+  .detail-actions { display: flex; flex-direction: column; gap: 8px; }
+  .detail-open { height: 44px; border: 0; border-radius: 10px; background: var(--ink); color: var(--dark-ink); font-weight: 700; cursor: pointer; }
+  .detail-more { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .detail-more button { height: 38px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--surface-2); font-weight: 500; cursor: pointer; }
+  .detail-hint { margin: 0; font-size: 12px; color: var(--dim); }
+
+  .preset-browser { display: flex; flex-direction: column; gap: 10px; width: clamp(210px, 14vw, 270px); flex-shrink: 0; min-height: 0; padding: 14px 8px 0 12px; background: var(--bar); border-right: 1px solid var(--edge); }
+  .browser-search { height: 36px; margin-right: 4px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); background: #222326; color: var(--ink); font: inherit; }
+  .browser-list { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 14px; }
+  .browser-bank { margin-bottom: 6px; }
+  .browser-bank-num { padding: 6px 8px 3px; font-family: var(--display); font-size: 11px; color: var(--soft); }
+  .browser-slot { display: flex; align-items: center; gap: 10px; width: 100%; height: 30px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; font-family: var(--mono); font-size: 13px; color: #e2e4e6; text-align: left; cursor: pointer; }
+  .browser-slot:hover { background: rgba(255, 255, 255, 0.06); }
+  .browser-slot.empty { color: var(--faint); }
+  .browser-slot.current { background: var(--selected); box-shadow: inset 3px 0 0 var(--accent); color: #fff; }
+  .browser-pos { width: 12px; flex-shrink: 0; font-size: 12px; color: var(--dim); }
+  .browser-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
+
+  .preset-main { flex-direction: column; }
+  .blocks-column { width: auto; border-right: 0; border-bottom: 1px solid var(--edge); }
+  .blocks { grid-template-columns: repeat(10, minmax(0, 1fr)); grid-auto-rows: auto; }
+  .tile, .tile.stack { flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 132px; padding: 14px 6px 16px; border-bottom: 0; border-right: 1px solid var(--groove); text-align: center; }
+  .tile:last-child { border-right: 0; }
+  .tile .footswitch { --size: clamp(36px, 2.4vw, 46px); order: 2; }
+  .tile-label { flex: none; align-items: center; text-align: center; max-width: 100%; }
+  .tile-code { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: clamp(10px, 0.75vw, 14px); }
+  .tile.stack .tile-type, .tile.stack .tile-count { max-width: 100%; text-align: center; }
+  .params { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+
+  .preset-inspector { display: flex; flex-direction: column; width: clamp(260px, 17vw, 330px); flex-shrink: 0; min-height: 0; background: var(--bar); border-left: 1px solid var(--edge); }
+  .inspector-hint { margin: auto 24px; text-align: center; color: var(--dim); font-size: 13px; }
+  .sheet.docked { flex: 1; width: auto; min-height: 0; padding: 20px; border: 0; border-radius: 0; background: transparent; animation: none; overflow-y: auto; }
+  .sheet.docked .sheet-value { margin: 18px 0 16px; }
+  .sheet.docked .sheet-range { margin-bottom: 0; }
+  .sheet.docked .sheet-choices { margin-bottom: 0; max-height: none; }
+  .sheet.docked .sheet-buttons { margin-top: 20px; }
+}

@@ -1,6 +1,6 @@
 /** Preset view: effect tiles, block parameters and the fine-adjust sheet, over an edit buffer. */
 
-import { bankPosition, slotLabel, type BankStore } from "../core/bank";
+import { BANK_COUNT, PRESETS_PER_BANK, bankPosition, slotLabel, type BankStore } from "../core/bank";
 import {
   MODIFIER_BLOCK_ID, MODIFIER_FIELD, MODIFIER_PARAM_BASE, MODIFIER_SLOTS, SOURCES, UNASSIGNED, isValidModifier,
   modifierTargets, valueAt, writeModifier, type Modifier, type ModifierTarget,
@@ -15,7 +15,7 @@ import { BLOCK_IDS, LEVELS_BLOCK_ID, LEVEL_SWITCHES } from "../core/protocol";
 import { TAP_MAX_MS, TAP_MIN_MS, bpmToMs, msToBpm, presetTempoMs, writeTempoMs } from "../core/tempo";
 import { NAME_LEN, Preset, SysexError, USER_SLOTS } from "../core/sysex";
 import { askText } from "./dialog";
-import { el } from "./dom";
+import { DESKTOP, el } from "./dom";
 import { ICONS, iconButton, onLongPress, routingIcon, showMenu } from "./widgets";
 
 /** Tile order of the design: the unit's effect sections. */
@@ -102,6 +102,11 @@ export class PresetView {
   private readonly paramsHead = el("div", "params-head");
   private readonly paramsList = el("div", "params");
   private readonly body = el("div", "preset-body");
+  /** Desktop: a bank browser on the left and the fine-adjust panel docked on the right. */
+  private readonly browser = el("aside", "preset-browser");
+  private readonly browserList = el("div", "browser-list");
+  private readonly search = el("input", "browser-search");
+  private readonly inspector = el("aside", "preset-inspector");
 
   constructor(private bank: BankStore) {
     this.nameButton.type = "button";
@@ -140,8 +145,21 @@ export class PresetView {
     strip.append(this.levelBar, this.tempoButton);
     this.favoriteBar.setAttribute("aria-label", "Favoris de l'effet");
     params.append(strip, this.favoriteBar, this.paramsHead, this.paramsList);
-    this.body.append(column, params);
+    const main = el("div", "preset-main");
+    main.append(column, params);
+    this.search.type = "search";
+    this.search.placeholder = "Nom du preset…";
+    this.search.setAttribute("aria-label", "Rechercher un preset");
+    this.search.addEventListener("input", () => this.renderBrowser());
+    this.browser.setAttribute("aria-label", "Banques");
+    this.browser.append(this.search, this.browserList);
+    this.inspector.setAttribute("aria-label", "Réglage du paramètre");
+    this.body.append(this.browser, main, this.inspector);
     this.el.append(header, this.body);
+    DESKTOP.addEventListener("change", () => {
+      this.closeSheet();
+      this.renderBrowser();
+    });
     this.openSlot(0);
   }
 
@@ -277,7 +295,33 @@ export class PresetView {
     this.redoStack = [];
     this.setBuffer(this.stored, false);
     this.onSlotChange?.(slot);
+    this.renderBrowser();
     if (changed && !this.fromUnit) this.pushToUnit();
+  }
+
+  /** Desktop browser: every bank with its presets' names, filtered by the search box. */
+  renderBrowser(): void {
+    if (!DESKTOP.matches) return;
+    const query = this.search.value.trim().toLowerCase();
+    const groups: HTMLElement[] = [];
+    for (let b = 0; b < BANK_COUNT; b++) {
+      const slots = [...Array(PRESETS_PER_BANK).keys()].map((i) => b * PRESETS_PER_BANK + i)
+        .filter((s) => !query || this.bank.preset(s)?.name.toLowerCase().includes(query));
+      if (!slots.length) continue;
+      const group = el("div", "browser-bank");
+      group.append(el("div", "browser-bank-num", String(b).padStart(2, "0")));
+      for (const slot of slots) {
+        const p = this.bank.preset(slot);
+        const row = el("button", ["browser-slot", slot === this.slot ? "current" : "", p ? "" : "empty"].filter(Boolean).join(" "));
+        row.type = "button";
+        row.append(el("span", "browser-pos", String((slot % PRESETS_PER_BANK) + 1)), el("span", "browser-name", p ? p.name : "—"));
+        row.addEventListener("click", () => this.openSlot(slot));
+        group.append(row);
+      }
+      groups.push(group);
+    }
+    this.browserList.replaceChildren(...(groups.length ? groups : [el("p", "empty-note", "Aucun preset trouvé.")]));
+    this.browserList.querySelector(".current")?.scrollIntoView({ block: "nearest" });
   }
 
   /** The bank slot changed under us (paste, import, undo, re-read): follow it if not edited. */
@@ -875,6 +919,13 @@ export class PresetView {
   }
 
   private showSheet(sheet: HTMLElement, label: string): void {
+    if (DESKTOP.matches) {
+      // Docked in the inspector column: no backdrop, the parameters stay usable beside it.
+      sheet.setAttribute("aria-label", label);
+      sheet.classList.add("docked");
+      this.inspector.replaceChildren(sheet);
+      return;
+    }
     const layer = el("div", "sheet-layer");
     const backdrop = el("button", "sheet-backdrop");
     backdrop.type = "button";
@@ -892,6 +943,7 @@ export class PresetView {
     this.paramIndex = null;
     this.sheetShow = null;
     this.body.querySelector(".sheet-layer")?.remove();
+    this.inspector.replaceChildren(el("p", "inspector-hint", "Choisissez un paramètre pour le régler ici."));
     this.paramsList.querySelector(".param.selected")?.classList.remove("selected");
   }
 }

@@ -6,7 +6,7 @@ import { block, readField } from "../core/params";
 import { msToBpm, presetTempoMs } from "../core/tempo";
 import { NAME_LEN, type Preset } from "../core/sysex";
 import { askText } from "./dialog";
-import { el } from "./dom";
+import { DESKTOP, el } from "./dom";
 import { ICONS, iconButton, onLongPress, routingIcon, showMenu, type MenuItem } from "./widgets";
 
 /** State strip of a preset row: the effect blocks, named as on the unit's switches. */
@@ -33,6 +33,9 @@ export class BanksView {
   private connected = false;
   private readonly list = el("div", "bank-list");
   private readonly slots = el("div", "slots");
+  /** Desktop: every bank at once, and the selected preset's details. */
+  private readonly grid = el("div", "bank-grid");
+  private readonly detail = el("aside", "bank-detail");
   private bankButtons: HTMLButtonElement[] = [];
   private reading: [number, number] | null = null;
 
@@ -61,8 +64,11 @@ export class BanksView {
       this.list.append(button);
     }
     const body = el("div", "banks-body");
-    body.append(this.list, this.slots);
+    this.grid.setAttribute("aria-label", "Toutes les banques");
+    this.detail.setAttribute("aria-label", "Preset sélectionné");
+    body.append(this.list, this.slots, this.grid, this.detail);
     this.el.append(header, body);
+    DESKTOP.addEventListener("change", () => this.refresh());
     this.refresh();
   }
 
@@ -103,6 +109,96 @@ export class BanksView {
       button.setAttribute("aria-label", `Banque ${String(b).padStart(2, "0")}, ${used.filter(Boolean).length} presets`);
     });
     this.slots.replaceChildren(...[...Array(PRESETS_PER_BANK).keys()].map((i) => this.slotRow(this.bankIndex * PRESETS_PER_BANK + i)));
+    if (DESKTOP.matches) {
+      this.renderGrid();
+      this.renderDetail();
+    }
+  }
+
+  /** Desktop: select a preset (its details show on the right); double-click opens it. */
+  private select(slot: number): void {
+    this.current = slot;
+    this.bankIndex = Math.floor(slot / PRESETS_PER_BANK);
+    this.refresh();
+  }
+
+  private renderGrid(): void {
+    this.grid.replaceChildren(...[...Array(BANK_COUNT).keys()].map((b) => {
+      const slots = [...Array(PRESETS_PER_BANK).keys()].map((i) => b * PRESETS_PER_BANK + i);
+      const used = slots.filter((s) => this.bank.preset(s)).length;
+      const cell = el("section", ["bank-cell", used ? "used" : "", AVOIDED_BANKS.has(b) ? "avoided" : "",
+        b === this.bankIndex ? "current" : ""].filter(Boolean).join(" "));
+      cell.setAttribute("aria-label", `Banque ${String(b).padStart(2, "0")}`);
+      const head = el("div", "bank-cell-head");
+      head.append(el("span", "bank-cell-num", String(b).padStart(2, "0")), el("span", "bank-cell-count", used ? `${used}/5` : ""));
+      cell.append(head, ...slots.map((slot) => {
+        const p = this.bank.preset(slot);
+        const button = el("button", ["cell-slot", p ? "" : "empty", slot === this.current ? "selected" : "",
+          this.bank.pending.has(slot) ? "pending" : ""].filter(Boolean).join(" "));
+        button.type = "button";
+        button.setAttribute("aria-label", `${slotLabel(slot)} ${p ? p.name : "vide"}`);
+        button.append(el("span", "cell-pos", String((slot % PRESETS_PER_BANK) + 1)), el("span", "cell-name", p ? p.name : "—"));
+        onLongPress(button, (x, y) => showMenu({ x, y }, this.slotMenu(slot)));
+        button.addEventListener("click", () => this.select(slot));
+        button.addEventListener("dblclick", () => this.actions.open(slot));
+        return button;
+      }));
+      return cell;
+    }));
+  }
+
+  private renderDetail(): void {
+    const slot = this.current;
+    const p = this.bank.preset(slot);
+    const [b, position] = [Math.floor(slot / PRESETS_PER_BANK), (slot % PRESETS_PER_BANK) + 1];
+    const display = el("div", "detail-display");
+    const number = el("div", "dot-number");
+    number.append(el("span", "bank", String(b).padStart(2, "0")), el("span", "position", String(position)));
+    display.append(number, el("div", "detail-lcd", p ? p.name || "(sans nom)" : "<EMPTY>"));
+    const parts: HTMLElement[] = [display];
+    if (p) {
+      const blocks = el("div", "detail-blocks");
+      for (const [key, label] of STRIP) {
+        const blk = block(key);
+        const field = blk.enableField(p.data);
+        const on = field !== null && readField(p.data, field) === 1;
+        const cell = el("div", on ? "detail-block on" : "detail-block");
+        cell.append(el("span", on ? "footswitch on" : "footswitch"), el("span", "detail-code", label),
+          el("span", "detail-type", blk.effectType(p.data)?.name ?? (key === "eq" ? "3-band" : "Gate")));
+        blocks.append(cell);
+      }
+      const lv = presetLevels(p.data);
+      const ms = presetTempoMs(p.data);
+      const facts = el("dl", "detail-facts");
+      const fact = (term: string, value: string) => facts.append(el("dt", "", term), el("dd", "", value));
+      fact("Loops", [...lv.loops.flatMap((on, i) => (on ? [`Loop ${i + 1}`] : [])), ...(lv.insert ? ["Insert"] : [])].join(", ") || "aucune");
+      fact("Boost", lv.boost ? `On · ${lv.boostLevel} dB` : `Off · ${lv.boostLevel} dB`);
+      fact("Routing", ROUTINGS[lv.routing] ?? String(lv.routing));
+      if (ms) fact("Tempo", `${msToBpm(ms)} BPM (${ms} ms)`);
+      fact("Somme de contrôle", p.checksumOk ? "valide" : "à corriger");
+      if (this.bank.pending.has(slot)) fact("G-System", "à synchroniser");
+      parts.push(blocks, facts);
+    } else {
+      parts.push(el("p", "detail-empty", "Emplacement vide."));
+    }
+    const actions = el("div", "detail-actions");
+    if (p) {
+      const open = el("button", "detail-open", "Ouvrir dans l'éditeur");
+      open.type = "button";
+      open.addEventListener("click", () => this.actions.open(slot));
+      actions.append(open);
+    }
+    const more = el("div", "detail-more");
+    for (const item of this.slotMenu(slot).filter((m) => m.label !== "Ouvrir")) {
+      const button = el("button", "", item.label.replace(/…$/, ""));
+      button.type = "button";
+      button.disabled = !!item.disabled;
+      button.addEventListener("click", item.action);
+      more.append(button);
+    }
+    actions.append(more);
+    parts.push(el("div", "grow"), actions, el("p", "detail-hint", "Double-clic : ouvrir · appui long ou clic droit : plus d'actions"));
+    this.detail.replaceChildren(...parts);
   }
 
   private renderHeader(): void {
@@ -177,7 +273,7 @@ export class BanksView {
     return [
       { label: "Ouvrir", action: () => this.actions.open(slot), disabled: !p },
       { label: "Renommer…", action: () => void this.rename(slot), disabled: !p },
-      { label: "Copier", action: () => (this.clipboard = p), disabled: !p },
+      { label: "Copier", action: () => { this.clipboard = p; this.refresh(); }, disabled: !p },
       { label: "Coller ici", action: () => this.paste(slot), disabled: !this.clipboard },
       { label: "Vider l'emplacement", action: () => this.clear(slot), disabled: !p },
     ];

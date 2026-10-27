@@ -75,6 +75,7 @@ export class App {
       this.banks.refresh();
       for (const s of slots ?? []) this.preset.reloadIfShowing(s);
       if (!slots) this.preset.openSlot(this.preset.slot);
+      this.preset.renderBrowser();
       this.scheduleSave();
     };
     this.bank.undo.onChange = () => this.banks.refresh();
