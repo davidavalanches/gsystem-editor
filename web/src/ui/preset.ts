@@ -111,7 +111,7 @@ export class PresetView {
     const header = el("header", "header preset-header");
     header.append(
       iconButton(ICONS.prev, "Preset précédent", () => this.openSlot((this.slot + USER_SLOTS - 1) % USER_SLOTS)),
-      this.number, this.nameButton, this.tempoButton,
+      this.number, this.nameButton,
       iconButton(ICONS.next, "Preset suivant", () => this.openSlot((this.slot + 1) % USER_SLOTS)),
       el("div", "separator"), this.undoButton, this.liveButton, this.storeButton,
     );
@@ -119,10 +119,13 @@ export class PresetView {
     const column = el("section", "blocks-column");
     column.setAttribute("aria-label", "Blocs d'effets");
     this.levelBar.setAttribute("aria-label", "Loops, insert et boost du preset");
-    column.append(this.tiles, this.levelBar);
+    column.append(this.tiles);
     const params = el("section", "params-section");
     params.setAttribute("aria-label", "Paramètres");
-    params.append(this.paramsHead, this.paramsList);
+    // Strip over the block details: the preset's loops, insert and boost, and its tempo.
+    const strip = el("div", "preset-strip");
+    strip.append(this.levelBar, this.tempoButton);
+    params.append(strip, this.paramsHead, this.paramsList);
     this.body.append(column, params);
     this.el.append(header, this.body);
     this.openSlot(0);

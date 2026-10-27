@@ -261,9 +261,9 @@ button:disabled { opacity: 0.4; cursor: default; }
 .preset-name { flex: 1; min-width: 0; height: 40px; margin-left: 8px; padding: 0 10px; display: flex; flex-direction: column; justify-content: center; border: 0; border-radius: 0; background: var(--lcd); color: var(--lcd-ink); text-align: left; }
 .preset-name .name { font-family: var(--lcd-font); font-size: 22px; line-height: 0.95; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
 /* Tempo of the preset, on its own LCD right of the name. */
-.preset-tempo { flex-shrink: 0; height: 40px; min-width: 44px; margin-left: 3px; padding: 0 5px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border: 0; border-radius: 0; background: var(--lcd); color: var(--lcd-ink); font-family: var(--lcd-font); line-height: 0.9; }
-.preset-tempo .bpm { font-size: 20px; }
-.preset-tempo .unit { font-size: 12px; }
+.preset-tempo { flex-shrink: 0; height: 32px; min-width: 50px; padding: 0 7px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border: 0; border-radius: 0; background: var(--lcd); color: var(--lcd-ink); font-family: var(--lcd-font); line-height: 0.9; }
+.preset-tempo .bpm { font-size: 18px; }
+.preset-tempo .unit { font-size: 10px; }
 .preset-name .status { font-family: var(--lcd-font); font-size: 15px; line-height: 0.95; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .preset-name .status.alert { color: var(--lcd-ink); }
 .separator { width: 1px; height: 28px; background: #2e3034; margin: 0 4px; flex-shrink: 0; }
@@ -341,9 +341,10 @@ button:disabled { opacity: 0.4; cursor: default; }
 .tile-count.none { color: var(--dim); font-family: inherit; font-weight: 500; }
 
 /* Loops, insert and boost: live-only switches. */
-.levels { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; flex-shrink: 0; padding: 6px; }
+.preset-strip { display: flex; align-items: center; gap: 8px; flex-shrink: 0; padding: 5px 8px; background: var(--panel) var(--scanlines); border-bottom: 1px solid var(--edge); }
+.levels { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; }
 .level {
-  height: 34px;
+  height: 32px;
   min-width: 0;
   padding: 0;
   border-radius: 6px;
@@ -351,15 +352,15 @@ button:disabled { opacity: 0.4; cursor: default; }
   background: rgba(0, 0, 0, 0.18);
   font-family: var(--display);
   font-size: 8.5px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.01em;
   color: var(--muted);
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 4px;
+  white-space: nowrap;
 }
-.level::before { content: ""; width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--line-3); }
+.level::before { content: ""; flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--line-3); }
 .level.on { color: var(--ink); }
 .level.on::before { background: var(--red); border: 0; box-shadow: 0 0 6px rgba(240, 83, 62, 0.8); }
 
