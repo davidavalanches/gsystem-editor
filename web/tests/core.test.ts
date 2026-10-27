@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { BankStore, bankPosition, slotLabel } from "../src/core/bank";
+import { applyFavorite, captureFavorite } from "../src/core/favorites";
 import { LEVELS_FIELD, presetLevels } from "../src/core/levels";
 import { BLOCKS, block, diffFields, fieldOffset, FIELD_COUNT, freq, readField, writeField } from "../src/core/params";
 import {
@@ -231,6 +232,22 @@ describe("levels", () => {
 
   it("reads a factory preset: loops off, 6 dB boost", () => {
     expect(levels(0x68)).toEqual({ loops: [false, false, false, false], insert: false, boost: false, boostLevel: 6, routing: 0 });
+  });
+});
+
+describe("favorites", () => {
+  it("restores a block's type and parameters, keeping the preset's on/off", () => {
+    const blk = block("reverb");
+    const enable = (d: Uint8Array) => blk.enableField(d)!;
+    let source = writeField(BLANK, blk.firstField, 1);
+    source = writeField(source, enable(source), 1);
+    source = writeField(source, blk.firstField + 3, 42);
+    const fav = captureFavorite(source, "reverb");
+    const target = writeField(writeField(BLANK, blk.firstField, 1), enable(source), 0);
+    const out = applyFavorite(target, "reverb", fav);
+    expect(readField(out, blk.firstField + 3)).toBe(42);
+    expect(readField(out, enable(out))).toBe(0);
+    expect(() => applyFavorite(BLANK, "comp", fav)).toThrow();
   });
 });
 

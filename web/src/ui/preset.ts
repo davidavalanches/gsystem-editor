@@ -9,13 +9,14 @@ import {
   LEVEL_BITS, LEVELS_FIELD, OUTPUTS_FIELD, OUTPUT_MIN, OUTPUT_PARAMS, ROUTINGS, ROUTING_PARAM, levelOn, presetLevels,
   presetOutputs, writeLevel, writeOutputs, writeRouting,
 } from "../core/levels";
+import { FAVORITE_COUNT, applyFavorite, captureFavorite, type Favorite, type Favorites } from "../core/favorites";
 import { BLOCKS, Param, block, diffFields, owner, readField, writeField, type Block } from "../core/params";
 import { BLOCK_IDS, LEVELS_BLOCK_ID, LEVEL_SWITCHES } from "../core/protocol";
 import { TAP_MAX_MS, TAP_MIN_MS, bpmToMs, msToBpm, presetTempoMs, writeTempoMs } from "../core/tempo";
 import { NAME_LEN, Preset, SysexError, USER_SLOTS } from "../core/sysex";
 import { askText } from "./dialog";
 import { el } from "./dom";
-import { ICONS, iconButton, routingIcon } from "./widgets";
+import { ICONS, iconButton, onLongPress, routingIcon, showMenu } from "./widgets";
 
 /** Tile order of the design: the unit's effect sections. */
 const TILES: [string, string][] = [
@@ -39,6 +40,16 @@ const isModifierField = (index: number) => index >= MODIFIER_FIELD && index < MO
 const LEVEL_LABELS: [string, string][] = [
   ["loop1", "L1"], ["loop2", "L2"], ["loop3", "L3"], ["loop4", "L4"], ["insert", "INS"], ["boost", "BST"],
 ];
+
+const FAVORITES_KEY = "gsystem-favorites";
+
+function loadFavorites(): Favorites {
+  try {
+    return JSON.parse(localStorage.getItem(FAVORITES_KEY) ?? "{}") as Favorites;
+  } catch {
+    return {};
+  }
+}
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
@@ -86,6 +97,8 @@ export class PresetView {
   private readonly undoButton = iconButton(ICONS.undo, "Annuler", () => this.undo());
   private readonly tiles = el("div", "blocks");
   private readonly levelBar = el("div", "levels");
+  private readonly favoriteBar = el("div", "favorites");
+  private favorites: Favorites = loadFavorites();
   private readonly paramsHead = el("div", "params-head");
   private readonly paramsList = el("div", "params");
   private readonly body = el("div", "preset-body");
@@ -125,7 +138,8 @@ export class PresetView {
     // Strip over the block details: the preset's loops, insert and boost, and its tempo.
     const strip = el("div", "preset-strip");
     strip.append(this.levelBar, this.tempoButton);
-    params.append(strip, this.paramsHead, this.paramsList);
+    this.favoriteBar.setAttribute("aria-label", "Favoris de l'effet");
+    params.append(strip, this.favoriteBar, this.paramsHead, this.paramsList);
     this.body.append(column, params);
     this.el.append(header, this.body);
     this.openSlot(0);
@@ -401,6 +415,7 @@ export class PresetView {
     this.renderTiles();
     this.renderLevels();
     this.renderParams();
+    this.renderFavorites();
   }
 
   private renderTiles(): void {
@@ -485,6 +500,58 @@ export class PresetView {
       b.addEventListener("click", () => this.setLevel(key, !on));
       return b;
     }));
+  }
+
+  /** The four favorites of the shown effect: tap to load (or to save into an empty one), long-press for more. */
+  private renderFavorites(): void {
+    const key = this.blockKey;
+    const isEffect = key !== MODIFIERS && key !== ROUTING;
+    this.favoriteBar.hidden = !isEffect || !this.buffer;
+    if (this.favoriteBar.hidden) return;
+    const slots = this.favorites[key] ?? [];
+    this.favoriteBar.replaceChildren(el("span", "favorites-title", "FAV"), ...Array.from({ length: FAVORITE_COUNT }, (_, i) => {
+      const fav = slots[i] ?? null;
+      const b = el("button", fav ? "favorite" : "favorite empty");
+      b.type = "button";
+      b.append(el("span", "favorite-num", String(i + 1)), el("span", "favorite-label", fav ? fav.label : "+"));
+      b.title = fav ? `Charger le favori ${i + 1} (${fav.label}) — appui long : plus d'options`
+        : `Enregistrer les réglages actuels dans le favori ${i + 1}`;
+      onLongPress(b, (x, y) => showMenu({ x, y }, [
+        { label: "Charger", action: () => this.loadFavorite(key, i), disabled: !fav },
+        { label: fav ? "Remplacer par les réglages actuels" : "Enregistrer les réglages actuels",
+          action: () => this.saveFavorite(key, i) },
+        { label: "Effacer", action: () => this.saveFavorite(key, i, true), disabled: !fav },
+      ]));
+      b.addEventListener("click", () => (fav ? this.loadFavorite(key, i) : this.saveFavorite(key, i)));
+      return b;
+    }));
+  }
+
+  private saveFavorite(key: string, index: number, clear = false): void {
+    if (!this.buffer) return;
+    const slots: (Favorite | null)[] = [...(this.favorites[key] ?? [])];
+    while (slots.length < FAVORITE_COUNT) slots.push(null);
+    slots[index] = clear ? null : captureFavorite(this.buffer.data, key);
+    this.favorites = { ...this.favorites, [key]: slots };
+    try {
+      localStorage.setItem(FAVORITES_KEY, JSON.stringify(this.favorites));
+    } catch {
+      alert("Impossible d'enregistrer les favoris sur cet appareil.");
+    }
+    this.renderFavorites();
+    this.onNotice?.(clear ? `Favori ${index + 1} effacé` : `Favori ${index + 1} enregistré : ${slots[index]!.label}`);
+  }
+
+  private loadFavorite(key: string, index: number): void {
+    const fav = this.favorites[key]?.[index];
+    if (!this.buffer || !fav) return;
+    try {
+      const data = applyFavorite(this.buffer.data, key, fav);
+      if (diffFields(this.buffer.data, data).length) this.pushBuffer(this.buffer.withData(data));
+      this.onNotice?.(`Favori ${index + 1} chargé : ${fav.label}`);
+    } catch (e) {
+      alert(`Favori illisible : ${(e as Error).message}`);
+    }
   }
 
   private renderParams(): void {
