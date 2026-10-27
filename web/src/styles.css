@@ -184,10 +184,13 @@ button:disabled { opacity: 0.4; cursor: default; }
   flex-direction: column;
   gap: 2px;
 }
+/* Bank number above its fill dots: they keep apart however narrow the list. */
 .bank-list button {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  gap: 5px;
   height: 44px;
   flex-shrink: 0;
   padding: 0 10px;
@@ -267,7 +270,7 @@ button:disabled { opacity: 0.4; cursor: default; }
   gap: 8px;
   min-height: 0;
   min-width: 0;
-  padding: 0 6px;
+  padding: 0 6px 0 9px;
   border: 0;
   border-bottom: 1px solid var(--groove);
   border-radius: 0;
@@ -276,9 +279,10 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 .tile:nth-child(odd):not(.wide) { border-right: 1px solid var(--groove); }
 .tile.selected { background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 -3px 0 var(--accent); }
-/* Chrome footswitch: metal bezel, then a ring (black, red and glowing when on), then the dome. */
+/* Chrome footswitch: metal bezel, black ring, then the dome; when on, a red neon ring glows around the bezel
+   (the LED ring of the first mock-up). */
 .footswitch {
-  --size: 42px;
+  --size: 36px;
   flex-shrink: 0;
   display: block;
   box-sizing: border-box;
@@ -292,9 +296,9 @@ button:disabled { opacity: 0.4; cursor: default; }
     inset 0 0 calc(var(--size) * 0.06) rgba(0, 0, 0, 0.7);
 }
 .footswitch.on {
-  border-color: #f03a22;
   box-shadow: 0 0 0 calc(var(--size) * 0.05) #6f7378, 0 0 0 calc(var(--size) * 0.08) #2c2e31,
-    0 0 calc(var(--size) * 0.22) rgba(255, 64, 32, 0.5), inset 0 0 calc(var(--size) * 0.08) rgba(110, 0, 0, 0.8);
+    0 0 0 calc(var(--size) * 0.08 + 2.5px) #ff5a47, 0 0 10px calc(var(--size) * 0.08 + 2px) rgba(255, 70, 50, 0.45),
+    0 0 22px calc(var(--size) * 0.08) rgba(255, 70, 50, 0.25), inset 0 0 calc(var(--size) * 0.06) rgba(0, 0, 0, 0.7);
 }
 /* 5" phones (360 px high): the five rows fit without scrolling. */
 @media (max-height: 380px) {
