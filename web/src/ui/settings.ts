@@ -77,7 +77,7 @@ export class SettingsView {
     row.append(el("span", "switch-number", `#${n + 1}`));
     const fixed = FIXED_SWITCHES.get(n);
     if (fixed) {
-      row.append(el("span", "setting-help", `${fixed} — fonction fixe`));
+      row.append(el("span", "setting-help", `${fixed} — fixed function`));
       return row;
     }
     const control = el("div", "setting-control");

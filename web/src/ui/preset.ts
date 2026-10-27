@@ -17,7 +17,7 @@ const TILES: [string, string][] = [
   ["filter", "FILTER"], ["comp", "COMP"], ["mod", "MOD"], ["pitch", "PITCH"],
   ["delay", "DELAY"], ["reverb", "REVERB"], ["eq", "EQ"], ["gate", "GATE"],
 ];
-const TILE_LABELS: Record<string, string> = { mod: "Modulation", eq: "EQ paramétrique" };
+const TILE_LABELS: Record<string, string> = { mod: "Modulation", eq: "Parametric EQ" };
 /** Pseudo block of the tile list: pedal and encoder assignments. */
 const MODIFIERS = "modifiers";
 const SHORT_SOURCES = ["—", "VOL", "EXP", "ENC A", "ENC B", "ENC C"];
@@ -318,7 +318,7 @@ export class PresetView {
     this.number.setAttribute("aria-label", `Banque ${String(b).padStart(2, "0")}, position ${position}`);
     this.number.innerHTML = `<span class="bank">${String(b).padStart(2, "0")}</span><span class="position">${position}</span>`;
     const status = this.isDirty ? "Modifié — Store pour garder"
-      : this.isLive ? "LIVE · mémoire de travail" : `${this.bank.title} · ${slotLabel(this.slot)}`;
+      : this.isLive ? "LIVE · edit buffer" : `${this.bank.title} · ${slotLabel(this.slot)}`;
     this.nameButton.innerHTML = "";
     this.nameButton.append(el("span", "name", this.buffer ? this.buffer.name || "(sans nom)" : "— vide —"),
       el("span", this.isDirty || this.isLive ? "status alert" : "status", status));
@@ -349,7 +349,7 @@ export class PresetView {
       pick.type = "button";
       pick.setAttribute("aria-label", `Afficher ${label}, ${on ? "activé" : "désactivé"}`);
       const kind = this.buffer ? blk.effectType(this.buffer.data)?.name : "";
-      const typeShort = blk.hasType ? kind ?? "" : key === "eq" ? "3 bandes" : "Gate";
+      const typeShort = blk.hasType ? kind ?? "" : key === "eq" ? "3-band" : "Gate";
       pick.append(el("span", "tile-code", code), el("span", "tile-type", typeShort));
       pick.addEventListener("click", () => {
         this.blockKey = key;
@@ -368,10 +368,10 @@ export class PresetView {
     tile.type = "button";
     tile.setAttribute("aria-label", `Pédales et encodeurs, ${assigned.length} affectation(s)`);
     const head = el("span", "tile-head");
-    head.append(el("span", "tile-code", "PÉDALES"), el("span", assigned.length ? "tile-count" : "tile-count none",
-      sources.join(" · ") || "aucune"));
+    head.append(el("span", "tile-code", "MODIFIERS"), el("span", assigned.length ? "tile-count" : "tile-count none",
+      sources.join(" · ") || "none"));
     tile.append(head, el("span", "tile-type", assigned.length
-      ? assigned.map((t) => t.name).join(", ") : "Exp, Vol, encodeurs A-C"));
+      ? assigned.map((t) => t.name).join(", ") : "Exp, Vol, Enc A-C"));
     tile.addEventListener("click", () => {
       this.blockKey = MODIFIERS;
       this.closeSheet();
@@ -428,7 +428,7 @@ export class PresetView {
       sw.setAttribute("aria-label", `${blk.label} : ${on ? "désactiver" : "activer"}`);
       const trackEl = el("span", "switch-track");
       trackEl.append(el("span", "switch-knob"));
-      sw.append(trackEl, el("span", "switch-text", on ? "Activé" : "Désactivé"));
+      sw.append(trackEl, el("span", "switch-text", on ? "On" : "Off"));
       sw.addEventListener("click", () => this.toggleBlock(blk.key));
       this.paramsHead.append(sw);
     }
@@ -442,7 +442,7 @@ export class PresetView {
   }
 
   private renderModifiers(): void {
-    this.paramsHead.replaceChildren(el("span", "label", "Pédales & encodeurs"), el("div", "grow"));
+    this.paramsHead.replaceChildren(el("span", "label", "Modifiers"), el("div", "grow"));
     this.paramsList.classList.remove("on-block");
     const preset = this.buffer;
     if (!preset) {
@@ -466,7 +466,7 @@ export class PresetView {
     const active = valid && m.source > 0;
     const row = el("button", `param modifier${t.field === this.paramIndex ? " selected" : ""}${active ? " assigned" : ""}`);
     row.type = "button";
-    const summary = !valid ? "valeurs invalides" : active ? `${SOURCES[m.source]}, ${m.min} / ${m.mid} / ${m.max} %` : "aucune";
+    const summary = !valid ? "invalid values" : active ? `${SOURCES[m.source]}, ${m.min} / ${m.mid} / ${m.max} %` : "none";
     row.setAttribute("aria-label", `${this.blockLabel(t.key)} ${t.name} : ${summary}, toucher pour régler`);
     const top = el("span", "param-top");
     const name = el("span", "param-name");
@@ -533,7 +533,7 @@ export class PresetView {
     const close = () => this.closeSheet();
     const sheet = el("div", "sheet");
     const head = el("div", "sheet-head");
-    head.append(el("span", "", `${TILE_LABELS[blk.key] ?? blk.label} · ${param.name}`), el("span", "field", `champ #${index}`));
+    head.append(el("span", "", `${TILE_LABELS[blk.key] ?? blk.label} · ${param.name}`), el("span", "field", `field #${index}`));
     const big = el("div", "sheet-value", param.format(value));
     sheet.append(head, big);
 
@@ -658,7 +658,7 @@ export class PresetView {
     draw();
 
     const buttons = el("div", "sheet-buttons");
-    const reset = el("button", "", "Retirer");
+    const reset = el("button", "", "Remove");
     reset.type = "button";
     reset.addEventListener("click", () => commit({ ...UNASSIGNED }));
     const ok = el("button", "ok", "OK");

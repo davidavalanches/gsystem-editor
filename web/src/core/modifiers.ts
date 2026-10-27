@@ -25,7 +25,7 @@ export const MODIFIER_SLOTS = 38;
 export const MODIFIER_BLOCK_ID = 0x0d;
 export const MODIFIER_PARAM_BASE = 20;
 
-export const SOURCES = ["Aucune", "Vol", "Exp", "Enc A", "Enc B", "Enc C"] as const;
+export const SOURCES = ["None", "Vol", "Exp", "Enc A", "Enc B", "Enc C"] as const;
 
 export interface Modifier {
   source: number;
@@ -109,7 +109,7 @@ export function modifierTargets(data: Uint8Array, novaDrive = false): ModifierTa
       const slot = g.first + n;
       const param = params[index] ?? null;
       out.push({ key: g.key, slot, field: modifierField(slot), paramField: blk.firstField + index, param,
-        name: param?.name ?? `Paramètre ${index}`, modifier: readModifier(data, slot) });
+        name: param?.name ?? `Param ${index}`, modifier: readModifier(data, slot) });
     });
   }
   if (novaDrive) {

@@ -26,7 +26,7 @@ const NO_PARAMS = new Set([0, 17]);
 
 export const STYLES = ["Toggle", "Hold"];
 /** Bank parameter of a Preset switch: none (UP/DOWN decide), factory A0-A9 and B0-B9, then user banks 00-39. */
-export const SWITCH_BANKS = ["Banque courante", ...Array.from({ length: 10 }, (_, i) => `A${i}`),
+export const SWITCH_BANKS = ["Current bank", ...Array.from({ length: 10 }, (_, i) => `A${i}`),
   ...Array.from({ length: 10 }, (_, i) => `B${i}`), ...Array.from({ length: 40 }, (_, i) => String(i).padStart(2, "0"))];
 
 export interface SwitchSetting {
@@ -56,7 +56,7 @@ export function withFunction(s: SwitchSetting, fn: number): SwitchSetting {
 }
 
 export function describeSwitch(s: SwitchSetting): string {
-  const name = FUNCTIONS[s.fn] ?? `Fonction ${s.fn}`;
+  const name = FUNCTIONS[s.fn] ?? `Function ${s.fn}`;
   switch (switchKind(s.fn)) {
     case "style": return `${name} (${STYLES[s.p1] ?? s.p1})`;
     case "preset": return `Preset ${SWITCH_BANKS[s.p1] ?? s.p1}-${s.p2 + 1}`;

@@ -226,7 +226,7 @@ describe("switches", () => {
     expect(describeSwitch(decodeSwitch(11))).toBe("Mod (Toggle)");
     expect(describeSwitch(decodeSwitch(277264))).toBe("Preset 38-5");
     expect(describeSwitch(decodeSwitch(202000))).toBe("Preset 00-4");
-    expect(describeSwitch(decodeSwitch(65552))).toBe("Preset Banque courante-2");
+    expect(describeSwitch(decodeSwitch(65552))).toBe("Preset Current bank-2");
     expect(encodeSwitch(decodeSwitch(277264))).toBe(277264);
   });
 });

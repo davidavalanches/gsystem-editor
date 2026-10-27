@@ -24,7 +24,7 @@ export const GLOBAL_RANGES: [number, number, number][] = [[LEVELS_BLOCK, 0, 30],
 
 const ONOFF = ["Off", "On"];
 const PRESET_GLOBAL = ["Preset", "Global"];
-const PEDAL_TYPES = ["Off", "Momentané", "Alterné", "Exp.", "Vol."];
+const PEDAL_TYPES = ["Off", "Momentary", "Alternate", "Exp.", "Vol."];
 const CHANNELS = ["Off", ...Array.from({ length: 16 }, (_, i) => String(i + 1)), "Omni"];
 const db = (offset = 0) => (v: number) => `${v + offset} dB`;
 
@@ -52,7 +52,7 @@ const e = (block: number, param: number, name: string, choices: readonly string[
   p(block, param, name, 0, choices.length - 1, { choices, help });
 
 export const GLOBAL_GROUPS: GlobalGroup[] = [
-  { title: "Niveaux (Gbl Levels)", params: [
+  { title: "Gbl Levels", params: [
     p(1, 3, "Input Gain", 0, 26, { format: db(-8), help: "Gain de l'entrée instrument, de −8 à +18 dB" }),
     p(1, 4, "Loop Level", 0, 10, { format: db(), help: "Niveau envoyé dans les boucles" }),
     p(1, 5, "Loop Headroom", 0, 10, { help: "Marge à l'entrée des effets ; sa plage dépend de Loop Level" }),
@@ -73,7 +73,7 @@ export const GLOBAL_GROUPS: GlobalGroup[] = [
     p(5, 8, "View Angle", 0, 127, { help: "Contraste de l'écran" }),
     e(5, 25, "KillDry", ONOFF),
   ] },
-  { title: "Pédales", params: [
+  { title: "Pedals", params: [
     { ...e(0x0d, 58, "Volume Ctrl.", ["None", "Vol", "Exp", "Enc A", "Enc B", "Enc C"],
       "Pédale (ou encodeur) qui règle le volume"), mask: 7 },
     e(5, 9, "GFX1 Vol. Type", PEDAL_TYPES),
@@ -94,10 +94,10 @@ export const GLOBAL_GROUPS: GlobalGroup[] = [
     p(5, 23, "Enc. C CC", 0, 127),
     p(5, 24, "Tap CC", 0, 127),
   ] },
-  { title: "Accordeur", params: [
-    e(5, 5, "Sortie", ["Mute", "On"], "Sortie coupée ou non en mode accordeur"),
-    e(5, 6, "Affichage", ["Bar", "Strobe"]),
-    p(5, 7, "Référence", 420, 460, { format: (v) => `${v} Hz` }),
+  { title: "Tuner", params: [
+    e(5, 5, "Output", ["Mute", "On"], "Sortie coupée ou non en mode accordeur"),
+    e(5, 6, "Mode", ["Bar", "Strobe"]),
+    p(5, 7, "Reference", 420, 460, { format: (v) => `${v} Hz` }),
   ] },
 ];
 

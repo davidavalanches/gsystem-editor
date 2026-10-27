@@ -48,6 +48,9 @@
   /* Brushed panel of the unit and its metal footswitches. */
   --scanlines: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 3px);
   --metal: radial-gradient(circle at 40% 32%, #fff 0%, #e4e6e8 38%, #9da2a8 78%, #c7cbcf 100%);
+  /* Footswitch cap: a chrome dome with its inner groove. */
+  --dome: radial-gradient(circle, transparent 0 50%, rgba(60, 63, 68, 0.55) 54%, transparent 60%),
+    radial-gradient(circle at 38% 30%, #fff 0%, #eef0f2 20%, #c4c8cd 48%, #8f949a 72%, #c9cdd1 90%, #7d8187 100%);
   color-scheme: dark;
 }
 
@@ -219,13 +222,15 @@ button:disabled { opacity: 0.4; cursor: default; }
 .slot.current { background: var(--current); box-shadow: inset 3px 0 0 var(--accent); }
 .slot-code { font-family: var(--display); font-size: 22px; color: #f2f2f2; width: 34px; flex-shrink: 0; white-space: nowrap; }
 .slot.empty .slot-code { color: var(--faint); }
-.slot-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.slot-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .slot-name { min-width: 0; font-family: var(--mono); font-size: 15px; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
 .slot.empty .slot-name { color: #8a8d92; }
 .slot.warn .slot-name { color: var(--amber); }
-.leds { display: flex; gap: 5px; }
-.led { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--line-3); }
-.led.on { background: var(--red); border: 0; box-shadow: 0 0 5px rgba(240, 83, 62, 0.6); }
+/* Effect states of a preset: small labelled footswitches. */
+.fs-strip { display: flex; gap: 2px; }
+.fs-item { width: 44px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.fs-label { font-family: var(--display); font-size: 7px; line-height: 1; letter-spacing: 0.02em; color: var(--dim); white-space: nowrap; }
+.fs-item.on .fs-label { color: #f2f2f2; }
 .slot svg { stroke: var(--dim); flex-shrink: 0; }
 
 /* Preset */
@@ -265,17 +270,27 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 .tile:nth-child(odd):not(.wide) { border-right: 1px solid var(--groove); }
 .tile.selected { background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 -3px 0 var(--accent); }
+/* Chrome footswitch: metal bezel, then a ring (black, red and glowing when on), then the dome. */
 .footswitch {
+  --size: 42px;
   flex-shrink: 0;
-  width: 42px;
-  height: 42px;
+  display: block;
+  box-sizing: border-box;
+  width: var(--size);
+  height: var(--size);
   padding: 0;
   border-radius: 50%;
-  border: 5px solid var(--dark-ink);
-  background: var(--metal);
-  box-shadow: 0 0 0 2.5px var(--line-2);
+  border: max(2px, calc(var(--size) * 0.085)) solid #101011;
+  background: var(--dome);
+  box-shadow: 0 0 0 calc(var(--size) * 0.05) #6f7378, 0 0 0 calc(var(--size) * 0.08) #2c2e31,
+    inset 0 0 calc(var(--size) * 0.06) rgba(0, 0, 0, 0.7);
 }
-.footswitch.on { box-shadow: 0 0 0 2.5px var(--red), 0 0 10px rgba(240, 83, 62, 0.4); }
+.footswitch.on {
+  border-color: #f03a22;
+  box-shadow: 0 0 0 calc(var(--size) * 0.05) #6f7378, 0 0 0 calc(var(--size) * 0.08) #2c2e31,
+    0 0 calc(var(--size) * 0.22) rgba(255, 64, 32, 0.5), inset 0 0 calc(var(--size) * 0.08) rgba(110, 0, 0, 0.8);
+}
+.footswitch.mini { --size: 19px; }
 .footswitch:disabled { opacity: 1; filter: grayscale(1) brightness(0.7); }
 .tile-label { flex: 1; min-width: 0; align-self: stretch; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 0; border: 0; background: transparent; text-align: left; }
 .tile-head { display: flex; align-items: center; justify-content: space-between; width: 100%; }

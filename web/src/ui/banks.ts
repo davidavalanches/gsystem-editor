@@ -7,8 +7,9 @@ import { askText } from "./dialog";
 import { el } from "./dom";
 import { ICONS, iconButton, onLongPress, showMenu, type MenuItem } from "./widgets";
 
-/** LED order: the unit's effect sections, as on the Preset view. */
-const LED_BLOCKS = ["filter", "comp", "mod", "pitch", "delay", "reverb", "eq", "gate"];
+/** Footswitch strip of a preset row: the unit's effect sections, as on the Preset view. */
+const STRIP: [string, string][] = [["filter", "FILTER"], ["comp", "COMP"], ["mod", "MOD"], ["pitch", "PITCH"],
+  ["delay", "DELAY"], ["reverb", "REVERB"], ["eq", "EQ"], ["gate", "GATE"]];
 
 export interface BanksActions {
   open(slot: number): void;
@@ -133,19 +134,20 @@ export class BanksView {
     const row = el("button", classes.filter(Boolean).join(" "));
     row.type = "button";
     row.setAttribute("aria-label", `${slotLabel(slot)} ${p ? p.name : "vide"}`);
-    const leds = el("span", "leds");
+    const strip = el("span", "fs-strip");
     if (p) {
-      for (const key of LED_BLOCKS) {
+      for (const [key, code] of STRIP) {
         const blk = block(key);
         const field = blk.enableField(p.data);
         const on = field !== null && readField(p.data, field) === 1;
-        const led = el("span", on ? "led on" : "led");
-        led.title = `${blk.label} ${on ? "on" : "off"}`;
-        leds.append(led);
+        const item = el("span", on ? "fs-item on" : "fs-item");
+        item.title = `${blk.label} ${on ? "on" : "off"}`;
+        item.append(el("span", "fs-label", code), el("span", on ? "footswitch mini on" : "footswitch mini"));
+        strip.append(item);
       }
     }
     const text = el("span", "slot-text");
-    text.append(el("span", "slot-name", p ? p.name || "(sans nom)" : "vide"), leds);
+    text.append(el("span", "slot-name", p ? p.name || "(sans nom)" : "vide"), strip);
     row.append(el("span", "slot-code", String((slot % PRESETS_PER_BANK) + 1)), text);
     row.insertAdjacentHTML("beforeend", ICONS.chevron);
     row.addEventListener("click", () => this.actions.open(slot));
