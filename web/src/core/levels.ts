@@ -1,7 +1,7 @@
 /**
  * Loops, insert, boost and routing of a preset: packed into preset field 0.
  *
- * bits 0-1   routing (Serial, Semi-par., Parallel…; block 1 parameter 0)
+ * bits 0-1   routing, see ROUTINGS (block 1 parameter 0)
  * bit  2     boost on (block 1 parameter 10)
  * bits 4-7   boost level in dB (block 1 parameter 11)
  * bits 9-12  loops 1 to 4 (block 1 parameters 19-22)
@@ -17,6 +17,8 @@
 import { readField } from "./params";
 
 export const LEVELS_FIELD = 0;
+/** Routing names in the firmware's order. */
+export const ROUTINGS = ["Serial", "Parallel", "Semi Parallel", "Serial2"] as const;
 
 export interface PresetLevels {
   loops: [boolean, boolean, boolean, boolean];
