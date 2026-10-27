@@ -672,6 +672,27 @@ button:disabled { opacity: 0.4; cursor: default; }
 
   .preset-inspector { display: flex; flex-direction: column; width: clamp(260px, 17vw, 330px); flex-shrink: 0; min-height: 0; background: var(--bar); border-left: 1px solid var(--edge); }
   .inspector-hint { margin: auto 24px; text-align: center; color: var(--dim); font-size: 13px; }
+  /* Views of the parameters panel: Bloc, Tous les blocs, Brut, Comparer. */
+  .desk-tabs { display: flex; gap: 2px; padding: 3px; flex-shrink: 0; border-radius: 9px; background: var(--bg); font-size: 13px; }
+  .desk-tabs button { padding: 6px 14px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; white-space: nowrap; }
+  .desk-tabs button.on { background: var(--line); color: var(--ink); font-weight: 600; }
+  .params.wide-list { display: block; }
+  .all-head { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 12px; margin-top: 14px; padding: 8px 10px 6px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; text-align: left; cursor: pointer; }
+  .all-head:first-child { margin-top: 0; }
+  .all-code { font-family: var(--display); font-size: 13px; letter-spacing: 0.05em; color: var(--ink); }
+  .all-type { font-size: 13px; color: var(--soft); }
+  .all-state { margin-left: auto; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--line-2); font-size: 11px; color: var(--dim); }
+  .all-state.on { border-color: var(--accent); color: var(--accent); }
+  .field-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .field-table th { position: sticky; top: 0; z-index: 1; padding: 8px 10px; background: var(--surface); border-bottom: 1px solid var(--line); text-align: left; font-weight: 600; color: var(--soft); white-space: nowrap; }
+  .field-table td { padding: 5px 10px; border-bottom: 1px solid var(--surface-2); white-space: nowrap; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+  .field-table td.num { font-family: var(--mono); color: var(--dim); }
+  .field-table tr.editable { cursor: pointer; }
+  .field-table tr.editable:hover td { background: rgba(255, 255, 255, 0.05); }
+  .field-table tr.changed td { color: var(--amber); }
+  .field-table tr.changed td.num { color: var(--amber); }
+  .field-table .take { height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--surface-2); font-size: 12px; cursor: pointer; }
+  .compare-select { max-width: 320px; }
   .sheet.docked { flex: 1; width: auto; min-height: 0; padding: 20px; border: 0; border-radius: 0; background: transparent; animation: none; overflow-y: auto; }
   .sheet.docked .sheet-value { margin: 18px 0 16px; }
   .sheet.docked .sheet-range { margin-bottom: 0; }

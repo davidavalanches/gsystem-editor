@@ -9,6 +9,7 @@ import {
   LEVEL_BITS, LEVELS_FIELD, OUTPUTS_FIELD, OUTPUT_MIN, OUTPUT_PARAMS, ROUTINGS, ROUTING_PARAM, levelOn, presetLevels,
   presetOutputs, writeLevel, writeOutputs, writeRouting,
 } from "../core/levels";
+import { ALL_FIELDS, describeField, formatField, rawHex } from "../core/fields";
 import { FAVORITE_COUNT, applyFavorite, captureFavorite, type Favorite, type Favorites } from "../core/favorites";
 import { BLOCKS, Param, block, diffFields, owner, readField, writeField, type Block } from "../core/params";
 import { BLOCK_IDS, LEVELS_BLOCK_ID, LEVEL_SWITCHES } from "../core/protocol";
@@ -35,6 +36,11 @@ const OUTPUTS = [0, 1].map((side) =>
 const TEMPO = new Param("Tempo", msToBpm(TAP_MAX_MS), msToBpm(TAP_MIN_MS), [], (v) => `${v} BPM`);
 /** Selection keys of the output and tempo rows (field indexes are below 165). */
 const OUTPUT_ROW = 1000;
+/** Desktop views of the parameters panel. */
+type DeskTab = "block" | "all" | "raw" | "compare";
+const DESK_TABS: [DeskTab, string][] = [["block", "Bloc"], ["all", "Tous les blocs"], ["raw", "Brut"], ["compare", "Comparer"]];
+/** Compare target: the stored version of the preset, else a bank slot. */
+const STORED = -1;
 const TEMPO_ROW = 1002;
 const isModifierField = (index: number) => index >= MODIFIER_FIELD && index < MODIFIER_FIELD + MODIFIER_SLOTS;
 const LEVEL_LABELS: [string, string][] = [
@@ -100,6 +106,8 @@ export class PresetView {
   private readonly levelBar = el("div", "levels");
   private readonly favoriteBar = el("div", "favorites");
   private favorites: Favorites = loadFavorites();
+  private tab: DeskTab = "block";
+  private compareSlot = STORED;
   private readonly paramsHead = el("div", "params-head");
   private readonly paramsList = el("div", "params");
   private readonly body = el("div", "preset-body");
@@ -486,6 +494,7 @@ export class PresetView {
       pick.append(el("span", "tile-code", code), el("span", "tile-type", typeShort));
       pick.addEventListener("click", () => {
         this.blockKey = key;
+        this.tab = "block";
         this.closeSheet();
         this.render();
       });
@@ -505,6 +514,7 @@ export class PresetView {
       el("span", assigned.length ? "tile-count" : "tile-count none", sources.join(" · ") || "none"));
     tile.addEventListener("click", () => {
       this.blockKey = MODIFIERS;
+      this.tab = "block";
       this.closeSheet();
       this.render();
     });
@@ -525,6 +535,7 @@ export class PresetView {
     tile.append(el("span", "tile-code", "ROUTING"), type);
     tile.addEventListener("click", () => {
       this.blockKey = ROUTING;
+      this.tab = "block";
       this.closeSheet();
       this.render();
     });
@@ -552,7 +563,7 @@ export class PresetView {
   /** The four favorites of the shown effect: tap to load (or to save into an empty one), long-press for more. */
   private renderFavorites(): void {
     const key = this.blockKey;
-    const isEffect = key !== MODIFIERS && key !== ROUTING;
+    const isEffect = key !== MODIFIERS && key !== ROUTING && (this.tab === "block" || !DESKTOP.matches);
     this.favoriteBar.hidden = !isEffect || !this.buffer;
     if (this.favoriteBar.hidden) return;
     const slots = this.favorites[key] ?? [];
@@ -602,6 +613,177 @@ export class PresetView {
   }
 
   private renderParams(): void {
+    const desk = DESKTOP.matches;
+    this.paramsList.classList.remove("wide-list");
+    if (desk && this.tab === "all") this.renderAllBlocks();
+    else if (desk && this.tab === "raw") this.renderRaw();
+    else if (desk && this.tab === "compare") this.renderCompare();
+    else this.renderBlockParams();
+    if (desk) this.paramsHead.append(this.deskTabs());
+  }
+
+  private deskTabs(): HTMLElement {
+    const tabs = el("div", "desk-tabs");
+    tabs.setAttribute("role", "tablist");
+    tabs.setAttribute("aria-label", "Vue des paramètres");
+    for (const [key, label] of DESK_TABS) {
+      const b = el("button", key === this.tab ? "on" : "", label);
+      b.type = "button";
+      b.setAttribute("role", "tab");
+      b.setAttribute("aria-selected", String(key === this.tab));
+      b.addEventListener("click", () => {
+        this.tab = key;
+        this.closeSheet();
+        this.render();
+      });
+      tabs.append(b);
+    }
+    return tabs;
+  }
+
+  /** Every effect block at once: its type, on/off and parameters, each one adjustable. */
+  private renderAllBlocks(): void {
+    this.paramsHead.replaceChildren(el("span", "label", "Tous les blocs"), el("div", "grow"));
+    this.paramsList.classList.remove("on-block");
+    const preset = this.buffer;
+    if (!preset) {
+      this.paramsList.replaceChildren(el("p", "empty-note", "Emplacement vide."));
+      return;
+    }
+    const rows: HTMLElement[] = [];
+    for (const [key, code] of TILES) {
+      const blk = block(key);
+      const on = this.isOn(blk);
+      const head = el("button", on ? "all-head on" : "all-head");
+      head.type = "button";
+      head.title = `Afficher ${blk.label} seul`;
+      head.append(el("span", "all-code", code),
+        el("span", "all-type", blk.effectType(preset.data)?.name ?? (key === "eq" ? "3-band" : "Gate")),
+        el("span", on ? "all-state on" : "all-state", on ? "On" : "Off"));
+      head.addEventListener("click", () => {
+        this.blockKey = key;
+        this.tab = "block";
+        this.render();
+      });
+      rows.push(head);
+      for (const [index, p] of blk.fields(preset.data)) {
+        if ((blk.hasType && index === blk.firstField) || p.name === blk.enableName) continue;
+        rows.push(this.paramRow(index, p, readField(preset.data, index), () => this.openSheet(index)));
+      }
+    }
+    this.paramsList.replaceChildren(...rows);
+  }
+
+  /** All 165 fields: what each holds, raw and as shown; those changed since the last Store are marked. */
+  private renderRaw(): void {
+    const preset = this.buffer;
+    const changed = new Set(preset && this.stored ? diffFields(this.stored.data, preset.data).map(([i]) => i) : []);
+    this.paramsHead.replaceChildren(el("span", "label", "Brut"), el("div", "grow"),
+      el("span", "params-hint", preset ? `${ALL_FIELDS.length} champs · ${changed.size} modifié(s)` : ""));
+    this.paramsList.classList.remove("on-block");
+    this.paramsList.classList.add("wide-list");
+    if (!preset) {
+      this.paramsList.replaceChildren(el("p", "empty-note", "Emplacement vide."));
+      return;
+    }
+    const table = el("table", "field-table");
+    const head = el("tr");
+    for (const h of ["#", "Groupe", "Paramètre", "Brut", "Valeur"]) head.append(el("th", "", h));
+    table.append(head);
+    for (const index of ALL_FIELDS) {
+      const info = describeField(preset.data, index);
+      const row = el("tr", [changed.has(index) ? "changed" : "", info.param ? "editable" : ""].filter(Boolean).join(" "));
+      row.append(el("td", "num", String(index)), el("td", "", info.group), el("td", "", info.name),
+        el("td", "num", rawHex(preset.data, index)), el("td", "", formatField(preset.data, index)));
+      if (info.param && owner(index)) {
+        row.tabIndex = 0;
+        row.addEventListener("click", () => this.openSheet(index));
+        row.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") this.openSheet(index);
+        });
+      }
+      table.append(row);
+    }
+    this.paramsList.replaceChildren(table);
+  }
+
+  /** Differences with the stored version or another preset; each can be taken over. */
+  private renderCompare(): void {
+    const preset = this.buffer;
+    const select = el("select", "type-select compare-select");
+    select.setAttribute("aria-label", "Comparer avec");
+    select.append(new Option("Version enregistrée", String(STORED)));
+    this.bank.presets.forEach((p, slot) => {
+      if (p && slot !== this.slot) select.append(new Option(`${slotLabel(slot)} ${p.name}`, String(slot)));
+    });
+    select.value = String(this.compareSlot);
+    if (select.value !== String(this.compareSlot)) {
+      this.compareSlot = STORED;
+      select.value = String(STORED);
+    }
+    select.addEventListener("change", () => {
+      this.compareSlot = Number(select.value);
+      this.render();
+    });
+    const other = this.compareSlot === STORED ? this.stored : this.bank.preset(this.compareSlot);
+    const diffs = preset && other ? diffFields(preset.data, other.data) : [];
+    this.paramsHead.replaceChildren(el("span", "label", "Comparer avec"), select, el("div", "grow"),
+      el("span", "params-hint", preset && other ? `${diffs.length} différence(s)` : ""));
+    this.paramsList.classList.remove("on-block");
+    this.paramsList.classList.add("wide-list");
+    if (!preset || !other) {
+      this.paramsList.replaceChildren(el("p", "empty-note", "Rien à comparer."));
+      return;
+    }
+    if (!diffs.length && preset.name === other.name) {
+      this.paramsList.replaceChildren(el("p", "empty-note", "Aucune différence."));
+      return;
+    }
+    const table = el("table", "field-table compare");
+    const head = el("tr");
+    for (const h of ["#", "Groupe", "Paramètre", "Ce preset", other === this.stored ? "Enregistré" : other.name, ""]) {
+      head.append(el("th", "", h));
+    }
+    table.append(head);
+    if (preset.name !== other.name) {
+      const row = el("tr");
+      const take = el("button", "take", "← Reprendre");
+      take.type = "button";
+      take.addEventListener("click", () => this.pushBuffer(this.buffer!.withName(other.name)));
+      const cell = el("td");
+      cell.append(take);
+      row.append(el("td", "num", "—"), el("td", "", "Preset"), el("td", "", "Nom"), el("td", "", preset.name),
+        el("td", "", other.name), cell);
+      table.append(row);
+    }
+    for (const [index, , theirs] of diffs) {
+      const mine = describeField(preset.data, index);
+      const their = describeField(other.data, index);
+      const name = mine.name === their.name ? mine.name : `${mine.name} / ${their.name}`;
+      // A block whose type (or parameter count) differs is taken whole: its fields only mean
+      // something together, and the count must match the type.
+      const blk = owner(index);
+      const whole = blk !== null && blk.allFields().slice(0, 2).some((f) => readField(preset.data, f) !== readField(other.data, f));
+      const take = el("button", "take", whole ? "← Reprendre le bloc" : "← Reprendre");
+      take.type = "button";
+      take.title = whole ? `Le type diffère : reprendre tout le bloc ${blk!.label}` : "Reprendre cette valeur dans ce preset";
+      take.addEventListener("click", () => {
+        if (!this.buffer) return;
+        if (!whole) return this.setField(index, theirs);
+        const data = blk!.allFields().reduce((d, f) => writeField(d, f, readField(other.data, f)), this.buffer.data);
+        this.pushBuffer(this.buffer.withData(data));
+      });
+      const cell = el("td");
+      cell.append(take);
+      const row = el("tr");
+      row.append(el("td", "num", String(index)), el("td", "", mine.group), el("td", "", name),
+        el("td", "", formatField(preset.data, index)), el("td", "", formatField(other.data, index)), cell);
+      table.append(row);
+    }
+    this.paramsList.replaceChildren(table);
+  }
+
+  private renderBlockParams(): void {
     if (this.blockKey === MODIFIERS) {
       this.renderModifiers();
       return;
@@ -772,9 +954,9 @@ export class PresetView {
     this.body.querySelector(".sheet-layer")?.remove();
     const preset = this.buffer;
     if (!preset) return;
-    const blk = block(this.blockKey);
-    const param = blk.fields(preset.data).find(([f]) => f === index)?.[1];
-    if (!param) return;
+    const blk = owner(index);
+    const param = blk?.fields(preset.data).find(([f]) => f === index)?.[1];
+    if (!blk || !param) return;
     this.openValueSheet(`${TILE_LABELS[blk.key] ?? blk.label} · ${param.name}`, `field #${index}`, param,
       readField(preset.data, index), (v) => this.setField(index, v));
   }
