@@ -44,6 +44,7 @@ export class App {
         this.show("preset");
       },
       menu: () => this.fileMenu(),
+      bankMenu: (b) => this.bankMenu(b),
       readUnit: () => (this.link?.busy ? this.link.cancel() : this.startRead("all")),
       sync: () => this.syncPending(),
     });
@@ -149,6 +150,30 @@ export class App {
     ];
   }
 
+  /** The actions of one bank; each first makes it the bank shown. */
+  private bankMenu(b: number): MenuItem[] {
+    const on = (action: () => void) => () => {
+      this.banks.showBank(b);
+      action();
+    };
+    return [
+      { label: `Lire la banque ${pad2(b)} du G-System`, action: on(() => this.startRead("bank")), disabled: !this.link },
+      { label: "Échanger avec la banque…", action: on(() => void this.bankOperation("swap")) },
+      { label: "Copier sur la banque…", action: on(() => void this.bankOperation("copy")) },
+      { label: "Exporter la banque (.syx)", action: on(() => void this.exportBankSyx(b)) },
+    ];
+  }
+
+  private async exportBankSyx(b: number): Promise<void> {
+    const slots = [...Array(PRESETS_PER_BANK).keys()].map((i) => b * PRESETS_PER_BANK + i);
+    try {
+      const where = await saveFile(this.exportName("syx", `-banque-${pad2(b)}`), this.bank.exportSyx(slots));
+      this.notify(`Banque ${pad2(b)} exportée : ${where}`);
+    } catch (e) {
+      alert(`Export impossible : ${(e as Error).message}`);
+    }
+  }
+
   // Session and files
 
   private restore(): void {
@@ -187,10 +212,10 @@ export class App {
     }
   }
 
-  private exportName(ext: string): string {
+  private exportName(ext: string, suffix = ""): string {
     const base = this.bank.title.replace(/\.(sqs|syx)$/i, "").replace(/[^\w\- ]+/g, "_").trim() || "banque";
     const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
-    return `${base}-${stamp}.${ext}`;
+    return `${base}${suffix}-${stamp}.${ext}`;
   }
 
   private async exportSyx(): Promise<void> {

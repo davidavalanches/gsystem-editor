@@ -16,6 +16,8 @@ const STRIP: [string, string][] = [["filter", "FILTER"], ["comp", "COMP"], ["mod
 export interface BanksActions {
   open(slot: number): void;
   menu(): MenuItem[];
+  /** Actions on a whole bank (read, swap, copy, export). */
+  bankMenu(bank: number): MenuItem[];
   readUnit(): void;
   sync(): void;
 }
@@ -130,7 +132,10 @@ export class BanksView {
         b === this.bankIndex ? "current" : ""].filter(Boolean).join(" "));
       cell.setAttribute("aria-label", `Banque ${String(b).padStart(2, "0")}`);
       const head = el("div", "bank-cell-head");
-      head.append(el("span", "bank-cell-num", String(b).padStart(2, "0")), el("span", "bank-cell-count", used ? `${used}/5` : ""));
+      const more = iconButton(ICONS.more, `Actions de la banque ${String(b).padStart(2, "0")}`,
+        () => showMenu(more, this.actions.bankMenu(b)));
+      more.classList.add("bank-cell-more");
+      head.append(el("span", "bank-cell-num", String(b).padStart(2, "0")), more);
       cell.append(head, ...slots.map((slot) => {
         const p = this.bank.preset(slot);
         const button = el("button", ["cell-slot", p ? "" : "empty", slot === this.current ? "selected" : "",
