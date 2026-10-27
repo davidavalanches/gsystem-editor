@@ -287,7 +287,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 /* Chrome footswitch: metal bezel, black ring, then the dome; when on, a red neon ring glows around the bezel
    (the LED ring of the first mock-up). */
 .footswitch {
-  --size: 36px;
+  --size: 30px;
   flex-shrink: 0;
   display: block;
   box-sizing: border-box;
@@ -321,6 +321,9 @@ button:disabled { opacity: 0.4; cursor: default; }
 .tile.on .tile-type { color: var(--ink); }
 /* Pedal and encoder assignments, under the effect tiles. */
 .tile.wide { grid-column: 1 / -1; flex-direction: column; align-items: flex-start; justify-content: center; gap: 3px; padding: 0 12px; }
+/* Half-width tiles under the blocks: Modifiers and Routing. */
+.tile.stack { flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; padding: 0 10px; }
+.tile-routing { display: flex; align-items: center; gap: 6px; color: var(--soft); }
 .tile-count { font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--amber); }
 .tile-count.none { color: var(--dim); font-family: inherit; font-weight: 500; }
 
@@ -529,8 +532,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 
 /* Presets changed offline, waiting to be written into the unit. */
 .pill.sync { border-color: var(--amber); color: var(--amber); }
-.slot.pending .slot-code { position: relative; }
-.slot.pending .slot-code::after { content: ""; position: absolute; top: 2px; left: -8px; width: 5px; height: 5px; border-radius: 50%; background: var(--amber); }
+.slot-pending { flex-shrink: 0; align-self: flex-end; width: 6px; height: 6px; margin: 0 0 3px -6px; border-radius: 50%; background: var(--amber); }
 /* Unsynced changes in the bank: an amber dot clear of the number's top right. */
 .bank-list button.has-pending .bank-num { position: relative; }
 .bank-list button.has-pending .bank-num::after { content: ""; position: absolute; top: 0; right: -10px; width: 6px; height: 6px; border-radius: 50%; background: var(--amber); }

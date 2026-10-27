@@ -5,12 +5,16 @@ import {
   MODIFIER_BLOCK_ID, MODIFIER_FIELD, MODIFIER_PARAM_BASE, MODIFIER_SLOTS, SOURCES, UNASSIGNED, isValidModifier,
   modifierTargets, valueAt, writeModifier, type Modifier, type ModifierTarget,
 } from "../core/modifiers";
-import { BLOCKS, block, diffFields, owner, readField, writeField, type Block, type Param } from "../core/params";
+import {
+  LEVELS_FIELD, OUTPUTS_FIELD, OUTPUT_MIN, OUTPUT_PARAMS, ROUTINGS, ROUTING_PARAM, presetLevels, presetOutputs, writeOutputs,
+  writeRouting,
+} from "../core/levels";
+import { BLOCKS, Param, block, diffFields, owner, readField, writeField, type Block } from "../core/params";
 import { BLOCK_IDS, LEVELS_BLOCK_ID, LEVEL_SWITCHES } from "../core/protocol";
 import { NAME_LEN, Preset, SysexError, USER_SLOTS } from "../core/sysex";
 import { askText } from "./dialog";
 import { el } from "./dom";
-import { ICONS, iconButton } from "./widgets";
+import { ICONS, iconButton, routingIcon } from "./widgets";
 
 /** Tile order of the design: the unit's effect sections. */
 const TILES: [string, string][] = [
@@ -21,6 +25,12 @@ const TILE_LABELS: Record<string, string> = { mod: "Modulation", eq: "Parametric
 /** Pseudo block of the tile list: pedal and encoder assignments. */
 const MODIFIERS = "modifiers";
 const SHORT_SOURCES = ["—", "VOL", "EXP", "ENC A", "ENC B", "ENC C"];
+/** Pseudo block of the tile list: the preset's routing and output levels. */
+const ROUTING = "routing";
+const OUTPUTS = [0, 1].map((side) =>
+  new Param(side ? "Output R" : "Output L", OUTPUT_MIN, 0, [], (v) => `${v} dB`));
+/** Selection keys of the output rows (field indexes are below 165). */
+const OUTPUT_ROW = 1000;
 const isModifierField = (index: number) => index >= MODIFIER_FIELD && index < MODIFIER_FIELD + MODIFIER_SLOTS;
 const LEVEL_LABELS: [string, string][] = [
   ["loop1", "L1"], ["loop2", "L2"], ["loop3", "L3"], ["loop4", "L4"], ["insert", "INS"], ["boost", "BST"],
@@ -144,6 +154,7 @@ export class PresetView {
     for (let slot = 0; slot < MODIFIER_SLOTS; slot++) {
       this.sendParam!(MODIFIER_BLOCK_ID, MODIFIER_PARAM_BASE + slot, readField(this.buffer.data, MODIFIER_FIELD + slot));
     }
+    this.sendRouting(this.buffer.data);
     this.onNotice?.(`« ${this.buffer.name} » chargé dans la mémoire de travail du G-System`);
   }
 
@@ -153,11 +164,29 @@ export class PresetView {
       const blk = owner(index);
       if (blk && index !== blk.countField) this.sendParam!(BLOCK_IDS[blk.key], index - blk.firstField, value);
       else if (isModifierField(index)) this.sendParam!(MODIFIER_BLOCK_ID, MODIFIER_PARAM_BASE + index - MODIFIER_FIELD, value);
+      else if (index === LEVELS_FIELD || index === OUTPUTS_FIELD) this.sendRouting(after, index);
     }
+  }
+
+  /** Routing and output levels go to the levels block (1); only those of field 0 are sent, not its loops or boost. */
+  private sendRouting(data: Uint8Array, only?: number): void {
+    if (only !== OUTPUTS_FIELD) this.sendParam!(LEVELS_BLOCK_ID, ROUTING_PARAM, presetLevels(data).routing);
+    if (only !== LEVELS_FIELD) presetOutputs(data).forEach((v, side) => this.sendParam!(LEVELS_BLOCK_ID, OUTPUT_PARAMS[side], v));
   }
 
   /** A switch or knob was used on the G-System: mirror it in the edit buffer. */
   applyFromUnit(blockId: number, param: number, value: number): void {
+    if (blockId === LEVELS_BLOCK_ID && this.buffer && this.live
+      && (param === ROUTING_PARAM || OUTPUT_PARAMS.includes(param))) {
+      this.fromUnit = true;
+      try {
+        if (param === ROUTING_PARAM) this.setRouting(value);
+        else this.setOutput(OUTPUT_PARAMS.indexOf(param), value);
+      } finally {
+        this.fromUnit = false;
+      }
+      return;
+    }
     if (blockId === LEVELS_BLOCK_ID) {
       for (const [key, index] of Object.entries(LEVEL_SWITCHES)) if (index === param) this.levels[key] = Boolean(value);
       this.renderLevels();
@@ -240,6 +269,20 @@ export class PresetView {
       return;
     }
     this.pushBuffer(this.buffer.withData(data));
+  }
+
+  private setRouting(routing: number): void {
+    if (this.buffer && presetLevels(this.buffer.data).routing !== routing) {
+      this.pushBuffer(this.buffer.withData(writeRouting(this.buffer.data, routing)));
+    }
+  }
+
+  private setOutput(side: number, value: number): void {
+    if (!this.buffer) return;
+    const outputs = presetOutputs(this.buffer.data);
+    if (outputs[side] === value) return;
+    outputs[side] = Math.max(OUTPUT_MIN, Math.min(0, value));
+    this.pushBuffer(this.buffer.withData(writeOutputs(this.buffer.data, outputs)));
   }
 
   private pushBuffer(after: Preset): void {
@@ -358,22 +401,41 @@ export class PresetView {
       });
       tile.append(footswitch, pick);
       return tile;
-    }), this.modifiersTile());
+    }), this.modifiersTile(), this.routingTile());
   }
 
   private modifiersTile(): HTMLElement {
     const assigned = this.buffer ? this.assignedModifiers(this.buffer.data) : [];
     const sources = [...new Set(assigned.map((t) => SHORT_SOURCES[t.modifier.source]))];
-    const tile = el("button", `tile wide${this.blockKey === MODIFIERS ? " selected" : ""}${assigned.length ? " on" : ""}`);
+    const tile = el("button", `tile stack${this.blockKey === MODIFIERS ? " selected" : ""}${assigned.length ? " on" : ""}`);
     tile.type = "button";
     tile.setAttribute("aria-label", `Pédales et encodeurs, ${assigned.length} affectation(s)`);
-    const head = el("span", "tile-head");
-    head.append(el("span", "tile-code", "MODIFIERS"), el("span", assigned.length ? "tile-count" : "tile-count none",
-      sources.join(" · ") || "none"));
-    tile.append(head, el("span", "tile-type", assigned.length
-      ? assigned.map((t) => t.name).join(", ") : "Exp, Vol, Enc A-C"));
+    tile.title = assigned.map((t) => t.name).join(", ");
+    tile.append(el("span", "tile-code", "MODIFIERS"),
+      el("span", assigned.length ? "tile-count" : "tile-count none", sources.join(" · ") || "none"));
     tile.addEventListener("click", () => {
       this.blockKey = MODIFIERS;
+      this.closeSheet();
+      this.render();
+    });
+    return tile;
+  }
+
+  private routingTile(): HTMLElement {
+    const tile = el("button", `tile stack${this.blockKey === ROUTING ? " selected" : ""}`);
+    tile.type = "button";
+    const type = el("span", "tile-type tile-routing");
+    if (this.buffer) {
+      const routing = presetLevels(this.buffer.data).routing;
+      const [left, right] = presetOutputs(this.buffer.data);
+      type.insertAdjacentHTML("afterbegin", routingIcon(routing));
+      type.append(ROUTINGS[routing] ?? String(routing));
+      tile.title = `L ${left} dB · R ${right} dB`;
+      tile.setAttribute("aria-label", `Routing ${ROUTINGS[routing] ?? routing}, sorties ${left} et ${right} dB`);
+    }
+    tile.append(el("span", "tile-code", "ROUTING"), type);
+    tile.addEventListener("click", () => {
+      this.blockKey = ROUTING;
       this.closeSheet();
       this.render();
     });
@@ -401,6 +463,10 @@ export class PresetView {
   private renderParams(): void {
     if (this.blockKey === MODIFIERS) {
       this.renderModifiers();
+      return;
+    }
+    if (this.blockKey === ROUTING) {
+      this.renderRouting();
       return;
     }
     const blk = block(this.blockKey);
@@ -438,7 +504,28 @@ export class PresetView {
       .filter(([index, p]) => !(blk.hasType && index === blk.firstField) && p.name !== blk.enableName);
     const pedals = new Map(this.assignedModifiers(preset.data).map((t) => [t.paramField, t.modifier.source]));
     this.paramsList.replaceChildren(...rows.map(([index, p]) =>
-      this.paramRow(index, p, readField(preset.data, index), pedals.get(index))));
+      this.paramRow(index, p, readField(preset.data, index), () => this.openSheet(index), pedals.get(index))));
+  }
+
+  /** Routing type and output levels: global menus on the unit, but stored in each preset. */
+  private renderRouting(): void {
+    this.paramsHead.replaceChildren(el("span", "label", "Routing"));
+    this.paramsList.classList.remove("on-block");
+    const preset = this.buffer;
+    if (!preset) {
+      this.paramsList.replaceChildren(el("p", "empty-note", "Emplacement vide."));
+      return;
+    }
+    const select = el("select", "type-select");
+    select.setAttribute("aria-label", "Type de routing");
+    ROUTINGS.forEach((r, i) => select.append(new Option(r, String(i))));
+    select.value = String(presetLevels(preset.data).routing);
+    select.addEventListener("change", () => this.setRouting(Number(select.value)));
+    this.paramsHead.append(select, el("div", "grow"));
+    this.paramsList.replaceChildren(...presetOutputs(preset.data).map((v, side) =>
+      this.paramRow(OUTPUT_ROW + side, OUTPUTS[side], v, () =>
+        this.openValueSheet(`Routing · ${OUTPUTS[side].name}`, `field #${OUTPUTS_FIELD}`, OUTPUTS[side], v,
+          (next) => this.setOutput(side, next)))));
   }
 
   private renderModifiers(): void {
@@ -493,7 +580,7 @@ export class PresetView {
     return row;
   }
 
-  private paramRow(index: number, p: Param, value: number, pedal?: number): HTMLElement {
+  private paramRow(index: number, p: Param, value: number, open: () => void, pedal?: number): HTMLElement {
     const row = el("button", index === this.paramIndex ? "param selected" : "param");
     row.type = "button";
     row.setAttribute("aria-label", `${p.name} : ${p.format(value)}, toucher pour régler`);
@@ -514,7 +601,7 @@ export class PresetView {
     row.addEventListener("click", () => {
       this.paramIndex = index;
       this.paramsList.querySelectorAll(".param").forEach((r) => r.classList.toggle("selected", r === row));
-      this.openSheet(index);
+      open();
     });
     return row;
   }
@@ -528,12 +615,17 @@ export class PresetView {
     const blk = block(this.blockKey);
     const param = blk.fields(preset.data).find(([f]) => f === index)?.[1];
     if (!param) return;
-    let value = readField(preset.data, index);
+    this.openValueSheet(`${TILE_LABELS[blk.key] ?? blk.label} · ${param.name}`, `field #${index}`, param,
+      readField(preset.data, index), (v) => this.setField(index, v));
+  }
 
+  private openValueSheet(title: string, tag: string, param: Param, start: number, set: (v: number) => void): void {
+    this.body.querySelector(".sheet-layer")?.remove();
+    let value = start;
     const close = () => this.closeSheet();
     const sheet = el("div", "sheet");
     const head = el("div", "sheet-head");
-    head.append(el("span", "", `${TILE_LABELS[blk.key] ?? blk.label} · ${param.name}`), el("span", "field", `field #${index}`));
+    head.append(el("span", "", title), el("span", "field", tag));
     const big = el("div", "sheet-value", param.format(value));
     sheet.append(head, big);
 
@@ -542,7 +634,7 @@ export class PresetView {
       if (v === value) return;
       value = v;
       big.textContent = param.format(v);
-      this.setField(index, v);
+      set(v);
     };
 
     if (param.choices.length && param.hi - param.lo < 24) {

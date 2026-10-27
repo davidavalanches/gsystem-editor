@@ -12,13 +12,22 @@
  * relays 6 and 12) and those Vyzor sent with "Fragile - clean" (insert and boost
  * on, boost 2 dB). The factory presets bear it out: all loops off, boost 3-6 dB.
  * Loops 1, 3 and 4 follow the bit order rather than an observation.
+ *
+ * Field 2 holds the preset's output levels, Left Output and Right Output (block 1
+ * parameters 26 and 27, -100 to 0 dB), as two signed 12-bit values; the left one is
+ * taken to be the low half, as parameters pack upwards in field 0.
  */
 
-import { readField } from "./params";
+import { readField, writeField } from "./params";
 
 export const LEVELS_FIELD = 0;
 /** Routing names in the firmware's order. */
 export const ROUTINGS = ["Serial", "Parallel", "Semi Parallel", "Serial2"] as const;
+export const OUTPUTS_FIELD = 2;
+export const OUTPUT_MIN = -100;
+/** Block 1 parameters of the routing and the output levels, for Live mode. */
+export const ROUTING_PARAM = 0;
+export const OUTPUT_PARAMS: readonly [number, number] = [26, 27];
 
 export interface PresetLevels {
   loops: [boolean, boolean, boolean, boolean];
@@ -38,4 +47,22 @@ export function presetLevels(data: Uint8Array): PresetLevels {
     boostLevel: (raw >> 4) & 0x0f,
     routing: raw & 3,
   };
+}
+
+const signed = (raw: number, bits: number) => (raw << (32 - bits)) >> (32 - bits);
+
+/** Left and right output levels in dB. */
+export function presetOutputs(data: Uint8Array): [number, number] {
+  const raw = readField(data, OUTPUTS_FIELD) & 0xffffff;
+  return [signed(raw & 0xfff, 12), signed(raw >> 12, 12)];
+}
+
+export function writeOutputs(data: Uint8Array, [left, right]: readonly [number, number]): Uint8Array {
+  const raw = (left & 0xfff) | ((right & 0xfff) << 12);
+  return writeField(data, OUTPUTS_FIELD, signed(raw, 24));
+}
+
+export function writeRouting(data: Uint8Array, routing: number): Uint8Array {
+  const raw = (readField(data, LEVELS_FIELD) & 0xfffffc) | (routing & 3);
+  return writeField(data, LEVELS_FIELD, signed(raw, 24));
 }

@@ -6,7 +6,7 @@ import { block, readField } from "../core/params";
 import { NAME_LEN, type Preset } from "../core/sysex";
 import { askText } from "./dialog";
 import { el } from "./dom";
-import { ICONS, iconButton, onLongPress, showMenu, type MenuItem } from "./widgets";
+import { ICONS, iconButton, onLongPress, routingIcon, showMenu, type MenuItem } from "./widgets";
 
 /** State strip of a preset row: the effect blocks, named as on the unit's switches. */
 const STRIP: [string, string][] = [["filter", "FILTER"], ["comp", "COMP"], ["mod", "MOD"], ["pitch", "PITCH"],
@@ -160,6 +160,8 @@ export class BanksView {
     const head = el("span", "slot-head");
     head.append(el("span", "slot-code", String((slot % PRESETS_PER_BANK) + 1)),
       el("span", "slot-name", p ? p.name || "(sans nom)" : "vide"));
+    // Not yet synced with the G-System: a dot after the name, low like a subscript.
+    if (this.bank.pending.has(slot)) head.append(el("span", "slot-pending"));
     const main = el("span", "slot-main");
     main.append(head, strip);
     row.append(main);
@@ -227,21 +229,11 @@ export class BanksView {
   }
 }
 
-/** Small diagrams of the effect routings: blocks in series, two parallel paths, or series then two paths. */
-const ROUTING_PATHS = [
-  "M1 7h5M12 7h6M24 7h5M6 4h6v6H6zM18 4h6v6h-6z",
-  "M1 7h5M6 3v8M6 3h5M6 11h5M11 1h8v4h-8zM11 9h8v4h-8zM19 3h5M19 11h5M24 3v8M24 7h5",
-  "M1 7h3M4 4h6v6H4zM10 7h4M14 3v8M14 3h2M14 11h2M16 1h6v4h-6zM16 9h6v4h-6zM22 3h3M22 11h3M25 3v8M25 7h4",
-];
-
 function routingBadge(routing: number): HTMLElement {
   const name = ROUTINGS[routing] ?? `Routing ${routing}`;
   const badge = el("span", "slot-routing");
   badge.title = `Routing : ${name}`;
-  const path = ROUTING_PATHS[routing === 3 ? 0 : routing];
-  if (path) {
-    badge.insertAdjacentHTML("afterbegin", `<svg viewBox="0 0 30 14" width="30" height="14" aria-hidden="true"><path d="${path}" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>`);
-  }
+  badge.insertAdjacentHTML("afterbegin", routingIcon(routing));
   badge.append(el("span", "slot-routing-name", name === "Semi Parallel" ? "Semi Par." : name));
   return badge;
 }

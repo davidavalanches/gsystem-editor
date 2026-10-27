@@ -101,3 +101,17 @@ export function onLongPress(target: HTMLElement, action: (x: number, y: number) 
     }
   }, true);
 }
+
+/** Small diagrams of the effect routings: blocks in series, two parallel paths, or series then two paths. */
+const ROUTING_PATHS = [
+  "M1 7h5M12 7h6M24 7h5M6 4h6v6H6zM18 4h6v6h-6z",
+  "M1 7h5M6 3v8M6 3h5M6 11h5M11 1h8v4h-8zM11 9h8v4h-8zM19 3h5M19 11h5M24 3v8M24 7h5",
+  "M1 7h3M4 4h6v6H4zM10 7h4M14 3v8M14 3h2M14 11h2M16 1h6v4h-6zM16 9h6v4h-6zM22 3h3M22 11h3M25 3v8M25 7h4",
+];
+
+/** SVG of a routing (Serial2 is drawn as Serial). */
+export function routingIcon(routing: number): string {
+  const path = ROUTING_PATHS[routing === 3 ? 0 : routing] ?? "";
+  return `<svg viewBox="0 0 30 14" width="30" height="14" aria-hidden="true"><path d="${path}" fill="none" `
+    + `stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>`;
+}
