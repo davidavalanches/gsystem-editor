@@ -135,23 +135,26 @@ export class BanksView {
     const row = el("button", classes.filter(Boolean).join(" "));
     row.type = "button";
     row.setAttribute("aria-label", `${slotLabel(slot)} ${p ? p.name : "vide"}`);
-    // Only what the preset switches on, as small lit buttons (display only).
+    // Only what the preset switches on, as small lit buttons (display only): the effect blocks,
+    // then the external loops, insert and boost grouped in a tray of their own.
     const strip = el("span", "fs-strip");
     const lv = p ? presetLevels(p.data) : null;
     if (p && lv) {
-      const lit = (label: string, title = label) => {
+      const lit = (parent: HTMLElement, label: string, title = label) => {
         const chip = el("span", "fs-item");
         chip.title = title;
         chip.append(el("span", "fs-led"), el("span", "fs-label", label));
-        strip.append(chip);
+        parent.append(chip);
       };
       for (const [key, label] of STRIP) {
         const field = block(key).enableField(p.data);
-        if (field !== null && readField(p.data, field) === 1) lit(label);
+        if (field !== null && readField(p.data, field) === 1) lit(strip, label);
       }
-      lv.loops.forEach((on, i) => on && lit(`LOOP ${i + 1}`));
-      if (lv.insert) lit("INSERT");
-      if (lv.boost) lit("BOOST", `BOOST ${lv.boostLevel} dB`);
+      const loops = el("span", "fs-loops");
+      lv.loops.forEach((on, i) => on && lit(loops, `LOOP ${i + 1}`));
+      if (lv.insert) lit(loops, "INSERT");
+      if (lv.boost) lit(loops, "BOOST", `BOOST ${lv.boostLevel} dB`);
+      if (loops.childElementCount) strip.append(loops);
     }
     // Position and name on one line, so the state strip gets the full width of the row.
     const head = el("span", "slot-head");

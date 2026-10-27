@@ -242,6 +242,8 @@ button:disabled { opacity: 0.4; cursor: default; }
   background: linear-gradient(#45474b, #36383b);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px #1c1d1f;
 }
+/* Loops, insert and boost: same buttons, set apart in a recessed tray. */
+.fs-loops { display: flex; flex-wrap: wrap; gap: 4px; margin: -2px 0; padding: 2px 3px; border-radius: 6px; background: #1d1e20; box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.06); }
 .fs-led { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #ffb09e, #f03a22 55%, #a51a0c); box-shadow: 0 0 4px rgba(255, 64, 32, 0.8); }
 .fs-label { font-family: var(--mono); font-size: 10px; font-weight: 500; line-height: 1.2; color: #f2f2f2; white-space: nowrap; }
 
@@ -307,7 +309,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 @media (max-height: 380px) {
   .slot { padding-top: 0; padding-bottom: 0; }
   .slot-main { gap: 3px; }
-  .fs-strip { gap: 3px; }
+  .fs-strip, .fs-loops { gap: 3px; }
   .fs-item { padding-top: 1px; padding-bottom: 1px; }
   .slot-head { line-height: 1.15; }
 }
