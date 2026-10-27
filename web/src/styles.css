@@ -591,8 +591,10 @@ button:disabled { opacity: 0.4; cursor: default; }
 .switches-card .setting-control .type-select { width: 140px; }
 .switches-card .setting-control .type-select.narrow { width: 64px; }
 
-/* Settings read earlier, shown while the G-System is not connected: visible but not editable. */
-.settings-body.offline .setting-control { pointer-events: none; opacity: 0.75; }
+/* A global setting changed here and not yet sent to the G-System. */
+.setting.modified { padding-left: 9px; box-shadow: inset 3px 0 0 var(--amber); }
+.setting.modified .setting-name::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 50%; background: var(--amber); vertical-align: middle; }
+.setting.modified .setting-value { color: var(--amber); }
 
 /* ── Desktop (PC screen) ───────────────────────────────────────────────
    Banks: all 40 banks in an 8 × 5 grid, the selected preset's details on the right.

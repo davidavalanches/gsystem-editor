@@ -69,7 +69,11 @@ export class App {
     }
     root.append(rail, this.banks.el, this.preset.el, this.settings.el, this.midiView.el, this.toast);
     this.settings.onRead = () => this.readSettings();
-    this.settings.onChange = (b, p, raw) => this.link?.sendParam(b, p, raw);
+    this.settings.onSend = (changes) => {
+      for (const [b, p, raw] of changes) this.link?.sendParam(b, p, raw);
+      setTimeout(() => this.readSettings(), 300);
+    };
+    this.settings.onNotice = (text) => this.notify(text);
 
     this.bank.onChange = (slots) => {
       this.banks.refresh();
