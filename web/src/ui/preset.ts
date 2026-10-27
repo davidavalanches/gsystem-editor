@@ -456,8 +456,7 @@ export class PresetView {
     if (this.buffer) {
       const routing = presetLevels(this.buffer.data).routing;
       const [left, right] = presetOutputs(this.buffer.data);
-      const ms = presetTempoMs(this.buffer.data);
-      type.append([ROUTINGS[routing] ?? String(routing), ms ? `${msToBpm(ms)} BPM` : ""].filter(Boolean).join(" · "));
+      type.append(ROUTINGS[routing] ?? String(routing));
       tile.title = `L ${left} dB · R ${right} dB`;
       tile.setAttribute("aria-label", `Routing ${ROUTINGS[routing] ?? routing}, sorties ${left} et ${right} dB`);
     }
