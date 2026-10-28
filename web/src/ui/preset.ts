@@ -51,6 +51,9 @@ const BOOST = "boost";
 const BOOST_PARAM = new Param("Level", 0, BOOST_LEVEL_MAX, [], (v) => `${v} dB`);
 const BOOST_ROW = 1003;
 
+/** Blocks with many parameters (13 to 25): on a phone their knobs would scroll, so they keep sliders. */
+const SLIDER_BLOCKS = new Set(["reverb", "delay", "pitch"]);
+
 const FAVORITES_KEY = "gsystem-favorites";
 
 function loadFavorites(): Favorites {
@@ -698,7 +701,7 @@ export class PresetView {
 
   private renderParams(): void {
     const desk = DESKTOP.matches;
-    this.paramsList.classList.remove("wide-list", "row-list");
+    this.paramsList.classList.remove("wide-list", "row-list", "slider-list");
     if (desk && this.tab === "all") this.renderAllBlocks();
     else if (desk && this.tab === "raw") this.renderRaw();
     else if (desk && this.tab === "compare") this.renderCompare();
@@ -914,6 +917,7 @@ export class PresetView {
     const rows = blk.fields(preset.data)
       .filter(([index, p]) => !(blk.hasType && index === blk.firstField) && p.name !== blk.enableName);
     const pedals = new Map(this.assignedModifiers(preset.data).map((t) => [t.paramField, t.modifier.source]));
+    this.paramsList.classList.toggle("slider-list", SLIDER_BLOCKS.has(blk.key) && !DESKTOP.matches);
     this.paramsList.replaceChildren(...rows.map(([index, p]) =>
       this.paramRow(index, p, readField(preset.data, index), () => this.openSheet(index), pedals.get(index))));
   }
@@ -927,7 +931,7 @@ export class PresetView {
   /** Routing type and output levels: global menus on the unit, but stored in each preset. */
   private renderRouting(): void {
     this.paramsHead.replaceChildren(el("span", "label", "Routing"));
-    this.paramsList.classList.remove("on-block");
+    this.paramsList.classList.add("on-block");
     const preset = this.buffer;
     if (!preset) {
       this.paramsList.replaceChildren(el("p", "empty-note", "Emplacement vide."));
@@ -1015,8 +1019,29 @@ export class PresetView {
     const row = el("button", index === this.paramIndex ? "param selected" : "param");
     row.type = "button";
     row.setAttribute("aria-label", `${p.name} : ${p.format(value)}, toucher pour régler`);
-    // A tile like a knob on the unit's panel: name, potentiometer (or the chosen value of a list), readout.
     const out = value < p.lo || value > p.hi;
+    if (this.paramsList.classList.contains("slider-list")) {
+      // Slider row: name and value, then the position on the range (or the list's segments).
+      const top = el("span", "param-top");
+      const name = el("span", "param-name", p.name);
+      if (pedal) name.append(el("span", "source-chip on small", SHORT_SOURCES[pedal]));
+      top.append(name, el("span", out ? "param-value warn" : "param-value", p.format(value)));
+      row.append(top);
+      if (p.choices.length && p.hi - p.lo < 8) {
+        const segs = el("span", "segments");
+        for (let v = p.lo; v <= p.hi; v++) segs.append(el("span", v === value ? "on" : ""));
+        row.append(segs);
+      } else {
+        row.append(track(p, value));
+      }
+      row.addEventListener("click", () => {
+        this.paramIndex = index;
+        this.paramsList.querySelectorAll(".param").forEach((r) => r.classList.toggle("selected", r === row));
+        open();
+      });
+      return row;
+    }
+    // A tile like a knob on the unit's panel: name, potentiometer (or the chosen value of a list), readout.
     row.append(el("span", "param-name", p.name));
     if (pedal) row.append(el("span", "source-chip on small param-pedal", SHORT_SOURCES[pedal]));
     if (p.choices.length) {
