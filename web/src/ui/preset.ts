@@ -74,6 +74,27 @@ function trackGeometry(p: Param, value: number): { left: number; width: number; 
   return { left: Math.min(pos, zero), width: Math.abs(pos - zero), pos };
 }
 
+/**
+ * Block codes stay whole: one that overflows its tile (with a larger system font on Android, say)
+ * is set just small enough to fit, rather than cut.
+ */
+function fitCodes(root: HTMLElement): void {
+  for (const code of root.querySelectorAll<HTMLElement>(".tile-code")) {
+    code.style.fontSize = "";
+    const room = code.getBoundingClientRect().width;
+    if (!room) continue;
+    // Fractional widths: an overflow under a pixel is invisible to scrollWidth but still ellipsed.
+    const range = document.createRange();
+    range.selectNodeContents(code);
+    const text = () => range.getBoundingClientRect().width;
+    let size = parseFloat(getComputedStyle(code).fontSize);
+    for (let i = 0; i < 8 && text() > room - 0.5 && size > 6; i++) {
+      size = Math.max(6, Math.min(size - 0.2, Math.floor((size * (room - 1)) / text() * 10) / 10));
+      code.style.fontSize = `${size}px`;
+    }
+  }
+}
+
 /** Potentiometer of a parameter tile: a 270° scale lit up to the value (from the centre when bipolar). */
 function knob(p: Param, value: number): string {
   const g = trackGeometry(p, value);
@@ -195,6 +216,9 @@ export class PresetView {
       this.renderBrowser();
     });
     this.openSlot(0);
+    // Codes are measured in the panel font: again once it has loaded, and when the window changes size.
+    void document.fonts?.ready.then(() => fitCodes(this.tiles));
+    addEventListener("resize", () => fitCodes(this.tiles));
   }
 
   // Live link
@@ -529,6 +553,7 @@ export class PresetView {
       tile.append(footswitch, pick);
       return tile;
     }), this.modifiersTile(), this.routingTile());
+    requestAnimationFrame(() => fitCodes(this.tiles));
   }
 
   private modifiersTile(): HTMLElement {
