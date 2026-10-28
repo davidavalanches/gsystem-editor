@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { BankStore, bankPosition, slotLabel } from "../src/core/bank";
 import { applyFavorite, captureFavorite } from "../src/core/favorites";
+import { GLOBAL_PARAMS, formatGlobal, globalValue } from "../src/core/globals";
 import { LEVELS_FIELD, presetLevels } from "../src/core/levels";
 import { BLOCKS, block, diffFields, fieldOffset, FIELD_COUNT, freq, readField, writeField } from "../src/core/params";
 import {
@@ -232,6 +233,15 @@ describe("levels", () => {
 
   it("reads a factory preset: loops off, 6 dB boost", () => {
     expect(levels(0x68)).toEqual({ loops: [false, false, false, false], insert: false, boost: false, boostLevel: 6, routing: 0 });
+  });
+});
+
+describe("globals", () => {
+  it("shows Input Gain in dB as the unit sends it", () => {
+    const g = GLOBAL_PARAMS.get("1:3")!;
+    expect(formatGlobal(g, globalValue(g, 8))).toBe("8 dB");
+    expect(formatGlobal(g, globalValue(g, -8))).toBe("-8 dB");
+    expect([g.lo, g.hi]).toEqual([-8, 18]);
   });
 });
 

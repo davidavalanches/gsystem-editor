@@ -53,7 +53,8 @@ const e = (block: number, param: number, name: string, choices: readonly string[
 
 export const GLOBAL_GROUPS: GlobalGroup[] = [
   { title: "Gbl Levels", params: [
-    p(1, 3, "Input Gain", 0, 26, { format: db(-8), help: "Gain de l'entrée instrument, de −8 à +18 dB" }),
+    // Stored in dB, as the firmware table gives it (-8 to 18) and the unit sends it.
+    p(1, 3, "Input Gain", -8, 18, { format: db(), help: "Gain de l'entrée instrument, de −8 à +18 dB" }),
     p(1, 4, "Loop Level", 0, 10, { format: db(), help: "Niveau envoyé dans les boucles" }),
     p(1, 5, "Loop Headroom", 0, 10, { help: "Marge à l'entrée des effets ; sa plage dépend de Loop Level" }),
     p(1, 6, "Volume", -100, 0, { format: db() }),
