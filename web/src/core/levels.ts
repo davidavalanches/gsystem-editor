@@ -29,6 +29,8 @@ export const OUTPUTS_FIELD = 2;
 export const OUTPUT_MIN = -100;
 /** Block 1 parameters of the routing and the output levels, for Live mode. */
 export const ROUTING_PARAM = 0;
+export const BOOST_LEVEL_PARAM = 11;
+export const BOOST_LEVEL_MAX = 10;
 export const OUTPUT_PARAMS: readonly [number, number] = [26, 27];
 
 export interface PresetLevels {
@@ -77,4 +79,11 @@ export function writeLevel(data: Uint8Array, key: string, on: boolean): Uint8Arr
   const bit = 1 << LEVEL_BITS[key];
   const raw = readField(data, LEVELS_FIELD) & 0xffffff;
   return writeField(data, LEVELS_FIELD, signed(on ? raw | bit : raw & ~bit, 24));
+}
+
+/** Boost level of the preset, 0 to 10 dB (the unit also caps it at the global Boost Max). */
+export function writeBoostLevel(data: Uint8Array, level: number): Uint8Array {
+  const value = Math.max(0, Math.min(BOOST_LEVEL_MAX, Math.round(level)));
+  const raw = (readField(data, LEVELS_FIELD) & 0xffff0f) | (value << 4);
+  return writeField(data, LEVELS_FIELD, signed(raw, 24));
 }

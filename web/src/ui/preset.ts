@@ -6,8 +6,8 @@ import {
   modifierTargets, valueAt, writeModifier, type Modifier, type ModifierTarget,
 } from "../core/modifiers";
 import {
-  LEVEL_BITS, LEVELS_FIELD, OUTPUTS_FIELD, OUTPUT_MIN, OUTPUT_PARAMS, ROUTINGS, ROUTING_PARAM, levelOn, presetLevels,
-  presetOutputs, writeLevel, writeOutputs, writeRouting,
+  BOOST_LEVEL_MAX, BOOST_LEVEL_PARAM, LEVEL_BITS, LEVELS_FIELD, OUTPUTS_FIELD, OUTPUT_MIN, OUTPUT_PARAMS, ROUTINGS, ROUTING_PARAM, levelOn, presetLevels,
+  presetOutputs, writeBoostLevel, writeLevel, writeOutputs, writeRouting,
 } from "../core/levels";
 import { ALL_FIELDS, describeField, formatField, rawHex } from "../core/fields";
 import { FAVORITE_COUNT, applyFavorite, captureFavorite, type Favorite, type Favorites } from "../core/favorites";
@@ -44,8 +44,12 @@ const STORED = -1;
 const TEMPO_ROW = 1002;
 const isModifierField = (index: number) => index >= MODIFIER_FIELD && index < MODIFIER_FIELD + MODIFIER_SLOTS;
 const LEVEL_LABELS: [string, string][] = [
-  ["loop1", "L1"], ["loop2", "L2"], ["loop3", "L3"], ["loop4", "L4"], ["insert", "INS"], ["boost", "BST"],
+  ["loop1", "L1"], ["loop2", "L2"], ["loop3", "L3"], ["loop4", "L4"], ["insert", "INS"],
 ];
+/** Pseudo block: the preset's boost, its own footswitch on the unit, with a level per preset. */
+const BOOST = "boost";
+const BOOST_PARAM = new Param("Level", 0, BOOST_LEVEL_MAX, [], (v) => `${v} dB`);
+const BOOST_ROW = 1003;
 
 const FAVORITES_KEY = "gsystem-favorites";
 
@@ -104,6 +108,7 @@ export class PresetView {
   private readonly undoButton = iconButton(ICONS.undo, "Revenir au preset avant modification", () => this.revert());
   private readonly tiles = el("div", "blocks");
   private readonly levelBar = el("div", "levels");
+  private readonly boostBlock = el("div", "boost-block");
   private readonly favoriteBar = el("div", "favorites");
   private favorites: Favorites = loadFavorites();
   private tab: DeskTab = "block";
@@ -135,10 +140,13 @@ export class PresetView {
       + "et dans le G-System s'il est connecté (sinon à la prochaine synchronisation)";
     this.storeButton.addEventListener("click", () => this.store());
 
+    // The tempo sits on the name LCD, right of its second line, as the unit's display shows it.
+    const lcd = el("div", "preset-lcd");
+    lcd.append(this.nameButton, this.tempoButton);
     const header = el("header", "header preset-header");
     header.append(
       iconButton(ICONS.prev, "Preset précédent", () => this.openSlot((this.slot + USER_SLOTS - 1) % USER_SLOTS)),
-      this.number, this.nameButton,
+      this.number, lcd,
       iconButton(ICONS.next, "Preset suivant", () => this.openSlot((this.slot + 1) % USER_SLOTS)),
       el("div", "separator"), this.undoButton, this.liveButton, this.storeButton,
     );
@@ -151,7 +159,7 @@ export class PresetView {
     params.setAttribute("aria-label", "Paramètres");
     // Strip over the block details: the preset's loops, insert and boost, and its tempo.
     const strip = el("div", "preset-strip");
-    strip.append(this.levelBar, this.tempoButton);
+    strip.append(this.levelBar, this.boostBlock);
     this.favoriteBar.setAttribute("aria-label", "Favoris de l'effet");
     params.append(strip, this.favoriteBar, this.paramsHead, this.paramsList);
     const main = el("div", "preset-main");
@@ -215,6 +223,8 @@ export class PresetView {
       else if (isModifierField(index)) this.sendParam!(MODIFIER_BLOCK_ID, MODIFIER_PARAM_BASE + index - MODIFIER_FIELD, value);
       else if (index === LEVELS_FIELD || index === OUTPUTS_FIELD) this.sendRouting(after, index);
       if (index === LEVELS_FIELD) {
+        const level = presetLevels(after).boostLevel;
+        if (level !== presetLevels(before).boostLevel) this.sendParam!(LEVELS_BLOCK_ID, BOOST_LEVEL_PARAM, level);
         for (const key of Object.keys(LEVEL_BITS)) {
           const on = levelOn(after, key);
           if (on !== levelOn(before, key)) this.sendParam!(LEVELS_BLOCK_ID, LEVEL_SWITCHES[key], Number(on));
@@ -232,10 +242,11 @@ export class PresetView {
   /** A switch or knob was used on the G-System: mirror it in the edit buffer. */
   applyFromUnit(blockId: number, param: number, value: number): void {
     if (blockId === LEVELS_BLOCK_ID && this.buffer && this.live
-      && (param === ROUTING_PARAM || OUTPUT_PARAMS.includes(param))) {
+      && (param === ROUTING_PARAM || param === BOOST_LEVEL_PARAM || OUTPUT_PARAMS.includes(param))) {
       this.fromUnit = true;
       try {
         if (param === ROUTING_PARAM) this.setRouting(value);
+        else if (param === BOOST_LEVEL_PARAM) this.setBoostLevel(value);
         else this.setOutput(OUTPUT_PARAMS.indexOf(param), value);
       } finally {
         this.fromUnit = false;
@@ -459,7 +470,7 @@ export class PresetView {
     const ms = this.buffer ? presetTempoMs(this.buffer.data) : null;
     this.tempoButton.hidden = ms === null;
     if (ms !== null) {
-      this.tempoButton.replaceChildren(el("span", "bpm", String(msToBpm(ms))), el("span", "unit", "BPM"));
+      this.tempoButton.textContent = `${msToBpm(ms)} BPM`;
       this.tempoButton.setAttribute("aria-label", `Tempo ${msToBpm(ms)} BPM, toucher pour régler`);
     }
     this.liveButton.classList.toggle("active", this.isLive);
@@ -558,12 +569,71 @@ export class PresetView {
       b.addEventListener("click", () => this.setLevel(key, !on));
       return b;
     }));
+    this.renderBoostBlock();
+  }
+
+  /** Boost: its switch (LED) toggles it, its label shows its level and opens it like an effect block. */
+  private renderBoostBlock(): void {
+    const lv = this.buffer ? presetLevels(this.buffer.data) : null;
+    const on = !!lv?.boost;
+    this.boostBlock.className = ["boost-block", on ? "on" : "", this.blockKey === BOOST ? "selected" : ""].filter(Boolean).join(" ");
+    const led = el("button", "boost-switch");
+    led.type = "button";
+    led.disabled = !this.buffer;
+    led.setAttribute("aria-pressed", String(on));
+    led.setAttribute("aria-label", on ? "Couper le boost" : "Activer le boost");
+    led.addEventListener("click", () => this.setLevel("boost", !on));
+    const pick = el("button", "boost-pick");
+    pick.type = "button";
+    pick.disabled = !this.buffer;
+    pick.setAttribute("aria-label", `Régler le boost, ${lv ? lv.boostLevel : 0} dB`);
+    pick.append(el("span", "boost-name", "Boost"), el("span", "boost-level", lv ? `${lv.boostLevel} dB` : "—"));
+    pick.addEventListener("click", () => {
+      this.blockKey = BOOST;
+      this.tab = "block";
+      this.closeSheet();
+      this.render();
+    });
+    this.boostBlock.replaceChildren(led, pick);
+  }
+
+  private setBoostLevel(level: number): void {
+    if (this.buffer && presetLevels(this.buffer.data).boostLevel !== level) {
+      this.pushBuffer(this.buffer.withData(writeBoostLevel(this.buffer.data, level)));
+    }
+  }
+
+  /** The boost as a block: on/off in the header, its level as a parameter. */
+  private renderBoost(): void {
+    this.paramsList.classList.remove("on-block");
+    const preset = this.buffer;
+    this.paramsHead.replaceChildren(el("span", "label", "Boost"));
+    if (!preset) {
+      this.paramsList.replaceChildren(el("p", "empty-note", "Emplacement vide."));
+      return;
+    }
+    const lv = presetLevels(preset.data);
+    this.paramsHead.append(el("div", "grow"));
+    const sw = el("button", lv.boost ? "switch on" : "switch");
+    sw.type = "button";
+    sw.setAttribute("aria-pressed", String(lv.boost));
+    sw.setAttribute("aria-label", lv.boost ? "Couper le boost" : "Activer le boost");
+    const trackEl = el("span", "switch-track");
+    trackEl.append(el("span", "switch-knob"));
+    sw.append(trackEl, el("span", "switch-text", lv.boost ? "On" : "Off"));
+    sw.addEventListener("click", () => this.setLevel("boost", !lv.boost));
+    this.paramsHead.append(sw);
+    this.paramsList.classList.toggle("on-block", lv.boost);
+    this.paramsList.replaceChildren(
+      this.paramRow(BOOST_ROW, BOOST_PARAM, lv.boostLevel, () =>
+        this.openValueSheet("Boost · Level", `field #${LEVELS_FIELD}`, BOOST_PARAM, lv.boostLevel, (v) => this.setBoostLevel(v))),
+      el("p", "params-note", "Niveau ajouté quand le boost est actif. Le G-System le limite au Boost Max des réglages globaux."));
   }
 
   /** The four favorites of the shown effect: tap to load (or to save into an empty one), long-press for more. */
   private renderFavorites(): void {
     const key = this.blockKey;
-    const isEffect = key !== MODIFIERS && key !== ROUTING && (this.tab === "block" || !DESKTOP.matches);
+    const isEffect = key !== MODIFIERS && key !== ROUTING && key !== BOOST && (this.tab === "block" || !DESKTOP.matches);
     this.favoriteBar.hidden = !isEffect || !this.buffer;
     if (this.favoriteBar.hidden) return;
     const slots = this.favorites[key] ?? [];
@@ -790,6 +860,10 @@ export class PresetView {
     }
     if (this.blockKey === ROUTING) {
       this.renderRouting();
+      return;
+    }
+    if (this.blockKey === BOOST) {
+      this.renderBoost();
       return;
     }
     const blk = block(this.blockKey);

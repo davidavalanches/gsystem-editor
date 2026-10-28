@@ -259,12 +259,14 @@ button:disabled { opacity: 0.4; cursor: default; }
 .dot-number { display: flex; align-items: flex-end; gap: 2px; line-height: 0.8; padding: 6px 8px 7px; border-radius: 2px; background: #3a0c08; font-family: "Doto", monospace; font-weight: 800; color: #ff4a36; }
 .dot-number .bank { font-size: 28px; }
 .dot-number .position { font-size: 14px; }
-.preset-name { flex: 1; min-width: 0; height: 40px; margin-left: 8px; padding: 0 10px; display: flex; flex-direction: column; justify-content: center; border: 0; border-radius: 0; background: var(--lcd); color: var(--lcd-ink); text-align: left; }
+/* Name LCD: the name, the source and slot below it, the tempo at the right of that second line. */
+.preset-lcd { flex: 1; min-width: 0; position: relative; display: flex; margin-left: 8px; }
+.preset-name { flex: 1; min-width: 0; height: 40px; padding: 0 10px; display: flex; flex-direction: column; justify-content: center; border: 0; border-radius: 0; background: var(--lcd); color: var(--lcd-ink); text-align: left; }
 .preset-name .name { font-family: var(--lcd-font); font-size: 22px; line-height: 0.95; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
 /* Tempo of the preset, on its own LCD right of the name. */
-.preset-tempo { flex-shrink: 0; height: 32px; min-width: 50px; padding: 0 7px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border: 0; border-radius: 2px; background: #2b2c2f; box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6); color: #ff4a36; font-family: "Doto", monospace; font-weight: 800; line-height: 0.85; }
-.preset-tempo .bpm { font-size: 18px; }
-.preset-tempo .unit { font-size: 10px; }
+.preset-tempo { position: absolute; right: 0; bottom: 0; height: 22px; padding: 0 10px; border: 0; border-radius: 0; background: transparent; color: var(--lcd-ink); font-family: var(--lcd-font); font-size: 15px; line-height: 1; white-space: nowrap; }
+.preset-tempo:hover { text-decoration: underline; }
+.preset-lcd .preset-name .status { padding-right: 76px; }
 .preset-name .status { font-family: var(--lcd-font); font-size: 15px; line-height: 0.95; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .preset-name .status.alert { color: var(--lcd-ink); }
 .separator { width: 1px; height: 28px; background: #2e3034; margin: 0 4px; flex-shrink: 0; }
@@ -330,7 +332,6 @@ button:disabled { opacity: 0.4; cursor: default; }
 .tile-head { display: flex; align-items: center; justify-content: space-between; width: 100%; }
 .tile-code { font-family: var(--display); font-size: 10px; letter-spacing: 0.02em; color: #f2f2f2; }
 .tile-type { font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.tile.on .tile-type { color: var(--ink); }
 /* Pedal and encoder assignments, under the effect tiles. */
 .tile.wide { grid-column: 1 / -1; flex-direction: column; align-items: flex-start; justify-content: center; gap: 3px; padding: 0 12px; }
 /* Half-width tiles under the blocks: Modifiers and Routing. */
@@ -354,7 +355,18 @@ button:disabled { opacity: 0.4; cursor: default; }
 .favorite.empty { border-style: dashed; background: transparent; color: var(--faint); font-weight: 500; }
 .favorite.empty .favorite-num { color: var(--faint); }
 .preset-strip { display: flex; align-items: center; gap: 8px; flex-shrink: 0; padding: 5px 8px; background: var(--panel) var(--scanlines); border-bottom: 1px solid var(--edge); }
-.levels { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; }
+.levels { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; }
+/* Boost: a small footswitch block at the end of the loops, like BOOST at the end of the unit's bottom row. */
+.boost-block { flex-shrink: 0; display: flex; align-items: stretch; height: 32px; border: 1px solid var(--groove); border-radius: 6px; background: rgba(0, 0, 0, 0.18); }
+.boost-block.selected { border-color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+.boost-switch { width: 30px; padding: 0; border: 0; border-right: 1px solid var(--groove); border-radius: 6px 0 0 6px; background: transparent; display: grid; place-items: center; }
+.boost-switch::before { content: ""; width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--line-3); }
+.boost-block.on .boost-switch::before { border: 0; background: radial-gradient(circle at 40% 35%, #ffb09e, #f03a22 55%, #a51a0c); box-shadow: 0 0 6px rgba(255, 64, 32, 0.8); }
+.boost-pick { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; padding: 0 9px 0 7px; border: 0; border-radius: 0 6px 6px 0; background: transparent; text-align: left; }
+.boost-name { font-family: var(--display); font-size: 8.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.boost-block.on .boost-name { color: var(--ink); }
+.boost-level { font-family: var(--mono); font-size: 11px; font-weight: 600; line-height: 1; color: var(--soft); white-space: nowrap; }
+.params-note { grid-column: 1 / -1; margin: 6px 10px; font-size: 12px; color: var(--dim); }
 .level {
   height: 32px;
   min-width: 0;
@@ -675,7 +687,7 @@ button:disabled { opacity: 0.4; cursor: default; }
   .browser-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
 
   /* The LCD keeps the proportions of a display: 16 characters, not the width of the window. */
-  .preset-header .preset-name { flex: 0 1 460px; }
+  .preset-header .preset-lcd { flex: 0 1 460px; }
   .preset-header .separator { margin-left: auto; }
 
   .preset-main { flex-direction: column; }

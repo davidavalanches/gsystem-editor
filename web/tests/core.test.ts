@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { BankStore, bankPosition, slotLabel } from "../src/core/bank";
 import { applyFavorite, captureFavorite } from "../src/core/favorites";
 import { GLOBAL_PARAMS, formatGlobal, globalValue } from "../src/core/globals";
-import { LEVELS_FIELD, presetLevels } from "../src/core/levels";
+import { LEVELS_FIELD, presetLevels, writeBoostLevel } from "../src/core/levels";
 import { BLOCKS, block, diffFields, fieldOffset, FIELD_COUNT, freq, readField, writeField } from "../src/core/params";
 import {
   MODIFIER_FIELD, MODIFIER_SLOTS, UNASSIGNED, decodeModifier, encodeModifier, modifierTargets, writeModifier,
@@ -229,6 +229,11 @@ describe("levels", () => {
     expect(levels(0xc62508)).toMatchObject({ loops: [false, true, false, false], boost: false, boostLevel: 0, routing: 0 });
     // "Fragile - clean" as Vyzor sent it: insert and boost on, boost level 2.
     expect(levels(0xad202c)).toEqual({ loops: [false, false, false, false], insert: true, boost: true, boostLevel: 2, routing: 0 });
+  });
+
+  it("writes the boost level without touching the other bits", () => {
+    const out = presetLevels(writeBoostLevel(writeField(BLANK, LEVELS_FIELD, (0xad202c << 8) >> 8), 7));
+    expect(out).toEqual({ loops: [false, false, false, false], insert: true, boost: true, boostLevel: 7, routing: 0 });
   });
 
   it("reads a factory preset: loops off, 6 dB boost", () => {
