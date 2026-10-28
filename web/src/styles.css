@@ -358,7 +358,8 @@ button:disabled { opacity: 0.4; cursor: default; }
 .levels { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; }
 /* Boost: a small footswitch block at the end of the loops, like BOOST at the end of the unit's bottom row. */
 .boost-block { flex-shrink: 0; display: flex; align-items: stretch; height: 32px; border: 1px solid var(--groove); border-radius: 6px; background: rgba(0, 0, 0, 0.18); }
-.boost-block.selected { border-color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+/* Selected like an effect tile: a lighter ground and the red bar along the bottom. */
+.boost-block.selected { background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 -3px 0 var(--accent); }
 .boost-switch { width: 30px; padding: 0; border: 0; border-right: 1px solid var(--groove); border-radius: 6px 0 0 6px; background: transparent; display: grid; place-items: center; }
 .boost-switch::before { content: ""; width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--line-3); }
 .boost-block.on .boost-switch::before { border: 0; background: radial-gradient(circle at 40% 35%, #ffb09e, #f03a22 55%, #a51a0c); box-shadow: 0 0 6px rgba(255, 64, 32, 0.8); }
