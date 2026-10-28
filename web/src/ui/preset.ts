@@ -53,8 +53,8 @@ const BOOST_ROW = 1003;
 
 /** Blocks with many parameters (13 to 25): on a phone their knobs would scroll, so they keep sliders. */
 const SLIDER_BLOCKS = new Set(["reverb", "delay", "pitch"]);
-/** The block's output level, shown in its header rather than among its parameters. */
-const OUT_LEVEL = "OutLev";
+/** Read out in the block header as well as listed: [parameter name, label]. */
+const HEAD_READOUTS: [string, string][] = [["Mix", "Mix"], ["OutLev", "Out"]];
 
 const FAVORITES_KEY = "gsystem-favorites";
 
@@ -939,27 +939,25 @@ export class PresetView {
       sw.addEventListener("click", () => this.toggleBlock(blk.key));
       this.paramsHead.append(sw);
     }
-    // The output level, right of on/off: always in sight without scrolling the parameters.
-    const outLevel = blk.fields(preset.data).find(([, p]) => p.name === OUT_LEVEL);
-    if (outLevel) {
-      const [index, p] = outLevel;
-      const value = readField(preset.data, index);
-      const level = el("button", index === this.paramIndex ? "head-level selected" : "head-level");
-      level.type = "button";
-      level.setAttribute("aria-label", `Niveau de sortie : ${p.format(value)}, toucher pour régler`);
-      level.append(el("span", "head-level-name", "Out"), el("span", "head-level-value", p.format(value)));
-      level.addEventListener("click", () => {
-        this.paramIndex = index;
-        this.paramsList.querySelectorAll(".param").forEach((r) => r.classList.remove("selected"));
-        level.classList.add("selected");
-        this.openSheet(index);
-      });
-      this.paramsHead.append(level);
+    // Mix and output level read out right of on/off, in sight without scrolling; they are set in the list.
+    const readouts = HEAD_READOUTS.flatMap(([name, label]) => {
+      const found = blk.fields(preset.data).find(([, p]) => p.name === name);
+      return found ? [[label, found[1].format(readField(preset.data, found[0]))]] : [];
+    });
+    if (readouts.length) {
+      const box = el("span", "head-levels");
+      box.setAttribute("aria-label", readouts.map(([l, v]) => `${l} ${v}`).join(", "));
+      for (const [label, value] of readouts) {
+        const line = el("span", "head-level");
+        line.append(el("span", "head-level-name", label), el("span", "head-level-value", value));
+        box.append(line);
+      }
+      this.paramsHead.append(box);
     }
     this.paramsList.classList.toggle("on-block", on);
-    // Type, on/off and output level are in the block header.
+    // Type and on/off are in the block header.
     const rows = blk.fields(preset.data)
-      .filter(([index, p]) => !(blk.hasType && index === blk.firstField) && p.name !== blk.enableName && p.name !== OUT_LEVEL);
+      .filter(([index, p]) => !(blk.hasType && index === blk.firstField) && p.name !== blk.enableName);
     const pedals = new Map(this.assignedModifiers(preset.data).map((t) => [t.paramField, t.modifier.source]));
     this.paramsList.classList.toggle("slider-list", SLIDER_BLOCKS.has(blk.key) && !DESKTOP.matches);
     this.paramsList.replaceChildren(...rows.map(([index, p]) =>
