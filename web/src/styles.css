@@ -389,6 +389,11 @@ button:disabled { opacity: 0.4; cursor: default; }
   appearance: none;
 }
 /* Block on/off in the parameters header: a badge (the footswitch does the same). */
+/* Output level of the block, in its header beside on/off. */
+.head-level { flex-shrink: 0; display: flex; align-items: baseline; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); }
+.head-level.selected { border-color: var(--accent); }
+.head-level-name { font-family: var(--display); font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--soft); line-height: 28px; }
+.head-level-value { font-family: var(--mono); font-size: 14px; font-weight: 600; line-height: 28px; white-space: nowrap; }
 .switch { display: flex; align-items: center; height: 26px; padding: 0 10px; border: 1px dashed #5a5d62; border-radius: 13px; background: transparent; color: var(--dim); }
 .switch.on { border: 1px solid var(--line-3); background: var(--selected); color: #fff; }
 .switch-track { display: none; }
