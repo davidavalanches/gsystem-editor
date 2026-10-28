@@ -283,10 +283,10 @@ button:disabled { opacity: 0.4; cursor: default; }
 .tile {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 9px;
   min-height: 0;
   min-width: 0;
-  padding: 0 3px 0 10px;
+  padding: 0 8px 0 10px;
   border: 0;
   border-bottom: 1px solid var(--groove);
   border-radius: 0;
@@ -565,6 +565,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 .settings-body { flex: 1; overflow-y: auto; padding: 12px 16px 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; align-content: start; }
 .settings-note { grid-column: 1 / -1; margin: 0; font-size: 12.5px; color: var(--muted); }
 .settings-card { min-width: 0; }
+@media (max-height: 480px) { .settings-body { grid-template-columns: minmax(0, 1fr); } }
 /* Never read and offline: one invitation instead of every control showing a dash. */
 .settings-empty { display: none; }
 .settings-body.unread > :not(.settings-empty) { display: none; }
