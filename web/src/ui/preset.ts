@@ -1019,6 +1019,10 @@ export class PresetView {
     const row = el("button", index === this.paramIndex ? "param selected" : "param");
     row.type = "button";
     row.setAttribute("aria-label", `${p.name} : ${p.format(value)}, toucher pour régler`);
+    // The layout lives on an inner element: older Android WebViews centre and shrink a button's
+    // content whatever its own display, which squeezed the sliders to the width of their text.
+    const body = el("span", "param-body");
+    row.append(body);
     const out = value < p.lo || value > p.hi;
     if (this.paramsList.classList.contains("slider-list")) {
       // Slider row: name and value, then the position on the range (or the list's segments).
@@ -1026,32 +1030,27 @@ export class PresetView {
       const name = el("span", "param-name", p.name);
       if (pedal) name.append(el("span", "source-chip on small", SHORT_SOURCES[pedal]));
       top.append(name, el("span", out ? "param-value warn" : "param-value", p.format(value)));
-      row.append(top);
+      body.append(top);
       if (p.choices.length && p.hi - p.lo < 8) {
         const segs = el("span", "segments");
         for (let v = p.lo; v <= p.hi; v++) segs.append(el("span", v === value ? "on" : ""));
-        row.append(segs);
+        body.append(segs);
       } else {
-        row.append(track(p, value));
+        body.append(track(p, value));
       }
-      row.addEventListener("click", () => {
-        this.paramIndex = index;
-        this.paramsList.querySelectorAll(".param").forEach((r) => r.classList.toggle("selected", r === row));
-        open();
-      });
-      return row;
-    }
-    // A tile like a knob on the unit's panel: name, potentiometer (or the chosen value of a list), readout.
-    row.append(el("span", "param-name", p.name));
-    if (pedal) row.append(el("span", "source-chip on small param-pedal", SHORT_SOURCES[pedal]));
-    if (p.choices.length) {
-      const box = el("span", "param-choice");
-      box.append(el("span", "param-choice-text", p.format(value)));
-      box.insertAdjacentHTML("beforeend", '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>');
-      row.append(box);
     } else {
-      row.insertAdjacentHTML("beforeend", knob(p, value));
-      row.append(el("span", out ? "param-value warn" : "param-value", p.format(value)));
+      // A tile like a knob on the unit's panel: name, potentiometer (or the chosen value of a list), readout.
+      body.append(el("span", "param-name", p.name));
+      if (pedal) row.append(el("span", "source-chip on small param-pedal", SHORT_SOURCES[pedal]));
+      if (p.choices.length) {
+        const box = el("span", "param-choice");
+        box.append(el("span", "param-choice-text", p.format(value)));
+        box.insertAdjacentHTML("beforeend", '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>');
+        body.append(box);
+      } else {
+        body.insertAdjacentHTML("beforeend", knob(p, value));
+        body.append(el("span", out ? "param-value warn" : "param-value", p.format(value)));
+      }
     }
     row.addEventListener("click", () => {
       this.paramIndex = index;

@@ -239,11 +239,11 @@ button:disabled { opacity: 0.4; cursor: default; }
 .slot.warn .slot-name { color: var(--amber); }
 /* Miniature of the Preset view: 8 block footswitches | loops, insert and boost LEDs, on a fixed grid. */
 .mini-panel { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)) 9px repeat(6, minmax(0, 1fr)); column-gap: 2px; align-items: end; max-width: 560px; }
-.mini-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; }
-.mini-cell .footswitch { --size: 15px; }
+.mini-cell { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.mini-cell .footswitch { --size: 12px; }
 /* The neon ring scaled down to the miniature: thin ring, short glow. */
-.mini-cell .footswitch.on { box-shadow: 0 0 0 1px #6f7378, 0 0 0 2.5px #ff5a47, 0 0 4px 2px rgba(255, 70, 50, 0.35); }
-.mini-led { width: 7px; height: 7px; margin-bottom: 4px; border-radius: 50%; border: 1px solid var(--line-3); }
+.mini-cell .footswitch.on { box-shadow: 0 0 0 1px #6f7378, 0 0 0 2px #ff5a47, 0 0 3px 2px rgba(255, 70, 50, 0.35); }
+.mini-led { width: 7px; height: 7px; margin-bottom: 2px; border-radius: 50%; border: 1px solid var(--line-3); }
 .mini-led.on { border: 0; background: radial-gradient(circle at 40% 35%, #ffb09e, #f03a22 55%, #a51a0c); box-shadow: 0 0 5px rgba(255, 64, 32, 0.8); }
 .mini-code { font-family: var(--display); font-size: 6.5px; line-height: 1; letter-spacing: -0.02em; color: var(--faint); white-space: nowrap; }
 .mini-cell.on .mini-code { color: var(--soft); }
@@ -418,11 +418,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 /* A parameter tile: name, potentiometer (or list value), readout; tapping opens the fine-adjust sheet. */
 .param {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  gap: 3px;
+  display: block;
   /* Explicit: some Android WebViews size a button grid item to its content instead of stretching it. */
   width: 100%;
   min-width: 0;
@@ -434,6 +430,7 @@ button:disabled { opacity: 0.4; cursor: default; }
   text-align: center;
 }
 .param.selected { background: var(--selected); box-shadow: inset 0 -3px 0 var(--accent); }
+.param-body { display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 3px; width: 100%; min-height: 75px; }
 .param-name { max-width: 100%; font-family: var(--display); font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .param-pedal { position: absolute; top: 4px; right: 4px; margin: 0; }
 .param-value { max-width: 100%; font-family: var(--mono); font-size: 12.5px; font-weight: 500; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -455,6 +452,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 .params.slider-list .param { display: block; min-height: 52px; padding: 9px 10px 11px; border: 0; border-bottom: 1px solid var(--surface-2); background: transparent; text-align: left; }
 .params.slider-list .param.selected { background: var(--selected); box-shadow: inset 3px 0 0 var(--accent); }
 .params.slider-list .param-value { font-size: 14px; }
+.params.slider-list .param-body { display: block; min-height: 0; text-align: left; }
 .track-fill { position: absolute; top: 0; bottom: 0; border-radius: 2px; background: var(--accent); opacity: 0.4; }
 .on-block .track-fill { opacity: 1; }
 .segments { display: flex; gap: 3px; }
@@ -726,6 +724,7 @@ button:disabled { opacity: 0.4; cursor: default; }
   .params { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; padding: 12px 14px; }
   .params.row-list { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
   .param { min-height: 128px; padding: 12px 6px 10px; }
+  .param-body { min-height: 104px; }
   .knob { width: 64px; height: 64px; }
   .param-name { font-size: 10px; }
   .param-value { font-size: 14px; }
