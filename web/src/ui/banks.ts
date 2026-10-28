@@ -240,25 +240,24 @@ export class BanksView {
     const row = el("button", classes.filter(Boolean).join(" "));
     row.type = "button";
     row.setAttribute("aria-label", `${slotLabel(slot)} ${p ? p.name : "vide"}`);
-    // A miniature of the Preset view on a fixed grid across the row: the eight blocks as small
-    // footswitches, then loops, insert and boost as LEDs, lit or not, always in the same place.
+    // The blocks, then loops, insert and boost, by their codes on a fixed grid across the row:
+    // light when on, dark when off, always in the same place.
     const strip = el("span", "mini-panel");
     const lv = p ? presetLevels(p.data) : null;
     if (p && lv) {
-      const cell = (code: string, title: string, on: boolean, kind: "footswitch" | "mini-led") => {
-        const c = el("span", on ? "mini-cell on" : "mini-cell");
+      const cell = (code: string, title: string, on: boolean) => {
+        const c = el("span", on ? "mini-code on" : "mini-code", code);
         c.title = `${title} ${on ? "on" : "off"}`;
-        c.append(el("span", on ? `${kind} on` : kind), el("span", "mini-code", code));
         strip.append(c);
       };
       for (const [key, label] of STRIP) {
         const field = block(key).enableField(p.data);
-        cell(MINI_CODES[key], label, field !== null && readField(p.data, field) === 1, "footswitch");
+        cell(MINI_CODES[key], label, field !== null && readField(p.data, field) === 1);
       }
       strip.append(el("span", "mini-divider"));
-      lv.loops.forEach((on, i) => cell(`L${i + 1}`, `Loop ${i + 1}`, on, "mini-led"));
-      cell("INS", "Insert", lv.insert, "mini-led");
-      cell("BST", `Boost ${lv.boostLevel} dB`, lv.boost, "mini-led");
+      lv.loops.forEach((on, i) => cell(`L${i + 1}`, `Loop ${i + 1}`, on));
+      cell("INS", "Insert", lv.insert);
+      cell("BST", `Boost ${lv.boostLevel} dB`, lv.boost);
     }
     // Position and name on one line, so the state strip gets the full width of the row.
     const head = el("span", "slot-head");
