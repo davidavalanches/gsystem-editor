@@ -237,12 +237,6 @@ button:disabled { opacity: 0.4; cursor: default; }
 .slot-name { min-width: 0; font-family: var(--mono); font-size: 15px; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
 .slot.empty .slot-name { color: #8a8d92; }
 .slot.warn .slot-name { color: var(--amber); }
-/* What a preset uses, by code on a fixed grid: blocks | loops, insert, boost; light when on, dark when off. */
-.mini-panel { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)) 9px repeat(6, minmax(0, 1fr)); column-gap: 2px; align-items: center; max-width: 560px; }
-.mini-code { min-width: 0; text-align: center; font-family: var(--mono); font-size: 11px; font-weight: 600; line-height: 1.2; color: #5e6166; white-space: nowrap; }
-.mini-code.on { color: #f2f2f2; }
-.mini-divider { align-self: stretch; justify-self: center; width: 1px; background: var(--line); }
-
 /* Preset */
 
 .preset-header { background: var(--bar-dark); padding: 0 8px 0 4px; gap: 4px; }

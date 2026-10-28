@@ -9,13 +9,9 @@ import { askText } from "./dialog";
 import { DESKTOP, el } from "./dom";
 import { ICONS, iconButton, onLongPress, routingIcon, showMenu, type MenuItem } from "./widgets";
 
-/** State strip of a preset row: the effect blocks, named as on the unit's switches. */
+/** The effect blocks, named as on the unit's switches (desktop preset details). */
 const STRIP: [string, string][] = [["filter", "FILTER"], ["comp", "COMP"], ["mod", "MOD"], ["pitch", "PITCH"],
   ["delay", "DELAY"], ["reverb", "REVERB"], ["eq", "EQ"], ["gate", "GATE"]];
-
-/** Codes of the blocks in the list's miniature, as on the unit's display. */
-const MINI_CODES: Record<string, string> = { filter: "FLT", comp: "COM", mod: "MOD", pitch: "PIT", delay: "DLY",
-  reverb: "REV", eq: "EQ", gate: "GAT" };
 
 export interface BanksActions {
   open(slot: number): void;
@@ -240,33 +236,15 @@ export class BanksView {
     const row = el("button", classes.filter(Boolean).join(" "));
     row.type = "button";
     row.setAttribute("aria-label", `${slotLabel(slot)} ${p ? p.name : "vide"}`);
-    // The blocks, then loops, insert and boost, by their codes on a fixed grid across the row:
-    // light when on, dark when off, always in the same place.
-    const strip = el("span", "mini-panel");
     const lv = p ? presetLevels(p.data) : null;
-    if (p && lv) {
-      const cell = (code: string, title: string, on: boolean) => {
-        const c = el("span", on ? "mini-code on" : "mini-code", code);
-        c.title = `${title} ${on ? "on" : "off"}`;
-        strip.append(c);
-      };
-      for (const [key, label] of STRIP) {
-        const field = block(key).enableField(p.data);
-        cell(MINI_CODES[key], label, field !== null && readField(p.data, field) === 1);
-      }
-      strip.append(el("span", "mini-divider"));
-      lv.loops.forEach((on, i) => cell(`L${i + 1}`, `Loop ${i + 1}`, on));
-      cell("INS", "Insert", lv.insert);
-      cell("BST", `Boost ${lv.boostLevel} dB`, lv.boost);
-    }
-    // Position and name on one line, so the state strip gets the full width of the row.
+    // Position and name, with the tempo and routing at the right of the row.
     const head = el("span", "slot-head");
     head.append(el("span", "slot-code", String((slot % PRESETS_PER_BANK) + 1)),
       el("span", "slot-name", p ? p.name || "(sans nom)" : "vide"));
     // Not yet synced with the G-System: a dot after the name, low like a subscript.
     if (this.bank.pending.has(slot)) head.append(el("span", "slot-pending"));
     const main = el("span", "slot-main");
-    main.append(head, strip);
+    main.append(head);
     row.append(main);
     if (p && lv) row.append(routingBadge(lv.routing, presetTempoMs(p.data)));
     row.addEventListener("click", () => this.actions.open(slot));
