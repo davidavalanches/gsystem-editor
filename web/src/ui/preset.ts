@@ -71,6 +71,20 @@ function trackGeometry(p: Param, value: number): { left: number; width: number; 
   return { left: Math.min(pos, zero), width: Math.abs(pos - zero), pos };
 }
 
+/** Potentiometer of a parameter tile: a 270° scale lit up to the value (from the centre when bipolar). */
+function knob(p: Param, value: number): string {
+  const g = trackGeometry(p, value);
+  const r = 16, c = 2 * Math.PI * r, sweep = 0.75 * c;
+  const fill = Math.max(0.001, g.width * sweep);
+  const angle = -135 + g.pos * 270;
+  return `<svg class="knob" viewBox="0 0 40 40" aria-hidden="true">`
+    + `<circle class="knob-scale" cx="20" cy="20" r="${r}" stroke-dasharray="${sweep} ${c}" transform="rotate(135 20 20)"/>`
+    + `<circle class="knob-arc" cx="20" cy="20" r="${r}" stroke-dasharray="${fill} ${c}" `
+    + `stroke-dashoffset="${-g.left * sweep}" transform="rotate(135 20 20)"/>`
+    + `<circle class="knob-shadow" cx="20" cy="21" r="11.5"/><circle class="knob-cap" cx="20" cy="20" r="11.5"/>`
+    + `<line class="knob-pointer" x1="20" y1="19" x2="20" y2="10.5" transform="rotate(${angle} 20 20)"/></svg>`;
+}
+
 function track(p: Param, value: number): HTMLElement {
   const t = el("span", "track");
   const fill = el("span", "track-fill");
@@ -684,7 +698,7 @@ export class PresetView {
 
   private renderParams(): void {
     const desk = DESKTOP.matches;
-    this.paramsList.classList.remove("wide-list");
+    this.paramsList.classList.remove("wide-list", "row-list");
     if (desk && this.tab === "all") this.renderAllBlocks();
     else if (desk && this.tab === "raw") this.renderRaw();
     else if (desk && this.tab === "compare") this.renderCompare();
@@ -956,6 +970,7 @@ export class PresetView {
     // NovaDrive slots only matter with a NovaDrive pedal: listed once one is assigned.
     const targets = modifierTargets(preset.data, true)
       .filter((t) => t.key !== "novadrive" || (t.modifier.source && isValidModifier(t.modifier)));
+    this.paramsList.classList.add("row-list");
     this.paramsList.replaceChildren(...targets.map((t) => this.modifierRow(t)));
   }
 
@@ -1000,19 +1015,18 @@ export class PresetView {
     const row = el("button", index === this.paramIndex ? "param selected" : "param");
     row.type = "button";
     row.setAttribute("aria-label", `${p.name} : ${p.format(value)}, toucher pour régler`);
-    const top = el("span", "param-top");
+    // A tile like a knob on the unit's panel: name, potentiometer (or the chosen value of a list), readout.
     const out = value < p.lo || value > p.hi;
-    const name = el("span", "param-name", p.name);
-    if (pedal) name.append(el("span", "source-chip on small", SHORT_SOURCES[pedal]));
-    top.append(name, el("span", out ? "param-value warn" : "param-value", p.format(value)));
-    row.append(top);
-    const count = p.hi - p.lo + 1;
-    if (p.choices.length && count <= 8) {
-      const segs = el("span", "segments");
-      for (let v = p.lo; v <= p.hi; v++) segs.append(el("span", v === value ? "on" : ""));
-      row.append(segs);
+    row.append(el("span", "param-name", p.name));
+    if (pedal) row.append(el("span", "source-chip on small param-pedal", SHORT_SOURCES[pedal]));
+    if (p.choices.length) {
+      const box = el("span", "param-choice");
+      box.append(el("span", "param-choice-text", p.format(value)));
+      box.insertAdjacentHTML("beforeend", '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>');
+      row.append(box);
     } else {
-      row.append(track(p, value));
+      row.insertAdjacentHTML("beforeend", knob(p, value));
+      row.append(el("span", out ? "param-value warn" : "param-value", p.format(value)));
     }
     row.addEventListener("click", () => {
       this.paramIndex = index;

@@ -414,37 +414,52 @@ button:disabled { opacity: 0.4; cursor: default; }
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 4px 6px 8px;
+  padding: 6px 6px 8px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-content: start;
-  column-gap: 6px;
+  gap: 4px;
 }
-@media (min-width: 1100px) { .params { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* A parameter tile: name, potentiometer (or list value), readout; tapping opens the fine-adjust sheet. */
 .param {
-  display: block;
-  width: 100%;
-  min-height: 52px;
-  padding: 9px 10px 11px;
-  border: 0;
-  border-bottom: 1px solid var(--surface-2);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3px;
+  min-width: 0;
+  min-height: 92px;
+  padding: 8px 4px 7px;
+  border: 1px solid transparent;
   border-radius: 8px;
-  background: transparent;
-  text-align: left;
+  background: rgba(255, 255, 255, 0.025);
+  text-align: center;
 }
-.param.selected { background: var(--selected); box-shadow: inset 3px 0 0 var(--accent); }
-.param-top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; margin-bottom: 7px; }
-.param-name { font-family: var(--display); font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.param-value { font-family: var(--mono); font-size: 14px; font-weight: 500; white-space: nowrap; }
+.param.selected { background: var(--selected); box-shadow: inset 0 -3px 0 var(--accent); }
+.param-name { max-width: 100%; font-family: var(--display); font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.param-pedal { position: absolute; top: 4px; right: 4px; margin: 0; }
+.param-value { max-width: 100%; font-family: var(--mono); font-size: 12.5px; font-weight: 500; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .param-value.warn { color: var(--amber); }
+.knob { width: 44px; height: 44px; flex-shrink: 0; }
+.knob circle { fill: none; }
+.knob-scale { stroke: var(--line); stroke-width: 2.5; stroke-linecap: round; }
+.knob-arc { stroke: var(--faint); stroke-width: 2.5; stroke-linecap: round; }
+.on-block .knob-arc { stroke: var(--accent); }
+.knob .knob-shadow { fill: #141516; }
+.knob .knob-cap { fill: #26272a; stroke: #5a5d62; stroke-width: 1; }
+.knob-pointer { stroke: #f2f2f2; stroke-width: 2; stroke-linecap: round; }
+.param-choice { display: flex; align-items: center; justify-content: space-between; gap: 4px; width: 100%; height: 30px; margin: auto 0; padding: 0 6px 0 8px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--bg); font-family: var(--mono); font-size: 12px; font-weight: 500; }
+.param-choice-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.param-choice svg { width: 10px; height: 10px; flex-shrink: 0; fill: none; stroke: var(--muted); stroke-width: 1.8; stroke-linecap: round; }
+/* Modifiers keep a list of rows: block and parameter, source, Min / Mid / Max. */
+.params.row-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.param.modifier { display: block; min-height: 52px; padding: 9px 10px 11px; border: 0; border-bottom: 1px solid var(--surface-2); background: transparent; text-align: left; }
+.param.modifier.selected { background: var(--selected); box-shadow: inset 3px 0 0 var(--accent); }
+.param-top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; margin-bottom: 7px; }
 .track { position: relative; display: block; height: 4px; border-radius: 2px; background: var(--line); }
 .track-fill { position: absolute; top: 0; bottom: 0; border-radius: 2px; background: var(--faint); }
-.on-block .track-fill { background: var(--accent); }
 .track-thumb { position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #fff, #b9bdc2); border: 2px solid var(--dark-ink); }
-.segments { display: flex; gap: 3px; }
-.segments span { flex: 1; height: 5px; border-radius: 3px; background: var(--line); }
-.segments span.on { background: var(--faint); }
-.on-block .segments span.on { background: var(--accent); }
 .empty-note { padding: 24px; color: var(--muted); }
 
 /* Modifiers: what each pedal or encoder controls. */
@@ -700,7 +715,12 @@ button:disabled { opacity: 0.4; cursor: default; }
   .tile-label { flex: none; align-items: center; text-align: center; max-width: 100%; }
   .tile-code { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: clamp(10px, 0.75vw, 14px); }
   .tile.stack .tile-type, .tile.stack .tile-count { max-width: 100%; text-align: center; }
-  .params { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  .params { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; padding: 12px 14px; }
+  .params.row-list { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .param { min-height: 128px; padding: 12px 6px 10px; }
+  .knob { width: 64px; height: 64px; }
+  .param-name { font-size: 10px; }
+  .param-value { font-size: 14px; }
 
   .preset-inspector { display: flex; flex-direction: column; width: clamp(260px, 17vw, 330px); flex-shrink: 0; min-height: 0; background: var(--bar); border-left: 1px solid var(--edge); }
   .inspector-hint { margin: auto 24px; text-align: center; color: var(--dim); font-size: 13px; }
