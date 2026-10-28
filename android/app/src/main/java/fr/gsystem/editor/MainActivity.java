@@ -17,6 +17,8 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         // On stage the screen must not go to sleep.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        // The layout is sized for the unit's panel: ignore the system font size (Settings > Display > Font size).
+        getBridge().getWebView().getSettings().setTextZoom(100);
         hideSystemBars();
     }
 
