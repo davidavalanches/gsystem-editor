@@ -204,7 +204,7 @@ export class PresetView {
       this.sendParam!(MODIFIER_BLOCK_ID, MODIFIER_PARAM_BASE + slot, readField(this.buffer.data, MODIFIER_FIELD + slot));
     }
     this.sendRouting(this.buffer.data);
-    this.onNotice?.(`« ${this.buffer.name} » chargé dans la mémoire de travail du G-System`);
+    this.onNotice?.(`« ${this.buffer.name} » chargé dans la mémoire de travail du G-System`);
   }
 
   private sendChanges(before: Uint8Array, after: Uint8Array): void {
@@ -292,7 +292,7 @@ export class PresetView {
 
   openSlot(slot: number): void {
     if (slot !== this.slot && this.isDirty) {
-      if (confirm(`« ${this.buffer!.name} » a été modifié sans être stocké.\nOK : le stocker. Annuler : abandonner les modifications.`)) {
+      if (confirm(`« ${this.buffer!.name} » a été modifié sans être stocké.\nOK : le stocker. Annuler : abandonner les modifications.`)) {
         this.store();
       }
     }

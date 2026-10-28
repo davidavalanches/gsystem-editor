@@ -30,7 +30,7 @@ export class BanksView {
   private clipboard: Preset | null = null;
   private readonly title = el("div", "header-title");
   private readonly sub = el("div");
-  private readonly readButton = el("button", "pill primary", "Lire le G-System");
+  private readonly readButton = el("button", "pill primary", "Connecter");
   private readonly syncButton = el("button", "pill sync");
   private connected = false;
   private readonly list = el("div", "bank-list");
@@ -43,7 +43,6 @@ export class BanksView {
 
   constructor(private bank: BankStore, private actions: BanksActions) {
     this.readButton.type = "button";
-    this.readButton.disabled = true;
     this.readButton.addEventListener("click", () => actions.readUnit());
     this.syncButton.type = "button";
     this.syncButton.title = "Écrire dans le G-System les presets modifiés hors connexion (chacun vérifié)";
@@ -76,14 +75,14 @@ export class BanksView {
 
   setConnected(connected: boolean): void {
     this.connected = connected;
-    this.readButton.disabled = !connected;
+    if (!this.reading) this.readButton.textContent = connected ? "Lire le G-System" : "Connecter";
     this.renderHeader();
   }
 
   /** Reading progress, or null when no read is running. */
   setReading(progress: [number, number] | null): void {
     this.reading = progress;
-    this.readButton.textContent = progress ? "Annuler" : "Lire le G-System";
+    this.readButton.textContent = progress ? "Annuler" : this.connected ? "Lire le G-System" : "Connecter";
     this.readButton.className = progress ? "pill warn" : "pill primary";
     this.renderHeader();
   }
@@ -142,7 +141,7 @@ export class BanksView {
           this.bank.pending.has(slot) ? "pending" : ""].filter(Boolean).join(" "));
         button.type = "button";
         button.setAttribute("aria-label", `${slotLabel(slot)} ${p ? p.name : "vide"}`);
-        button.append(el("span", "cell-pos", String((slot % PRESETS_PER_BANK) + 1)), el("span", "cell-name", p ? p.name : "—"));
+        button.append(el("span", "cell-pos", String((slot % PRESETS_PER_BANK) + 1)), el("span", "cell-name", p ? p.name : ""));
         onLongPress(button, (x, y) => showMenu({ x, y }, this.slotMenu(slot)));
         button.addEventListener("click", () => this.select(slot));
         button.addEventListener("dblclick", () => this.actions.open(slot));
@@ -290,7 +289,7 @@ export class BanksView {
     const name = (await askText(`Nom du preset (${NAME_LEN} caractères max.)`, p.name, NAME_LEN))?.trim();
     if (!name || name === p.name) return;
     try {
-      this.bank.setSlots(new Map([[slot, p.withName(name.slice(0, NAME_LEN))]]), `Renommer « ${p.name} »`);
+      this.bank.setSlots(new Map([[slot, p.withName(name.slice(0, NAME_LEN))]]), `Renommer « ${p.name} »`);
     } catch {
       alert("Utilisez uniquement des caractères ASCII imprimables.");
     }
@@ -298,13 +297,13 @@ export class BanksView {
 
   private paste(slot: number): void {
     const old = this.bank.preset(slot);
-    if (old && !confirm(`Remplacer « ${old.name} » (${slotLabel(slot)}) ? Vous pourrez annuler.`)) return;
+    if (old && !confirm(`Remplacer « ${old.name} » (${slotLabel(slot)}) ? Vous pourrez annuler.`)) return;
     this.bank.setSlots(new Map([[slot, this.clipboard]]), `Coller dans ${slotLabel(slot)}`);
   }
 
   private clear(slot: number): void {
     const old = this.bank.preset(slot);
-    if (old && confirm(`Vider ${slotLabel(slot)} « ${old.name} » ? Vous pourrez annuler.`)) {
+    if (old && confirm(`Vider ${slotLabel(slot)} « ${old.name} » ? Vous pourrez annuler.`)) {
       this.bank.setSlots(new Map([[slot, null]]), `Vider ${slotLabel(slot)}`);
     }
   }
@@ -322,7 +321,7 @@ export class BanksView {
         return;
       }
     }
-    alert(`Aucun preset ne contient « ${text} ».`);
+    alert(`Aucun preset ne contient « ${text} ».`);
   }
 
   /** Slots a "read this bank" request should cover. */

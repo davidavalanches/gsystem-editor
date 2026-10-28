@@ -44,11 +44,15 @@ export class SettingsView {
   private readonly rows = new Map<string, () => void>();
   private readonly readButton = el("button", "pill", "Relire");
   private readonly note = el("p", "settings-note");
+  private readonly body = el("div", "settings-body");
+  /** Shown instead of the cards until the settings have been read once. */
+  private readonly empty = el("div", "settings-empty");
   private connected = false;
   /** When the values shown were read, if they come from the cache. */
   private readAt: string | null = null;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   onRead: (() => void) | null = null;
+  onConnect: (() => void) | null = null;
   /** Writes the given values to the unit and reads them back; the view is told through update(). */
   onSend: ((changes: [number, number, number][]) => void) | null = null;
   onNotice: ((text: string) => void) | null = null;
@@ -64,8 +68,15 @@ export class SettingsView {
     this.cancelButton.addEventListener("click", () => this.cancel());
     const header = el("header", "header");
     header.append(el("div", "grow header-title", "Réglages du G-System"), this.cancelButton, this.readButton, this.sendButton);
-    const body = el("div", "settings-body");
-    body.append(this.note);
+    const connect = el("button", "pill primary", "Connecter le G-System");
+    connect.type = "button";
+    connect.addEventListener("click", () => this.onConnect?.());
+    this.empty.append(el("h2", "", "Réglages pas encore lus"),
+      el("p", "", "Les réglages globaux (niveaux, pédales, MIDI, switches) sont lus dans le G‑System. "
+        + "Une fois lus, ils restent affichés hors connexion et vous pouvez y préparer des modifications."),
+      connect);
+    const body = this.body;
+    body.append(this.note, this.empty);
     for (const group of GLOBAL_GROUPS) {
       const card = el("div", "card settings-card");
       card.append(el("h2", "", group.title));
@@ -172,6 +183,9 @@ export class SettingsView {
     this.sendButton.textContent = this.sent ? "Envoi…" : n ? `Envoyer (${n})` : "Envoyer";
     this.sendButton.disabled = !this.connected || !n || !!this.sent;
     this.cancelButton.disabled = !n || !!this.sent;
+    const unread = !this.connected && !this.raw.size;
+    this.body.classList.toggle("unread", unread);
+    for (const b of [this.cancelButton, this.readButton, this.sendButton]) b.hidden = unread;
     const at = this.readAt ? new Date(this.readAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "";
     const changes = n ? ` ${n} modification(s) en attente${this.connected ? " : Envoyer pour les écrire dans le G-System."
       : ", envoyées à la prochaine connexion avec Envoyer."}` : "";

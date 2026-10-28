@@ -6,7 +6,7 @@ export class MidiView {
   readonly el = el("section", "view");
   private readonly dot = el("span", "dot");
   private readonly state = el("span", "", "Non connecté");
-  private readonly detail = el("p", "", "Branchez le G-System puis touchez « Connecter ».");
+  private readonly detail = el("p", "", "Branchez le G-System puis touchez « Connecter ».");
   readonly connectButton = el("button", "pill primary", "Connecter");
   readonly readAllButton = el("button", "pill", "Lire toute la banque");
   readonly readBankButton = el("button", "pill", "Lire la banque affichée");
@@ -37,9 +37,9 @@ export class MidiView {
     help.append(
       el("h2", "", "Mode d'emploi"),
       el("p", "", "Sur téléphone, reliez le port USB du G-System avec un câble OTG : le téléphone fait office d'hôte USB."),
-      el("p", "", "« Lire toute la banque » demande les 200 presets un par un (environ 2 min 30) ; "
+      el("p", "", "« Lire toute la banque » demande les 200 presets un par un (environ 2 min 30) ; "
         + "la liste se remplit au fur et à mesure."),
-      el("p", "", "« Live » (vue Preset) envoie chaque réglage dans la mémoire de travail du G-System sans rien stocker. "
+      el("p", "", "« Live » (vue Preset) envoie chaque réglage dans la mémoire de travail du G-System sans rien stocker. "
         + "Changer de preset au pied fait suivre l'éditeur."),
     );
     const body = el("div", "midi-body");

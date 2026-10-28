@@ -45,7 +45,12 @@ export class App {
       },
       menu: () => this.fileMenu(),
       bankMenu: (b) => this.bankMenu(b),
-      readUnit: () => (this.link?.busy ? this.link.cancel() : this.startRead("all")),
+      readUnit: () => {
+        // Offline, the button connects; when that fails the MIDI view says why.
+        if (!this.link) void this.toggleConnection().then(() => this.link || this.show("midi"));
+        else if (this.link.busy) this.link.cancel();
+        else this.startRead("all");
+      },
       sync: () => this.syncPending(),
     });
 
@@ -70,6 +75,7 @@ export class App {
     }
     root.append(rail, this.banks.el, this.preset.el, this.settings.el, this.midiView.el, this.toast);
     this.settings.onRead = () => this.readSettings();
+    this.settings.onConnect = () => void this.toggleConnection().then(() => this.link || this.show("midi"));
     this.settings.onSend = (changes) => {
       for (const [b, p, raw] of changes) this.link?.sendParam(b, p, raw);
       setTimeout(() => this.readSettings(), 300);
@@ -290,7 +296,7 @@ export class App {
       link.onIdentity = (version) => {
         this.setConnected(true, `G-System ${version}`, port.name);
         const n = this.bank.pending.size;
-        if (n) this.notify(`${n} preset(s) modifié(s) hors connexion : touchez « Synchroniser » pour les écrire dans le G-System`);
+        if (n) this.notify(`${n} preset(s) modifié(s) hors connexion : touchez « Synchroniser » pour les écrire dans le G-System`);
       };
       link.onParam = (b, p, v) => {
         this.settings.update(b, p, v);
@@ -309,7 +315,7 @@ export class App {
       // The unit answers the identity request at once; without an answer it is not a G-System.
       setTimeout(() => {
         if (this.link === link && !this.midiDot.classList.contains("on")) {
-          this.midiView.setStatus("Pas de réponse", false, `« ${port.name} » ne répond pas comme un G-System.`);
+          this.midiView.setStatus("Pas de réponse", false, `« ${port.name} » ne répond pas comme un G-System.`);
         }
       }, 2000);
     } catch (e) {
@@ -347,7 +353,7 @@ export class App {
 
   /** Store into the editor's bank and, when connected, into the unit. */
   private store(slot: number, p: Preset): void {
-    this.bank.setSlots(new Map([[slot, p]]), `Store « ${p.name} »`);
+    this.bank.setSlots(new Map([[slot, p]]), `Store « ${p.name} »`);
     this.writeToUnit(new Map([[slot, p]]));
   }
 
@@ -428,7 +434,7 @@ export class App {
     const item = this.writeQueue[0];
     if (!item) return;
     const done = this.writeTotal - this.writeQueue.length;
-    this.notify(`Écriture de « ${item.preset.name} » dans le G-System (${slotLabel(item.slot)})`
+    this.notify(`Écriture de « ${item.preset.name} » dans le G-System (${slotLabel(item.slot)})`
       + (this.writeTotal > 1 ? ` — ${done + 1}/${this.writeTotal}` : "") + "…");
     this.verifying = item;
     this.link!.store(item.slot, item.preset, () => this.startRead("verify"));
@@ -469,15 +475,15 @@ export class App {
           this.nextWrite();
         } else {
           this.notify(this.writeTotal > 1 ? `${this.writeTotal} presets écrits dans le G-System (vérifiés)`
-            : `« ${expected.preset.name} » enregistré dans le G-System (${slotLabel(expected.slot)}, vérifié)`);
+            : `« ${expected.preset.name} » enregistré dans le G-System (${slotLabel(expected.slot)}, vérifié)`);
         }
       } else {
         const left = this.writeQueue.length - 1;
         this.writeQueue = [];
-        alert(`Le G-System n'a pas confirmé l'enregistrement de « ${expected.preset.name} » en ${slotLabel(expected.slot)}`
+        alert(`Le G-System n'a pas confirmé l'enregistrement de « ${expected.preset.name} » en ${slotLabel(expected.slot)}`
           + (got ? " : le preset relu est différent." : " : l'emplacement ne répond pas (G-System bloqué ? éteignez-le et rallumez-le).")
           + (left ? `\n${left} autre(s) écriture(s) annulée(s).` : "")
-          + "\nLes presets restent enregistrés dans l'éditeur et dans la liste « à synchroniser ».");
+          + "\nLes presets restent enregistrés dans l'éditeur et dans la liste « à synchroniser ».");
       }
       return;
     }
