@@ -54,7 +54,7 @@ const BOOST_ROW = 1003;
 /** Blocks with many parameters (13 to 25): on a phone their knobs would scroll, so they keep sliders. */
 const SLIDER_BLOCKS = new Set(["reverb", "delay", "pitch"]);
 /** Read out in the block header as well as listed: [parameter name, label]. */
-const HEAD_READOUTS: [string, string][] = [["Mix", "Mix"], ["OutLev", "Out"]];
+const HEAD_READOUTS: [string, string][] = [["Mix", "Mix"], ["OutLev", "Output"]];
 
 const FAVORITES_KEY = "gsystem-favorites";
 
@@ -926,7 +926,6 @@ export class PresetView {
       select.addEventListener("change", () => this.setField(blk.firstField, Number(select.value)));
       this.paramsHead.append(select);
     }
-    this.paramsHead.append(el("div", "grow"));
     const field = blk.enableField(preset.data);
     if (field !== null) {
       const sw = el("button", on ? "switch on" : "switch");
@@ -939,7 +938,8 @@ export class PresetView {
       sw.addEventListener("click", () => this.toggleBlock(blk.key));
       this.paramsHead.append(sw);
     }
-    // Mix and output level read out right of on/off, in sight without scrolling; they are set in the list.
+    // Mix and output level read out at the far right, in sight without scrolling; they are set in the list.
+    this.paramsHead.append(el("div", "grow"));
     const readouts = HEAD_READOUTS.flatMap(([name, label]) => {
       const found = blk.fields(preset.data).find(([, p]) => p.name === name);
       return found ? [[label, found[1].format(readField(preset.data, found[0]))]] : [];
