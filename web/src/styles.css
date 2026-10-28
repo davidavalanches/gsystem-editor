@@ -237,20 +237,17 @@ button:disabled { opacity: 0.4; cursor: default; }
 .slot-name { min-width: 0; font-family: var(--mono); font-size: 15px; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
 .slot.empty .slot-name { color: #8a8d92; }
 .slot.warn .slot-name { color: var(--amber); }
-/* What a preset switches on: small lit buttons, wrapping to a second line when needed. */
-/* Rows of chips stay apart when the strip wraps onto two lines. */
-.fs-strip { display: flex; flex-wrap: wrap; gap: 6px 4px; }
-.fs-item {
-  display: flex; align-items: center; gap: 5px;
-  padding: 2px 7px 2px 5px;
-  border-radius: 4px;
-  background: linear-gradient(#45474b, #36383b);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px #1c1d1f;
-}
-/* Loops, insert and boost: same buttons, after the effect blocks. */
-.fs-loops { display: flex; flex-wrap: wrap; gap: 6px 4px; }
-.fs-led { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #ffb09e, #f03a22 55%, #a51a0c); box-shadow: 0 0 4px rgba(255, 64, 32, 0.8); }
-.fs-label { font-family: var(--mono); font-size: 10px; font-weight: 500; line-height: 1.2; color: #f2f2f2; white-space: nowrap; }
+/* Miniature of the Preset view: 8 block footswitches | loops, insert and boost LEDs, on a fixed grid. */
+.mini-panel { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)) 9px repeat(6, minmax(0, 1fr)); column-gap: 2px; align-items: end; max-width: 560px; }
+.mini-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; }
+.mini-cell .footswitch { --size: 15px; }
+/* The neon ring scaled down to the miniature: thin ring, short glow. */
+.mini-cell .footswitch.on { box-shadow: 0 0 0 1px #6f7378, 0 0 0 2.5px #ff5a47, 0 0 4px 2px rgba(255, 70, 50, 0.35); }
+.mini-led { width: 7px; height: 7px; margin-bottom: 4px; border-radius: 50%; border: 1px solid var(--line-3); }
+.mini-led.on { border: 0; background: radial-gradient(circle at 40% 35%, #ffb09e, #f03a22 55%, #a51a0c); box-shadow: 0 0 5px rgba(255, 64, 32, 0.8); }
+.mini-code { font-family: var(--display); font-size: 6.5px; line-height: 1; letter-spacing: -0.02em; color: var(--faint); white-space: nowrap; }
+.mini-cell.on .mini-code { color: var(--soft); }
+.mini-divider { align-self: stretch; justify-self: center; width: 1px; background: var(--line); }
 
 /* Preset */
 
@@ -323,8 +320,6 @@ button:disabled { opacity: 0.4; cursor: default; }
 @media (max-height: 380px) {
   .slot { padding-top: 0; padding-bottom: 0; }
   .slot-main { gap: 3px; }
-  .fs-strip, .fs-loops { gap: 5px 3px; }
-  .fs-item { padding-top: 1px; padding-bottom: 1px; }
   .slot-head { line-height: 1.15; }
 }
 .footswitch:disabled { opacity: 1; filter: grayscale(1) brightness(0.7); }

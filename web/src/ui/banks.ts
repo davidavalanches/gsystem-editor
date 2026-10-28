@@ -13,6 +13,10 @@ import { ICONS, iconButton, onLongPress, routingIcon, showMenu, type MenuItem } 
 const STRIP: [string, string][] = [["filter", "FILTER"], ["comp", "COMP"], ["mod", "MOD"], ["pitch", "PITCH"],
   ["delay", "DELAY"], ["reverb", "REVERB"], ["eq", "EQ"], ["gate", "GATE"]];
 
+/** Codes of the blocks in the list's miniature, as on the unit's display. */
+const MINI_CODES: Record<string, string> = { filter: "FLT", comp: "COM", mod: "MOD", pitch: "PIT", delay: "DLY",
+  reverb: "REV", eq: "EQ", gate: "GAT" };
+
 export interface BanksActions {
   open(slot: number): void;
   menu(): MenuItem[];
@@ -236,26 +240,25 @@ export class BanksView {
     const row = el("button", classes.filter(Boolean).join(" "));
     row.type = "button";
     row.setAttribute("aria-label", `${slotLabel(slot)} ${p ? p.name : "vide"}`);
-    // Only what the preset switches on, as small lit buttons (display only): the effect blocks,
-    // then the external loops, insert and boost grouped after them.
-    const strip = el("span", "fs-strip");
+    // A miniature of the Preset view on a fixed grid across the row: the eight blocks as small
+    // footswitches, then loops, insert and boost as LEDs, lit or not, always in the same place.
+    const strip = el("span", "mini-panel");
     const lv = p ? presetLevels(p.data) : null;
     if (p && lv) {
-      const lit = (parent: HTMLElement, label: string, title = label) => {
-        const chip = el("span", "fs-item");
-        chip.title = title;
-        chip.append(el("span", "fs-led"), el("span", "fs-label", label));
-        parent.append(chip);
+      const cell = (code: string, title: string, on: boolean, kind: "footswitch" | "mini-led") => {
+        const c = el("span", on ? "mini-cell on" : "mini-cell");
+        c.title = `${title} ${on ? "on" : "off"}`;
+        c.append(el("span", on ? `${kind} on` : kind), el("span", "mini-code", code));
+        strip.append(c);
       };
       for (const [key, label] of STRIP) {
         const field = block(key).enableField(p.data);
-        if (field !== null && readField(p.data, field) === 1) lit(strip, label);
+        cell(MINI_CODES[key], label, field !== null && readField(p.data, field) === 1, "footswitch");
       }
-      const loops = el("span", "fs-loops");
-      lv.loops.forEach((on, i) => on && lit(loops, `LOOP ${i + 1}`));
-      if (lv.insert) lit(loops, "INSERT");
-      if (lv.boost) lit(loops, "BOOST", `BOOST ${lv.boostLevel} dB`);
-      if (loops.childElementCount) strip.append(loops);
+      strip.append(el("span", "mini-divider"));
+      lv.loops.forEach((on, i) => cell(`L${i + 1}`, `Loop ${i + 1}`, on, "mini-led"));
+      cell("INS", "Insert", lv.insert, "mini-led");
+      cell("BST", `Boost ${lv.boostLevel} dB`, lv.boost, "mini-led");
     }
     // Position and name on one line, so the state strip gets the full width of the row.
     const head = el("span", "slot-head");
