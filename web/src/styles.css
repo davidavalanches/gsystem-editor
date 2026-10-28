@@ -390,7 +390,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 /* Block on/off in the parameters header: a badge (the footswitch does the same). */
 /* Mix and output level of the block, read out in its header beside on/off. */
-.head-levels { flex-shrink: 0; display: flex; flex-direction: column; justify-content: center; gap: 1px; height: 32px; padding: 0 0 0 8px; border-left: 1px solid var(--line); }
+.head-levels { flex-shrink: 0; margin-left: auto; display: flex; flex-direction: column; justify-content: center; gap: 1px; height: 32px; padding: 0 0 0 8px; border-left: 1px solid var(--line); }
 .head-level { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; line-height: 1.1; }
 .head-level-name { font-family: var(--display); font-size: 7px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--dim); }
 .head-level-value { font-family: var(--mono); font-size: 12px; font-weight: 600; white-space: nowrap; }
