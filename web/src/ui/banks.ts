@@ -237,7 +237,7 @@ export class BanksView {
     row.type = "button";
     row.setAttribute("aria-label", `${slotLabel(slot)} ${p ? p.name : "vide"}`);
     // Only what the preset switches on, as small lit buttons (display only): the effect blocks,
-    // then the external loops, insert and boost grouped in a tray of their own.
+    // then the external loops, insert and boost grouped after them.
     const strip = el("span", "fs-strip");
     const lv = p ? presetLevels(p.data) : null;
     if (p && lv) {
