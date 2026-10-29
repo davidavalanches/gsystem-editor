@@ -18,7 +18,7 @@ import { TAP_MAX_MS, TAP_MIN_MS, TEMPO_BLOCKS, bpmToMs, msToBpm, presetTempoMs, 
 import { NAME_LEN, Preset, SysexError, USER_SLOTS } from "../core/sysex";
 import { askText } from "./dialog";
 import { DESKTOP, el } from "./dom";
-import { ICONS, iconButton, onLongPress, routingIcon, showMenu } from "./widgets";
+import { ICONS, fillDotNumber, iconButton, onLongPress, routingIcon, showMenu } from "./widgets";
 
 /** Tile order of the design: the unit's effect sections. */
 const TILES: [string, string][] = [
@@ -534,8 +534,7 @@ export class PresetView {
 
   private render(): void {
     const [b, position] = bankPosition(this.slot);
-    this.number.setAttribute("aria-label", `Bank ${String(b).padStart(2, "0")}, position ${position}`);
-    this.number.innerHTML = `<span class="bank">${String(b).padStart(2, "0")}</span><span class="position">${position}</span>`;
+    fillDotNumber(this.number, b, position);
     const status = this.isDirty ? "Modified — Store to keep"
       : this.isLive ? "LIVE · edit buffer" : `${this.bank.title} · ${slotLabel(this.slot)}`;
     this.nameButton.innerHTML = "";
@@ -824,7 +823,10 @@ export class PresetView {
       rows.push(head);
       for (const [index, p] of blk.fields(preset.data)) {
         if ((blk.hasType && index === blk.firstField) || p.name === blk.enableName) continue;
-        rows.push(this.paramRow(index, p, readField(preset.data, index), () => this.openSheet(index), (v) => this.setField(index, v)));
+        const row = this.paramRow(index, p, readField(preset.data, index), () => this.openSheet(index), (v) => this.setField(index, v));
+        // The list mixes blocks on and off: each row lights its indicators from its own block.
+        row.classList.toggle("on-block", on);
+        rows.push(row);
       }
     }
     this.paramsList.replaceChildren(...rows);

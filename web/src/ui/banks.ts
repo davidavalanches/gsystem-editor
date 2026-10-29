@@ -7,7 +7,7 @@ import { msToBpm, presetTempoMs } from "../core/tempo";
 import { NAME_LEN, type Preset } from "../core/sysex";
 import { askText } from "./dialog";
 import { DESKTOP, el } from "./dom";
-import { ICONS, iconButton, onLongPress, routingIcon, showMenu, type MenuItem } from "./widgets";
+import { ICONS, fillDotNumber, iconButton, onLongPress, routingIcon, showMenu, type MenuItem } from "./widgets";
 
 /** The effect blocks, named as on the unit's switches (desktop preset details). */
 const STRIP: [string, string][] = [["filter", "FILTER"], ["comp", "COMP"], ["mod", "MOD"], ["pitch", "PITCH"],
@@ -157,7 +157,7 @@ export class BanksView {
     const [b, position] = [Math.floor(slot / PRESETS_PER_BANK), (slot % PRESETS_PER_BANK) + 1];
     const display = el("div", "detail-display");
     const number = el("div", "dot-number");
-    number.append(el("span", "bank", String(b).padStart(2, "0")), el("span", "position", String(position)));
+    fillDotNumber(number, b, position);
     display.append(number, el("div", "detail-lcd", p ? p.name || "(no name)" : "<EMPTY>"));
     const parts: HTMLElement[] = [display];
     if (p) {

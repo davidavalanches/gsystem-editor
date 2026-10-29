@@ -115,3 +115,38 @@ export function routingIcon(routing: number): string {
   return `<svg viewBox="0 0 30 14" width="30" height="14" aria-hidden="true"><path d="${path}" fill="none" `
     + `stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>`;
 }
+
+/** 5×7 dot-matrix digits, one string of 5 columns per row: wide, rounded zeros with no slash. */
+const DOT_DIGITS: Record<string, string[]> = {
+  "0": [".###.", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."],
+  "1": ["..#..", ".##..", "..#..", "..#..", "..#..", "..#..", ".###."],
+  "2": [".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####"],
+  "3": [".###.", "#...#", "....#", "..##.", "....#", "#...#", ".###."],
+  "4": ["...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#."],
+  "5": ["#####", "#....", "####.", "....#", "....#", "#...#", ".###."],
+  "6": ["..##.", ".#...", "#....", "####.", "#...#", "#...#", ".###."],
+  "7": ["#####", "....#", "...#.", "..#..", ".#...", ".#...", ".#..."],
+  "8": [".###.", "#...#", "#...#", ".###.", "#...#", "#...#", ".###."],
+  "9": [".###.", "#...#", "#...#", ".####", "....#", "...#.", ".##.."],
+};
+
+/** Digits drawn as round LEDs, the unlit ones faintly visible as on the unit's display. */
+function dotDigits(text: string, className: string): SVGSVGElement {
+  const width = text.length * 6 - 1;
+  const dots: string[] = [];
+  [...text].forEach((ch, i) => (DOT_DIGITS[ch] ?? DOT_DIGITS["0"]).forEach((row, y) => [...row].forEach((c, x) =>
+    dots.push(`<circle class="${c === "#" ? "lit" : "unlit"}" cx="${i * 6 + x + 0.5}" cy="${y + 0.5}" r="0.42"/>`))));
+  const box = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  box.setAttribute("class", className);
+  box.setAttribute("viewBox", `0 0 ${width} 7`);
+  box.setAttribute("aria-hidden", "true");
+  box.innerHTML = dots.join("");
+  return box;
+}
+
+/** The red bank number with the position as a small index at its top right, as on the unit. */
+export function fillDotNumber(target: HTMLElement, bank: number, position: number): void {
+  const bankText = String(bank).padStart(2, "0");
+  target.setAttribute("aria-label", `Bank ${bankText}, position ${position}`);
+  target.replaceChildren(dotDigits(bankText, "bank"), dotDigits(String(position), "position"));
+}

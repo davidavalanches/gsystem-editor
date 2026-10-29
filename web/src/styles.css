@@ -246,17 +246,19 @@ button:disabled { opacity: 0.4; cursor: default; }
 
 .preset-header { background: var(--bar-dark); padding: 0 8px 0 4px; gap: 4px; }
 /* Red dot-matrix preset number and green LCD, as on the unit. */
-.dot-number { display: flex; align-items: flex-end; gap: 2px; line-height: 0.8; padding: 6px 8px 7px; border-radius: 2px; background: #3a0c08; font-family: "Doto", monospace; font-weight: 800; color: #ff4a36; }
-.dot-number .bank { font-size: 28px; }
-.dot-number .position { font-size: 14px; }
-/* Name LCD: the name, the source and slot below it, the tempo at the right of that second line. */
-.preset-lcd { flex: 1; min-width: 0; position: relative; display: flex; margin-left: 8px; }
-.preset-name { flex: 1; min-width: 0; height: 40px; padding: 0 10px; display: flex; flex-direction: column; justify-content: center; border: 0; border-radius: 0; background: var(--lcd); color: var(--lcd-ink); text-align: left; }
+.dot-number { display: flex; align-items: flex-start; gap: 3px; padding: 7px 8px; border-radius: 2px; background: #3a0c08; }
+.dot-number svg { display: block; width: auto; }
+.dot-number .lit { fill: #ff4a36; }
+.dot-number .unlit { fill: #ff4a36; fill-opacity: 0.09; }
+.dot-number .bank { height: 24px; }
+.dot-number .position { height: 11px; }
+/* Name LCD: a grid with the name and the source/slot line at the left, the tempo in its own column at the top right,
+   so that neither text can run under it. */
+.preset-lcd { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; margin-left: 8px; background: var(--lcd); }
+.preset-name { grid-column: 1; min-width: 0; height: 40px; padding: 0 10px; display: flex; flex-direction: column; justify-content: center; border: 0; border-radius: 0; background: var(--lcd); color: var(--lcd-ink); text-align: left; }
 .preset-name .name { font-family: var(--lcd-font); font-size: 22px; line-height: 0.95; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
-/* Tempo of the preset, on its own LCD right of the name. */
-.preset-tempo { position: absolute; right: 0; bottom: 0; height: 22px; padding: 0 10px; border: 0; border-radius: 0; background: transparent; color: var(--lcd-ink); font-family: var(--lcd-font); font-size: 15px; line-height: 1; white-space: nowrap; }
+.preset-tempo { grid-column: 2; align-self: start; height: 22px; margin-top: 3px; padding: 0 10px 0 4px; border: 0; border-radius: 0; background: transparent; color: var(--lcd-ink); font-family: var(--lcd-font); font-size: 18px; line-height: 1; white-space: nowrap; }
 .preset-tempo:hover { text-decoration: underline; }
-.preset-lcd .preset-name .status { padding-right: 76px; }
 .preset-name .status { font-family: var(--lcd-font); font-size: 15px; line-height: 0.95; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .preset-name .status.alert { color: var(--lcd-ink); }
 .separator { width: 1px; height: 28px; background: #2e3034; margin: 0 4px; flex-shrink: 0; }
@@ -691,8 +693,8 @@ button:disabled { opacity: 0.4; cursor: default; }
 
   .bank-detail { display: flex; flex-direction: column; gap: 16px; min-height: 0; overflow-y: auto; margin: 16px 20px 16px 16px; }
   .detail-display { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 16px; border-radius: 10px; background: var(--bar-dark); }
-  .detail-display .dot-number .bank { font-size: 40px; }
-  .detail-display .dot-number .position { font-size: 20px; }
+  .detail-display .dot-number .bank { height: 34px; }
+  .detail-display .dot-number .position { height: 15px; }
   .detail-lcd { align-self: stretch; padding: 8px 12px; background: var(--lcd); color: var(--lcd-ink); font-family: var(--lcd-font); font-size: 28px; line-height: 1; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
   .detail-blocks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; background: var(--panel) var(--scanlines); }
   .detail-block { display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 0; padding: 14px 4px 10px; border-right: 1px solid var(--groove); border-bottom: 1px solid var(--groove); }
