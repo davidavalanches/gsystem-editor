@@ -8,11 +8,17 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
-    "android": "npm run build && cap sync android"
+    "android": "npm run build && cap sync android",
+    "desktop": "npm run build && electron .",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux",
+    "dist:win": "npm run build && electron-builder --win"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.3",
     "@types/node": "^26.6.5",
+    "electron": "^45.1.0",
+    "electron-builder": "^26.18.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"
@@ -26,5 +32,43 @@
     "@fontsource/ibm-plex-sans": "^5.3.0",
     "@fontsource/michroma": "^5.3.0",
     "@fontsource/vt323": "^5.3.0"
+  },
+  "main": "desktop/main.cjs",
+  "build": {
+    "appId": "fr.gsystem.editor",
+    "productName": "G-System Editor",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop/**",
+      "dist/**",
+      "package.json",
+      "!node_modules/**"
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.music",
+      "identity": null
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Audio"
+    },
+    "win": {
+      "target": [
+        "portable"
+      ]
+    }
   }
 }

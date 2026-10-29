@@ -37,6 +37,26 @@ npm install && npm run build
 
 Pour le développement : `npm run dev`, puis ouvrir l'URL affichée dans Chrome.
 
+### Application autonome (Electron)
+
+`desktop/main.cjs` emballe l'app dans Electron, qui embarque Chromium (Web MIDI) : l'ordinateur
+n'a besoin ni de Node, ni de Chrome, ni de serveur local.
+
+```sh
+npm run desktop       # lancement direct depuis le projet
+npm run dist:mac      # release/G-System Editor-<version>-arm64-mac.zip (Apple Silicon) et -mac.zip (Intel)
+npm run dist:linux    # AppImage
+npm run dist:win      # exécutable portable (nécessite wine depuis Linux)
+```
+
+Installation sur macOS : décompresser le zip, glisser « G-System Editor » dans Applications. L'app
+n'est pas signée par Apple ; au premier lancement, dans le Terminal :
+
+```sh
+xattr -cr "/Applications/G-System Editor.app"
+codesign --force --deep -s - "/Applications/G-System Editor.app"   # si macOS la dit « endommagée »
+```
+
 ## Fonctionnalités
 
 - **Banques** : liste des 40 banques, les 5 presets de la banque avec le voyant de chacun des 8 effets,
