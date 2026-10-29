@@ -6,14 +6,15 @@ import {
   modifierTargets, valueAt, writeModifier, type Modifier, type ModifierTarget,
 } from "../core/modifiers";
 import {
-  BOOST_LEVEL_MAX, BOOST_LEVEL_PARAM, LEVEL_BITS, LEVELS_FIELD, OUTPUTS_FIELD, OUTPUT_MIN, OUTPUT_PARAMS, ROUTINGS, ROUTING_PARAM, levelOn, presetLevels,
-  presetOutputs, writeBoostLevel, writeLevel, writeOutputs, writeRouting,
+  BOOST_LEVEL_MAX, BOOST_LEVEL_PARAM, LEVEL_BITS, LEVELS_FIELD, OUTPUTS_FIELD, OUTPUT_MIN, OUTPUT_PARAMS, RELAY_CONTACTS, RELAY_PARAMS,
+  ROUTINGS, ROUTING_PARAM, levelOn, presetLevels, presetOutputs, presetRelays, relayText, writeBoostLevel, writeLevel, writeOutputs,
+  writeRelay, writeRouting,
 } from "../core/levels";
 import { ALL_FIELDS, describeField, formatField, rawHex } from "../core/fields";
 import { FAVORITE_COUNT, applyFavorite, captureFavorite, type Favorite, type Favorites } from "../core/favorites";
 import { BLOCKS, Param, block, diffFields, owner, readField, writeField, type Block } from "../core/params";
 import { BLOCK_IDS, LEVELS_BLOCK_ID, LEVEL_SWITCHES } from "../core/protocol";
-import { TAP_MAX_MS, TAP_MIN_MS, bpmToMs, msToBpm, presetTempoMs, writeTempoMs } from "../core/tempo";
+import { TAP_MAX_MS, TAP_MIN_MS, TEMPO_BLOCKS, bpmToMs, msToBpm, presetTempoMs, syncToTempo, writeTempoMs } from "../core/tempo";
 import { NAME_LEN, Preset, SysexError, USER_SLOTS } from "../core/sysex";
 import { askText } from "./dialog";
 import { DESKTOP, el } from "./dom";
@@ -38,7 +39,7 @@ const TEMPO = new Param("Tempo", msToBpm(TAP_MAX_MS), msToBpm(TAP_MIN_MS), [], (
 const OUTPUT_ROW = 1000;
 /** Desktop views of the parameters panel. */
 type DeskTab = "block" | "all" | "raw" | "compare";
-const DESK_TABS: [DeskTab, string][] = [["block", "Bloc"], ["all", "Tous les blocs"], ["raw", "Brut"], ["compare", "Comparer"]];
+const DESK_TABS: [DeskTab, string][] = [["block", "Block"], ["all", "All blocks"], ["raw", "Raw"], ["compare", "Compare"]];
 /** Compare target: the stored version of the preset, else a bank slot. */
 const STORED = -1;
 const TEMPO_ROW = 1002;
@@ -138,6 +139,8 @@ export class PresetView {
   onStore: ((slot: number, preset: Preset) => void) | null = null;
   onNotice: ((text: string) => void) | null = null;
   onSlotChange: ((slot: number) => void) | null = null;
+  /** A preset was picked in the editor (not followed from the unit): recall it on the G-System. */
+  onSelect: ((slot: number) => void) | null = null;
 
   private readonly number = el("div", "dot-number");
   private readonly nameButton = el("button", "preset-name");
@@ -145,7 +148,11 @@ export class PresetView {
   private readonly liveButton = el("button", "pill live");
   private readonly storeButton = el("button", "pill store", "Store");
   /** Back to the preset as stored, in one go (Ctrl+Z still undoes step by step). */
-  private readonly undoButton = iconButton(ICONS.undo, "Revenir au preset avant modification", () => this.revert());
+  private readonly undoButton = iconButton(ICONS.undo, "Back to the preset before changes", () => this.revert());
+  /** Amber LED lit while the preset has changes not stored. */
+  private readonly editLed = el("span", "edit-led");
+  /** The unit's two green tempo LEDs, lit in turn on each beat of the preset's tempo. */
+  private readonly tempoLeds = el("span", "tempo-leds");
   private readonly tiles = el("div", "blocks");
   private readonly levelBar = el("div", "levels");
   private readonly boostBlock = el("div", "boost-block");
@@ -160,58 +167,59 @@ export class PresetView {
   private readonly browser = el("aside", "preset-browser");
   private readonly browserList = el("div", "browser-list");
   private readonly search = el("input", "browser-search");
-  private readonly inspector = el("aside", "preset-inspector");
 
   constructor(private bank: BankStore) {
     this.nameButton.type = "button";
-    this.nameButton.title = "Renommer le preset";
+    this.nameButton.title = "Rename the preset";
     this.nameButton.addEventListener("click", () => void this.rename());
     this.tempoButton.type = "button";
-    this.tempoButton.title = "Tempo du preset";
+    this.tempoButton.title = "Preset tempo";
     this.tempoButton.addEventListener("click", () => this.openTempoSheet());
     this.liveButton.type = "button";
     this.liveButton.innerHTML = '<span class="live-dot"></span>Live';
-    this.liveButton.title = "Envoyer chaque modification au G-System (mémoire de travail, sans Store) "
-      + "et suivre le pédalier";
+    this.liveButton.title = "Send each change to the G-System (working memory, no Store) "
+      + "and follow the unit";
     this.liveButton.disabled = true;
     this.liveButton.addEventListener("click", () => this.setLive(!this.live));
     this.storeButton.type = "button";
-    this.storeButton.title = "Enregistrer le preset dans la banque de l'éditeur "
-      + "et dans le G-System s'il est connecté (sinon à la prochaine synchronisation)";
+    this.storeButton.title = "Store the preset in the editor's bank "
+      + "and in the G-System if connected (otherwise at the next sync)";
     this.storeButton.addEventListener("click", () => this.store());
 
     // The tempo sits on the name LCD, right of its second line, as the unit's display shows it.
     const lcd = el("div", "preset-lcd");
     lcd.append(this.nameButton, this.tempoButton);
+    this.tempoLeds.append(el("span", "tempo-led"), el("span", "tempo-led"));
+    this.editLed.append(el("span", "edit-led-dot"), el("span", "edit-led-text", "Modified"));
+    this.editLed.setAttribute("role", "status");
     const header = el("header", "header preset-header");
     header.append(
-      iconButton(ICONS.prev, "Preset précédent", () => this.openSlot((this.slot + USER_SLOTS - 1) % USER_SLOTS)),
-      this.number, lcd,
-      iconButton(ICONS.next, "Preset suivant", () => this.openSlot((this.slot + 1) % USER_SLOTS)),
-      el("div", "separator"), this.undoButton, this.liveButton, this.storeButton,
+      iconButton(ICONS.prev, "Previous preset", () => this.openSlot((this.slot + USER_SLOTS - 1) % USER_SLOTS)),
+      this.number, lcd, this.tempoLeds,
+      iconButton(ICONS.next, "Next preset", () => this.openSlot((this.slot + 1) % USER_SLOTS)),
+      el("div", "separator"), this.editLed, this.undoButton, this.liveButton, this.storeButton,
     );
 
     const column = el("section", "blocks-column");
-    column.setAttribute("aria-label", "Blocs d'effets");
-    this.levelBar.setAttribute("aria-label", "Loops, insert et boost du preset");
+    column.setAttribute("aria-label", "Effect blocks");
+    this.levelBar.setAttribute("aria-label", "Preset loops, insert and boost");
     column.append(this.tiles);
     const params = el("section", "params-section");
-    params.setAttribute("aria-label", "Paramètres");
+    params.setAttribute("aria-label", "Parameters");
     // Strip over the block details: the preset's loops, insert and boost, and its tempo.
     const strip = el("div", "preset-strip");
     strip.append(this.levelBar, this.boostBlock);
-    this.favoriteBar.setAttribute("aria-label", "Favoris de l'effet");
+    this.favoriteBar.setAttribute("aria-label", "Effect favorites");
     params.append(strip, this.favoriteBar, this.paramsHead, this.paramsList);
     const main = el("div", "preset-main");
     main.append(column, params);
     this.search.type = "search";
-    this.search.placeholder = "Nom du preset…";
-    this.search.setAttribute("aria-label", "Rechercher un preset");
+    this.search.placeholder = "Preset name…";
+    this.search.setAttribute("aria-label", "Search for a preset");
     this.search.addEventListener("input", () => this.renderBrowser());
-    this.browser.setAttribute("aria-label", "Banques");
+    this.browser.setAttribute("aria-label", "Banks");
     this.browser.append(this.search, this.browserList);
-    this.inspector.setAttribute("aria-label", "Réglage du paramètre");
-    this.body.append(this.browser, main, this.inspector);
+    this.body.append(this.browser, main);
     this.el.append(header, this.body);
     DESKTOP.addEventListener("change", () => {
       this.closeSheet();
@@ -255,7 +263,7 @@ export class PresetView {
       this.sendParam!(MODIFIER_BLOCK_ID, MODIFIER_PARAM_BASE + slot, readField(this.buffer.data, MODIFIER_FIELD + slot));
     }
     this.sendRouting(this.buffer.data);
-    this.onNotice?.(`« ${this.buffer.name} » chargé dans la mémoire de travail du G-System`);
+    this.onNotice?.(`“${this.buffer.name}” loaded into the G-System's working memory`);
   }
 
   private sendChanges(before: Uint8Array, after: Uint8Array): void {
@@ -272,6 +280,10 @@ export class PresetView {
           const on = levelOn(after, key);
           if (on !== levelOn(before, key)) this.sendParam!(LEVELS_BLOCK_ID, LEVEL_SWITCHES[key], Number(on));
         }
+        const relays = presetRelays(before);
+        presetRelays(after).forEach((v, which) => {
+          if (v !== relays[which]) this.sendParam!(LEVELS_BLOCK_ID, RELAY_PARAMS[which], v);
+        });
       }
     }
   }
@@ -285,11 +297,12 @@ export class PresetView {
   /** A switch or knob was used on the G-System: mirror it in the edit buffer. */
   applyFromUnit(blockId: number, param: number, value: number): void {
     if (blockId === LEVELS_BLOCK_ID && this.buffer && this.live
-      && (param === ROUTING_PARAM || param === BOOST_LEVEL_PARAM || OUTPUT_PARAMS.includes(param))) {
+      && (param === ROUTING_PARAM || param === BOOST_LEVEL_PARAM || OUTPUT_PARAMS.includes(param) || RELAY_PARAMS.includes(param))) {
       this.fromUnit = true;
       try {
         if (param === ROUTING_PARAM) this.setRouting(value);
         else if (param === BOOST_LEVEL_PARAM) this.setBoostLevel(value);
+        else if (RELAY_PARAMS.includes(param)) this.setRelay(RELAY_PARAMS.indexOf(param), value);
         else this.setOutput(OUTPUT_PARAMS.indexOf(param), value);
       } finally {
         this.fromUnit = false;
@@ -346,7 +359,7 @@ export class PresetView {
 
   openSlot(slot: number): void {
     if (slot !== this.slot && this.isDirty) {
-      if (confirm(`« ${this.buffer!.name} » a été modifié sans être stocké.\nOK : le stocker. Annuler : abandonner les modifications.`)) {
+      if (confirm(`“${this.buffer!.name}” was modified but not stored.\nOK: store it. Cancel: discard the changes.`)) {
         this.store();
       }
     }
@@ -359,7 +372,13 @@ export class PresetView {
     this.setBuffer(this.stored, false);
     this.onSlotChange?.(slot);
     this.renderBrowser();
-    if (changed && !this.fromUnit) this.pushToUnit();
+    if (changed && !this.fromUnit) {
+      this.onSelect?.(slot);
+      // After the unit's own recall, so that the edit buffer ends up as the editor shows it.
+      setTimeout(() => {
+        if (this.slot === slot) this.pushToUnit();
+      }, 400);
+    }
   }
 
   /** Desktop browser: every bank with its presets' names, filtered by the search box. */
@@ -383,7 +402,7 @@ export class PresetView {
       }
       groups.push(group);
     }
-    this.browserList.replaceChildren(...(groups.length ? groups : [el("p", "empty-note", "Aucun preset trouvé.")]));
+    this.browserList.replaceChildren(...(groups.length ? groups : [el("p", "empty-note", "No preset found.")]));
     this.browserList.querySelector(".current")?.scrollIntoView({ block: "nearest" });
   }
 
@@ -409,12 +428,24 @@ export class PresetView {
     } catch {
       return;
     }
+    // A new tap time or note value sets the block's delay time or speed, as on the unit (which does it itself in Live).
+    const blk = owner(index);
+    if (!this.fromUnit && blk && TEMPO_BLOCKS.includes(blk.key)
+      && /^(Tap|Tempo)/.test(blk.fields(data).find(([f]) => f === index)?.[1].name ?? "")) {
+      data = syncToTempo(data, blk.key);
+    }
     this.pushBuffer(this.buffer.withData(data));
   }
 
   private setRouting(routing: number): void {
     if (this.buffer && presetLevels(this.buffer.data).routing !== routing) {
       this.pushBuffer(this.buffer.withData(writeRouting(this.buffer.data, routing)));
+    }
+  }
+
+  private setRelay(which: number, value: number): void {
+    if (this.buffer && presetRelays(this.buffer.data)[which] !== value) {
+      this.pushBuffer(this.buffer.withData(writeRelay(this.buffer.data, which, value)));
     }
   }
 
@@ -471,12 +502,12 @@ export class PresetView {
 
   private async rename(): Promise<void> {
     if (!this.buffer) return;
-    const name = (await askText(`Nom du preset (${NAME_LEN} caractères max.)`, this.buffer.name, NAME_LEN))?.trim();
+    const name = (await askText(`Preset name (${NAME_LEN} characters max.)`, this.buffer.name, NAME_LEN))?.trim();
     if (!name || !this.buffer || name === this.buffer.name) return;
     try {
       this.pushBuffer(this.buffer.withName(name.slice(0, NAME_LEN)));
     } catch (e) {
-      if (e instanceof SysexError) alert("Utilisez uniquement des caractères ASCII imprimables.");
+      if (e instanceof SysexError) alert("Use printable ASCII characters only.");
       else throw e;
     }
   }
@@ -503,19 +534,23 @@ export class PresetView {
 
   private render(): void {
     const [b, position] = bankPosition(this.slot);
-    this.number.setAttribute("aria-label", `Banque ${String(b).padStart(2, "0")}, position ${position}`);
+    this.number.setAttribute("aria-label", `Bank ${String(b).padStart(2, "0")}, position ${position}`);
     this.number.innerHTML = `<span class="bank">${String(b).padStart(2, "0")}</span><span class="position">${position}</span>`;
-    const status = this.isDirty ? "Modifié — Store pour garder"
+    const status = this.isDirty ? "Modified — Store to keep"
       : this.isLive ? "LIVE · edit buffer" : `${this.bank.title} · ${slotLabel(this.slot)}`;
     this.nameButton.innerHTML = "";
-    this.nameButton.append(el("span", "name", this.buffer ? this.buffer.name || "(sans nom)" : "— vide —"),
+    this.nameButton.append(el("span", "name", this.buffer ? this.buffer.name || "(no name)" : "— empty —"),
       el("span", this.isDirty || this.isLive ? "status alert" : "status", status));
     const ms = this.buffer ? presetTempoMs(this.buffer.data) : null;
     this.tempoButton.hidden = ms === null;
+    this.tempoLeds.hidden = ms === null || ms <= 0;
     if (ms !== null) {
       this.tempoButton.textContent = `${msToBpm(ms)} BPM`;
-      this.tempoButton.setAttribute("aria-label", `Tempo ${msToBpm(ms)} BPM, toucher pour régler`);
+      this.tempoButton.setAttribute("aria-label", `Tempo ${msToBpm(ms)} BPM, tap to adjust`);
+      this.tempoLeds.style.setProperty("--beat", `${ms}ms`);
+      this.tempoLeds.title = `Tempo ${msToBpm(ms)} BPM`;
     }
+    this.editLed.hidden = !this.isDirty;
     this.liveButton.classList.toggle("active", this.isLive);
     this.liveButton.setAttribute("aria-pressed", String(this.isLive));
     this.storeButton.classList.toggle("dirty", this.isDirty);
@@ -538,11 +573,11 @@ export class PresetView {
       footswitch.type = "button";
       footswitch.disabled = !this.buffer || blk.enableField(this.buffer.data) === null;
       footswitch.setAttribute("aria-pressed", String(on));
-      footswitch.setAttribute("aria-label", `${label} : ${on ? "désactiver" : "activer"}`);
+      footswitch.setAttribute("aria-label", `${label}: ${on ? "turn off" : "turn on"}`);
       footswitch.addEventListener("click", () => this.toggleBlock(key));
       const pick = el("button", "tile-label");
       pick.type = "button";
-      pick.setAttribute("aria-label", `Afficher ${label}, ${on ? "activé" : "désactivé"}`);
+      pick.setAttribute("aria-label", `Show ${label}, ${on ? "on" : "off"}`);
       const kind = this.buffer ? blk.effectType(this.buffer.data)?.name : "";
       const typeShort = blk.hasType ? kind ?? "" : key === "eq" ? "3-band" : "Gate";
       pick.append(el("span", "tile-code", code), el("span", "tile-type", typeShort));
@@ -563,7 +598,7 @@ export class PresetView {
     const sources = [...new Set(assigned.map((t) => SHORT_SOURCES[t.modifier.source]))];
     const tile = el("button", `tile stack${this.blockKey === MODIFIERS ? " selected" : ""}${assigned.length ? " on" : ""}`);
     tile.type = "button";
-    tile.setAttribute("aria-label", `Pédales et encodeurs, ${assigned.length} affectation(s)`);
+    tile.setAttribute("aria-label", `Pedals and encoders, ${assigned.length} assignment(s)`);
     tile.title = assigned.map((t) => t.name).join(", ");
     tile.append(el("span", "tile-code", "MODIFIERS"),
       el("span", assigned.length ? "tile-count" : "tile-count none", sources.join(" · ") || "none"));
@@ -585,7 +620,7 @@ export class PresetView {
       const [left, right] = presetOutputs(this.buffer.data);
       type.append(ROUTINGS[routing] ?? String(routing));
       tile.title = `L ${left} dB · R ${right} dB`;
-      tile.setAttribute("aria-label", `Routing ${ROUTINGS[routing] ?? routing}, sorties ${left} et ${right} dB`);
+      tile.setAttribute("aria-label", `Routing ${ROUTINGS[routing] ?? routing}, outputs ${left} and ${right} dB`);
     }
     tile.append(el("span", "tile-code", "ROUTING"), type);
     tile.addEventListener("click", () => {
@@ -625,12 +660,12 @@ export class PresetView {
     led.type = "button";
     led.disabled = !this.buffer;
     led.setAttribute("aria-pressed", String(on));
-    led.setAttribute("aria-label", on ? "Couper le boost" : "Activer le boost");
+    led.setAttribute("aria-label", on ? "Turn boost off" : "Turn boost on");
     led.addEventListener("click", () => this.setLevel("boost", !on));
     const pick = el("button", "boost-pick");
     pick.type = "button";
     pick.disabled = !this.buffer;
-    pick.setAttribute("aria-label", `Régler le boost, ${lv ? lv.boostLevel : 0} dB`);
+    pick.setAttribute("aria-label", `Adjust boost, ${lv ? lv.boostLevel : 0} dB`);
     pick.append(el("span", "boost-name", "Boost"), el("span", "boost-level", lv ? `${lv.boostLevel} dB` : "—"));
     pick.addEventListener("click", () => {
       this.blockKey = BOOST;
@@ -653,7 +688,7 @@ export class PresetView {
     const preset = this.buffer;
     this.paramsHead.replaceChildren(el("span", "label", "Boost"));
     if (!preset) {
-      this.paramsList.replaceChildren(el("p", "empty-note", "Emplacement vide."));
+      this.paramsList.replaceChildren(el("p", "empty-note", "Empty slot."));
       return;
     }
     const lv = presetLevels(preset.data);
@@ -661,7 +696,7 @@ export class PresetView {
     const sw = el("button", lv.boost ? "switch on" : "switch");
     sw.type = "button";
     sw.setAttribute("aria-pressed", String(lv.boost));
-    sw.setAttribute("aria-label", lv.boost ? "Couper le boost" : "Activer le boost");
+    sw.setAttribute("aria-label", lv.boost ? "Turn boost off" : "Turn boost on");
     const trackEl = el("span", "switch-track");
     trackEl.append(el("span", "switch-knob"));
     sw.append(trackEl, el("span", "switch-text", lv.boost ? "On" : "Off"));
@@ -670,8 +705,9 @@ export class PresetView {
     this.paramsList.classList.toggle("on-block", lv.boost);
     this.paramsList.replaceChildren(
       this.paramRow(BOOST_ROW, BOOST_PARAM, lv.boostLevel, () =>
-        this.openValueSheet("Boost · Level", `field #${LEVELS_FIELD}`, BOOST_PARAM, lv.boostLevel, (v) => this.setBoostLevel(v))),
-      el("p", "params-note", "Niveau ajouté quand le boost est actif. Le G-System le limite au Boost Max des réglages globaux."));
+        this.openValueSheet("Boost · Level", `field #${LEVELS_FIELD}`, BOOST_PARAM, lv.boostLevel, (v) => this.setBoostLevel(v)),
+        (v) => this.setBoostLevel(v)),
+      el("p", "params-note", "Level added when the boost is on. The G-System caps it at the Boost Max global setting."));
   }
 
   /** The four favorites of the shown effect: tap to load (or to save into an empty one), long-press for more. */
@@ -686,13 +722,13 @@ export class PresetView {
       const b = el("button", fav ? "favorite" : "favorite empty");
       b.type = "button";
       b.append(el("span", "favorite-num", String(i + 1)), el("span", "favorite-label", fav ? fav.label : "+"));
-      b.title = fav ? `Charger le favori ${i + 1} (${fav.label}) — appui long : plus d'options`
-        : `Enregistrer les réglages actuels dans le favori ${i + 1}`;
+      b.title = fav ? `Load favorite ${i + 1} (${fav.label}) — long press: more options`
+        : `Save the current settings to favorite ${i + 1}`;
       onLongPress(b, (x, y) => showMenu({ x, y }, [
-        { label: "Charger", action: () => this.loadFavorite(key, i), disabled: !fav },
-        { label: fav ? "Remplacer par les réglages actuels" : "Enregistrer les réglages actuels",
+        { label: "Load", action: () => this.loadFavorite(key, i), disabled: !fav },
+        { label: fav ? "Replace with current settings" : "Save current settings",
           action: () => this.saveFavorite(key, i) },
-        { label: "Effacer", action: () => this.saveFavorite(key, i, true), disabled: !fav },
+        { label: "Clear", action: () => this.saveFavorite(key, i, true), disabled: !fav },
       ]));
       b.addEventListener("click", () => (fav ? this.loadFavorite(key, i) : this.saveFavorite(key, i)));
       return b;
@@ -708,10 +744,10 @@ export class PresetView {
     try {
       localStorage.setItem(FAVORITES_KEY, JSON.stringify(this.favorites));
     } catch {
-      alert("Impossible d'enregistrer les favoris sur cet appareil.");
+      alert("Cannot save favorites on this device.");
     }
     this.renderFavorites();
-    this.onNotice?.(clear ? `Favori ${index + 1} effacé` : `Favori ${index + 1} enregistré : ${slots[index]!.label}`);
+    this.onNotice?.(clear ? `Favorite ${index + 1} cleared` : `Favorite ${index + 1} saved: ${slots[index]!.label}`);
   }
 
   private loadFavorite(key: string, index: number): void {
@@ -720,26 +756,32 @@ export class PresetView {
     try {
       const data = applyFavorite(this.buffer.data, key, fav);
       if (diffFields(this.buffer.data, data).length) this.pushBuffer(this.buffer.withData(data));
-      this.onNotice?.(`Favori ${index + 1} chargé : ${fav.label}`);
+      this.onNotice?.(`Favorite ${index + 1} loaded: ${fav.label}`);
     } catch (e) {
-      alert(`Favori illisible : ${(e as Error).message}`);
+      alert(`Unreadable favorite: ${(e as Error).message}`);
     }
   }
 
   private renderParams(): void {
     const desk = DESKTOP.matches;
+    // A control used with the keyboard keeps the focus once the list is rebuilt.
+    const active = document.activeElement as HTMLElement | null;
+    const focused = active && this.paramsList.contains(active) ? active.closest<HTMLElement>("[data-row]")?.dataset.row : undefined;
     this.paramsList.classList.remove("wide-list", "row-list", "slider-list");
     if (desk && this.tab === "all") this.renderAllBlocks();
     else if (desk && this.tab === "raw") this.renderRaw();
     else if (desk && this.tab === "compare") this.renderCompare();
     else this.renderBlockParams();
     if (desk) this.paramsHead.append(this.deskTabs());
+    if (focused !== undefined) {
+      this.paramsList.querySelector<HTMLElement>(`[data-row="${focused}"] :is(.knob-control, select)`)?.focus();
+    }
   }
 
   private deskTabs(): HTMLElement {
     const tabs = el("div", "desk-tabs");
     tabs.setAttribute("role", "tablist");
-    tabs.setAttribute("aria-label", "Vue des paramètres");
+    tabs.setAttribute("aria-label", "Parameters view");
     for (const [key, label] of DESK_TABS) {
       const b = el("button", key === this.tab ? "on" : "", label);
       b.type = "button";
@@ -757,11 +799,11 @@ export class PresetView {
 
   /** Every effect block at once: its type, on/off and parameters, each one adjustable. */
   private renderAllBlocks(): void {
-    this.paramsHead.replaceChildren(el("span", "label", "Tous les blocs"), el("div", "grow"));
+    this.paramsHead.replaceChildren(el("span", "label", "All blocks"), el("div", "grow"));
     this.paramsList.classList.remove("on-block");
     const preset = this.buffer;
     if (!preset) {
-      this.paramsList.replaceChildren(el("p", "empty-note", "Emplacement vide."));
+      this.paramsList.replaceChildren(el("p", "empty-note", "Empty slot."));
       return;
     }
     const rows: HTMLElement[] = [];
@@ -770,7 +812,7 @@ export class PresetView {
       const on = this.isOn(blk);
       const head = el("button", on ? "all-head on" : "all-head");
       head.type = "button";
-      head.title = `Afficher ${blk.label} seul`;
+      head.title = `Show ${blk.label} alone`;
       head.append(el("span", "all-code", code),
         el("span", "all-type", blk.effectType(preset.data)?.name ?? (key === "eq" ? "3-band" : "Gate")),
         el("span", on ? "all-state on" : "all-state", on ? "On" : "Off"));
@@ -782,7 +824,7 @@ export class PresetView {
       rows.push(head);
       for (const [index, p] of blk.fields(preset.data)) {
         if ((blk.hasType && index === blk.firstField) || p.name === blk.enableName) continue;
-        rows.push(this.paramRow(index, p, readField(preset.data, index), () => this.openSheet(index)));
+        rows.push(this.paramRow(index, p, readField(preset.data, index), () => this.openSheet(index), (v) => this.setField(index, v)));
       }
     }
     this.paramsList.replaceChildren(...rows);
@@ -792,17 +834,17 @@ export class PresetView {
   private renderRaw(): void {
     const preset = this.buffer;
     const changed = new Set(preset && this.stored ? diffFields(this.stored.data, preset.data).map(([i]) => i) : []);
-    this.paramsHead.replaceChildren(el("span", "label", "Brut"), el("div", "grow"),
-      el("span", "params-hint", preset ? `${ALL_FIELDS.length} champs · ${changed.size} modifié(s)` : ""));
+    this.paramsHead.replaceChildren(el("span", "label", "Raw"), el("div", "grow"),
+      el("span", "params-hint", preset ? `${ALL_FIELDS.length} fields · ${changed.size} modified` : ""));
     this.paramsList.classList.remove("on-block");
     this.paramsList.classList.add("wide-list");
     if (!preset) {
-      this.paramsList.replaceChildren(el("p", "empty-note", "Emplacement vide."));
+      this.paramsList.replaceChildren(el("p", "empty-note", "Empty slot."));
       return;
     }
     const table = el("table", "field-table");
     const head = el("tr");
-    for (const h of ["#", "Groupe", "Paramètre", "Brut", "Valeur"]) head.append(el("th", "", h));
+    for (const h of ["#", "Group", "Parameter", "Raw", "Value"]) head.append(el("th", "", h));
     table.append(head);
     for (const index of ALL_FIELDS) {
       const info = describeField(preset.data, index);
@@ -825,8 +867,8 @@ export class PresetView {
   private renderCompare(): void {
     const preset = this.buffer;
     const select = el("select", "type-select compare-select");
-    select.setAttribute("aria-label", "Comparer avec");
-    select.append(new Option("Version enregistrée", String(STORED)));
+    select.setAttribute("aria-label", "Compare with");
+    select.append(new Option("Stored version", String(STORED)));
     this.bank.presets.forEach((p, slot) => {
       if (p && slot !== this.slot) select.append(new Option(`${slotLabel(slot)} ${p.name}`, String(slot)));
     });
@@ -841,32 +883,32 @@ export class PresetView {
     });
     const other = this.compareSlot === STORED ? this.stored : this.bank.preset(this.compareSlot);
     const diffs = preset && other ? diffFields(preset.data, other.data) : [];
-    this.paramsHead.replaceChildren(el("span", "label", "Comparer avec"), select, el("div", "grow"),
-      el("span", "params-hint", preset && other ? `${diffs.length} différence(s)` : ""));
+    this.paramsHead.replaceChildren(el("span", "label", "Compare with"), select, el("div", "grow"),
+      el("span", "params-hint", preset && other ? `${diffs.length} difference(s)` : ""));
     this.paramsList.classList.remove("on-block");
     this.paramsList.classList.add("wide-list");
     if (!preset || !other) {
-      this.paramsList.replaceChildren(el("p", "empty-note", "Rien à comparer."));
+      this.paramsList.replaceChildren(el("p", "empty-note", "Nothing to compare."));
       return;
     }
     if (!diffs.length && preset.name === other.name) {
-      this.paramsList.replaceChildren(el("p", "empty-note", "Aucune différence."));
+      this.paramsList.replaceChildren(el("p", "empty-note", "No differences."));
       return;
     }
     const table = el("table", "field-table compare");
     const head = el("tr");
-    for (const h of ["#", "Groupe", "Paramètre", "Ce preset", other === this.stored ? "Enregistré" : other.name, ""]) {
+    for (const h of ["#", "Group", "Parameter", "This preset", other === this.stored ? "Stored" : other.name, ""]) {
       head.append(el("th", "", h));
     }
     table.append(head);
     if (preset.name !== other.name) {
       const row = el("tr");
-      const take = el("button", "take", "← Reprendre");
+      const take = el("button", "take", "← Take");
       take.type = "button";
       take.addEventListener("click", () => this.pushBuffer(this.buffer!.withName(other.name)));
       const cell = el("td");
       cell.append(take);
-      row.append(el("td", "num", "—"), el("td", "", "Preset"), el("td", "", "Nom"), el("td", "", preset.name),
+      row.append(el("td", "num", "—"), el("td", "", "Preset"), el("td", "", "Name"), el("td", "", preset.name),
         el("td", "", other.name), cell);
       table.append(row);
     }
@@ -878,9 +920,9 @@ export class PresetView {
       // something together, and the count must match the type.
       const blk = owner(index);
       const whole = blk !== null && blk.allFields().slice(0, 2).some((f) => readField(preset.data, f) !== readField(other.data, f));
-      const take = el("button", "take", whole ? "← Reprendre le bloc" : "← Reprendre");
+      const take = el("button", "take", whole ? "← Take block" : "← Take");
       take.type = "button";
-      take.title = whole ? `Le type diffère : reprendre tout le bloc ${blk!.label}` : "Reprendre cette valeur dans ce preset";
+      take.title = whole ? `The type differs: take the whole ${blk!.label} block` : "Take this value into this preset";
       take.addEventListener("click", () => {
         if (!this.buffer) return;
         if (!whole) return this.setField(index, theirs);
@@ -915,12 +957,12 @@ export class PresetView {
     const on = this.isOn(blk);
     this.paramsHead.replaceChildren(el("span", "label", TILE_LABELS[blk.key] ?? blk.label));
     if (!preset) {
-      this.paramsList.replaceChildren(el("p", "empty-note", "Emplacement vide."));
+      this.paramsList.replaceChildren(el("p", "empty-note", "Empty slot."));
       return;
     }
     if (blk.hasType) {
       const select = el("select", "type-select");
-      select.setAttribute("aria-label", "Type d'effet");
+      select.setAttribute("aria-label", "Effect type");
       blk.types.forEach((t, i) => select.append(new Option(t.name, String(i))));
       select.value = String(readField(preset.data, blk.firstField));
       select.addEventListener("change", () => this.setField(blk.firstField, Number(select.value)));
@@ -931,7 +973,7 @@ export class PresetView {
       const sw = el("button", on ? "switch on" : "switch");
       sw.type = "button";
       sw.setAttribute("aria-pressed", String(on));
-      sw.setAttribute("aria-label", `${blk.label} : ${on ? "désactiver" : "activer"}`);
+      sw.setAttribute("aria-label", `${blk.label}: ${on ? "turn off" : "turn on"}`);
       const trackEl = el("span", "switch-track");
       trackEl.append(el("span", "switch-knob"));
       sw.append(trackEl, el("span", "switch-text", on ? "On" : "Off"));
@@ -961,7 +1003,8 @@ export class PresetView {
     const pedals = new Map(this.assignedModifiers(preset.data).map((t) => [t.paramField, t.modifier.source]));
     this.paramsList.classList.toggle("slider-list", SLIDER_BLOCKS.has(blk.key) && !DESKTOP.matches);
     this.paramsList.replaceChildren(...rows.map(([index, p]) =>
-      this.paramRow(index, p, readField(preset.data, index), () => this.openSheet(index), pedals.get(index))));
+      this.paramRow(index, p, readField(preset.data, index), () => this.openSheet(index), (v) => this.setField(index, v),
+        pedals.get(index))));
   }
 
   private openTempoSheet(): void {
@@ -976,7 +1019,7 @@ export class PresetView {
     this.paramsList.classList.add("on-block");
     const preset = this.buffer;
     if (!preset) {
-      this.paramsList.replaceChildren(el("p", "empty-note", "Emplacement vide."));
+      this.paramsList.replaceChildren(el("p", "empty-note", "Empty slot."));
       return;
     }
     this.paramsHead.append(el("div", "grow"));
@@ -984,7 +1027,7 @@ export class PresetView {
     const current = presetLevels(preset.data).routing;
     const choice = el("div", "routing-choice");
     choice.setAttribute("role", "radiogroup");
-    choice.setAttribute("aria-label", "Type de routing");
+    choice.setAttribute("aria-label", "Routing type");
     ROUTINGS.forEach((name, i) => {
       const b = el("button", i === current ? "on" : "");
       b.type = "button";
@@ -998,10 +1041,31 @@ export class PresetView {
     const rows: HTMLElement[] = [choice, ...presetOutputs(preset.data).map((v, side) =>
       this.paramRow(OUTPUT_ROW + side, OUTPUTS[side], v, () =>
         this.openValueSheet(`Routing · ${OUTPUTS[side].name}`, `field #${OUTPUTS_FIELD}`, OUTPUTS[side], v,
-          (next) => this.setOutput(side, next))))];
+          (next) => this.setOutput(side, next)), (next) => this.setOutput(side, next)))];
     const ms = presetTempoMs(preset.data);
-    if (ms !== null) rows.push(this.paramRow(TEMPO_ROW, TEMPO, msToBpm(ms), () => this.openTempoSheet()));
+    if (ms !== null) rows.push(this.paramRow(TEMPO_ROW, TEMPO, msToBpm(ms), () => this.openTempoSheet(), (bpm) => this.setTempo(bpm)));
+    // Relay settings A and B: which contacts of the Relay jacks close (amp channels…), toggled by the Relay switch.
+    rows.push(...presetRelays(preset.data).map((value, which) => this.relayRow(which, value)));
     this.paramsList.replaceChildren(...rows);
+  }
+
+  private relayRow(which: number, value: number): HTMLElement {
+    const name = which ? "Relay B" : "Relay A";
+    const row = el("div", "relay-row");
+    row.setAttribute("role", "group");
+    row.setAttribute("aria-label", `${name}: ${relayText(value)}`);
+    const contacts = el("span", "relay-contacts");
+    for (let i = 0; i < RELAY_CONTACTS; i++) {
+      const closed = ((value >> i) & 1) === 1;
+      const b = el("button", closed ? "relay-contact on" : "relay-contact", String(i + 1));
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(closed));
+      b.title = `Contact ${i + 1}: ${closed ? "closed" : "open"}`;
+      b.addEventListener("click", () => this.setRelay(which, value ^ (1 << i)));
+      contacts.append(b);
+    }
+    row.append(el("span", "relay-name", name), contacts, el("span", "relay-text", relayText(value)));
+    return row;
   }
 
   private renderModifiers(): void {
@@ -1009,10 +1073,10 @@ export class PresetView {
     this.paramsList.classList.remove("on-block");
     const preset = this.buffer;
     if (!preset) {
-      this.paramsList.replaceChildren(el("p", "empty-note", "Emplacement vide."));
+      this.paramsList.replaceChildren(el("p", "empty-note", "Empty slot."));
       return;
     }
-    this.paramsHead.append(el("span", "params-hint", "Paramètres pilotables avec les types d'effets actuels"));
+    this.paramsHead.append(el("span", "params-hint", "Parameters controllable with the current effect types"));
     // NovaDrive slots only matter with a NovaDrive pedal: listed once one is assigned.
     const targets = modifierTargets(preset.data, true)
       .filter((t) => t.key !== "novadrive" || (t.modifier.source && isValidModifier(t.modifier)));
@@ -1031,7 +1095,7 @@ export class PresetView {
     const row = el("button", `param modifier${t.field === this.paramIndex ? " selected" : ""}${active ? " assigned" : ""}`);
     row.type = "button";
     const summary = !valid ? "invalid values" : active ? `${SOURCES[m.source]}, ${m.min} / ${m.mid} / ${m.max} %` : "none";
-    row.setAttribute("aria-label", `${this.blockLabel(t.key)} ${t.name} : ${summary}, toucher pour régler`);
+    row.setAttribute("aria-label", `${this.blockLabel(t.key)} ${t.name}: ${summary}, tap to adjust`);
     const top = el("span", "param-top");
     const name = el("span", "param-name");
     name.append(el("span", "param-block", this.blockLabel(t.key)), t.name);
@@ -1057,10 +1121,12 @@ export class PresetView {
     return row;
   }
 
-  private paramRow(index: number, p: Param, value: number, open: () => void, pedal?: number): HTMLElement {
+  private paramRow(index: number, p: Param, value: number, open: () => void, set: (v: number) => void,
+    pedal?: number): HTMLElement {
+    if (DESKTOP.matches) return directParam(index, p, value, open, set, pedal);
     const row = el("button", index === this.paramIndex ? "param selected" : "param");
     row.type = "button";
-    row.setAttribute("aria-label", `${p.name} : ${p.format(value)}, toucher pour régler`);
+    row.setAttribute("aria-label", `${p.name}: ${p.format(value)}, tap to adjust`);
     // The layout lives on an inner element: older Android WebViews centre and shrink a button's
     // content whatever its own display, which squeezed the sliders to the width of their text.
     const body = el("span", "param-body");
@@ -1187,7 +1253,7 @@ export class PresetView {
     }
 
     const buttons = el("div", "sheet-buttons");
-    const stepper = (label: string, delta: number) => holdButton(label, delta < 0 ? "Diminuer" : "Augmenter", () => {
+    const stepper = (label: string, delta: number) => holdButton(label, delta < 0 ? "Decrease" : "Increase", () => {
       commit(value + delta);
       this.sheetShow?.(value);
     });
@@ -1219,8 +1285,8 @@ export class PresetView {
       const pct = el("span", "mod-pct");
       const equiv = el("span", "mod-equiv");
       const step = (d: number) => commit({ ...m, [k]: clampPct(m[k] + d) });
-      row.append(el("span", "mod-label", label), holdButton("−", `${label} : diminuer`, () => step(-1)), pct,
-        holdButton("+", `${label} : augmenter`, () => step(1)), equiv);
+      row.append(el("span", "mod-label", label), holdButton("−", `${label}: decrease`, () => step(-1)), pct,
+        holdButton("+", `${label}: increase`, () => step(1)), equiv);
       rows.append(row);
       return { k, row, pct, equiv };
     });
@@ -1258,17 +1324,10 @@ export class PresetView {
   }
 
   private showSheet(sheet: HTMLElement, label: string): void {
-    if (DESKTOP.matches) {
-      // Docked in the inspector column: no backdrop, the parameters stay usable beside it.
-      sheet.setAttribute("aria-label", label);
-      sheet.classList.add("docked");
-      this.inspector.replaceChildren(sheet);
-      return;
-    }
     const layer = el("div", "sheet-layer");
     const backdrop = el("button", "sheet-backdrop");
     backdrop.type = "button";
-    backdrop.setAttribute("aria-label", "Fermer");
+    backdrop.setAttribute("aria-label", "Close");
     backdrop.addEventListener("click", () => this.closeSheet());
     sheet.setAttribute("role", "dialog");
     sheet.setAttribute("aria-label", label);
@@ -1282,9 +1341,88 @@ export class PresetView {
     this.paramIndex = null;
     this.sheetShow = null;
     this.body.querySelector(".sheet-layer")?.remove();
-    this.inspector.replaceChildren(el("p", "inspector-hint", "Choisissez un paramètre pour le régler ici."));
     this.paramsList.querySelector(".param.selected")?.classList.remove("selected");
   }
+}
+
+/**
+ * Desktop parameter: the knob turns by dragging up or down (Shift for fine steps) or with the arrow keys,
+ * Page Up / Down, Home and End; a double click opens the fine-adjust sheet. A list is a drop-down.
+ * The value is set once the knob is released.
+ */
+function directParam(index: number, p: Param, value: number, open: () => void, set: (v: number) => void,
+  pedal?: number): HTMLElement {
+  const row = el("div", "param direct");
+  row.dataset.row = String(index);
+  const body = el("span", "param-body");
+  row.append(body);
+  body.append(el("span", "param-name", p.name));
+  if (pedal) row.append(el("span", "source-chip on small param-pedal", SHORT_SOURCES[pedal]));
+  if (p.choices.length) {
+    const select = el("select", "param-select");
+    select.setAttribute("aria-label", p.name);
+    for (let v = p.lo; v <= p.hi; v++) select.append(new Option(p.format(v), String(v)));
+    if (value < p.lo || value > p.hi) select.append(new Option(String(value), String(value)));
+    select.value = String(value);
+    select.addEventListener("change", () => set(Number(select.value)));
+    body.append(select);
+    return row;
+  }
+  const dial = el("span", "knob-control");
+  dial.tabIndex = 0;
+  dial.setAttribute("role", "slider");
+  dial.setAttribute("aria-label", p.name);
+  dial.setAttribute("aria-valuemin", String(p.lo));
+  dial.setAttribute("aria-valuemax", String(p.hi));
+  const readout = el("span", "param-value");
+  const span = p.hi - p.lo;
+  const clampV = (v: number) => Math.max(p.lo, Math.min(p.hi, Math.round(v)));
+  let shown = value;
+  const show = (v: number) => {
+    shown = v;
+    dial.innerHTML = knob(p, v);
+    readout.textContent = p.format(v);
+    readout.classList.toggle("warn", v < p.lo || v > p.hi);
+    dial.setAttribute("aria-valuenow", String(v));
+    dial.setAttribute("aria-valuetext", p.format(v));
+  };
+  show(value);
+  // The whole range over 200 px of travel, ten times finer with Shift.
+  let drag: { y: number; at: number } | null = null;
+  dial.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    dial.focus();
+    dial.setPointerCapture(e.pointerId);
+    drag = { y: e.clientY, at: shown };
+  });
+  dial.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    drag.at += ((drag.y - e.clientY) / (e.shiftKey ? 2000 : 200)) * span;
+    drag.y = e.clientY;
+    drag.at = Math.max(p.lo, Math.min(p.hi, drag.at));
+    if (clampV(drag.at) !== shown) show(clampV(drag.at));
+  });
+  const end = () => {
+    if (!drag) return;
+    drag = null;
+    if (shown !== value) set(shown);
+  };
+  dial.addEventListener("pointerup", end);
+  dial.addEventListener("pointercancel", end);
+  dial.addEventListener("lostpointercapture", end);
+  dial.addEventListener("dblclick", open);
+  dial.addEventListener("keydown", (e) => {
+    const page = Math.max(1, Math.round(span / 10));
+    const next = { ArrowUp: shown + 1, ArrowRight: shown + 1, ArrowDown: shown - 1, ArrowLeft: shown - 1,
+      PageUp: shown + page, PageDown: shown - page, Home: p.lo, End: p.hi }[e.key];
+    if (next === undefined) return;
+    e.preventDefault();
+    const v = clampV(next);
+    if (v !== value) set(v);
+  });
+  body.append(dial, readout);
+  return row;
 }
 
 /** A button that repeats its action while held. */

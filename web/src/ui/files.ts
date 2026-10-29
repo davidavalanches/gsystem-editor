@@ -43,7 +43,7 @@ export async function saveFile(name: string, bytes: Uint8Array): Promise<string>
   a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  return `Téléchargements/${name}`;
+  return `Downloads/${name}`;
 }
 
 const SESSION_KEY = "gsystem-editor.session";

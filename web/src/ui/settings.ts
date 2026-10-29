@@ -6,7 +6,7 @@
  * be prepared offline from the last values read, and dropped with "Annuler".
  */
 
-import { GLOBAL_GROUPS, formatGlobal, globalKey, globalRaw, globalValue, type GlobalParam } from "../core/globals";
+import { GLOBAL_GROUPS, formatGlobal, globalKey, globalRaw, globalValue, type GlobalGroup, type GlobalParam } from "../core/globals";
 import {
   FIXED_SWITCHES, FUNCTIONS, STYLES, SWITCH_BANKS, SWITCH_BLOCK, SWITCH_COUNT, SWITCH_FIRST, decodeSwitch, encodeSwitch, switchKind,
   withFunction, type SwitchSetting,
@@ -40,9 +40,13 @@ export class SettingsView {
   /** Changes sent and awaiting the read-back that confirms them. */
   private sent: Map<string, number> | null = null;
   private readonly sendButton = el("button", "pill primary");
-  private readonly cancelButton = el("button", "pill", "Annuler");
-  private readonly rows = new Map<string, () => void>();
-  private readonly readButton = el("button", "pill", "Relire");
+  private readonly cancelButton = el("button", "pill", "Cancel");
+  /** Send and Cancel buttons of the cards shown in other views (the MIDI view's). */
+  private readonly sendButtons: HTMLButtonElement[] = [this.sendButton];
+  private readonly cancelButtons: HTMLButtonElement[] = [this.cancelButton];
+  /** How to redraw each setting, in every card that shows it. */
+  private readonly rows = new Map<string, (() => void)[]>();
+  private readonly readButton = el("button", "pill", "Re-read");
   private readonly note = el("p", "settings-note");
   private readonly body = el("div", "settings-body");
   /** Shown instead of the cards until the settings have been read once. */
@@ -61,31 +65,26 @@ export class SettingsView {
     this.readButton.type = "button";
     this.readButton.addEventListener("click", () => this.onRead?.());
     this.sendButton.type = "button";
-    this.sendButton.title = "Écrire les réglages modifiés dans le G-System, puis les relire pour vérifier";
+    this.sendButton.title = "Write the modified settings to the G-System, then read them back to check";
     this.sendButton.addEventListener("click", () => this.send());
     this.cancelButton.type = "button";
-    this.cancelButton.title = "Abandonner les modifications et revenir aux valeurs du G-System";
+    this.cancelButton.title = "Discard the changes and go back to the G-System's values";
     this.cancelButton.addEventListener("click", () => this.cancel());
     const header = el("header", "header");
-    header.append(el("div", "grow header-title", "Réglages du G-System"), this.cancelButton, this.readButton, this.sendButton);
-    const connect = el("button", "pill primary", "Connecter le G-System");
+    header.append(el("div", "grow header-title", "G-System settings"), this.cancelButton, this.readButton, this.sendButton);
+    const connect = el("button", "pill primary", "Connect the G-System");
     connect.type = "button";
     connect.addEventListener("click", () => this.onConnect?.());
-    this.empty.append(el("h2", "", "Réglages pas encore lus"),
-      el("p", "", "Les réglages globaux (niveaux, pédales, MIDI, switches) sont lus dans le G‑System. "
-        + "Une fois lus, ils restent affichés hors connexion et vous pouvez y préparer des modifications."),
+    this.empty.append(el("h2", "", "Settings not read yet"),
+      el("p", "", "The global settings (levels, pedals, MIDI, switches) are read from the G‑System. "
+        + "Once read, they stay shown offline and you can prepare changes to them."),
       connect);
     const body = this.body;
     body.append(this.note, this.empty);
-    for (const group of GLOBAL_GROUPS) {
-      const card = el("div", "card settings-card");
-      card.append(el("h2", "", group.title));
-      for (const g of group.params) card.append(this.row(g));
-      body.append(card);
-    }
+    for (const group of GLOBAL_GROUPS) body.append(this.groupCard(group));
     const switches = el("div", "card settings-card switches-card");
     switches.append(el("h2", "", "Switches"),
-      el("p", "", "Fonction de chaque switch du pédalier. EDIT, UP et DOWN sont fixes."));
+      el("p", "", "Function of each footswitch on the unit. EDIT, UP and DOWN are fixed."));
     for (let n = 0; n < SWITCH_COUNT; n++) switches.append(this.switchRow(n));
     body.append(switches);
     this.el.append(header, body);
@@ -96,6 +95,40 @@ export class SettingsView {
       this.readAt = cache.at;
     }
     this.setConnected(false);
+  }
+
+  private groupCard(group: GlobalGroup): HTMLElement {
+    const card = el("div", "card settings-card");
+    card.append(el("h2", "", group.title));
+    for (const g of group.params) card.append(this.row(g));
+    return card;
+  }
+
+  /** A group's card for another view, with its own Cancel and Send (they act on all pending settings). */
+  externalCard(title: string): HTMLElement {
+    const group = GLOBAL_GROUPS.find((g) => g.title === title);
+    if (!group) throw new Error(`unknown settings group ${title}`);
+    const card = this.groupCard(group);
+    const send = el("button", "pill primary");
+    send.type = "button";
+    send.title = this.sendButton.title;
+    send.addEventListener("click", () => this.send());
+    const cancel = el("button", "pill", "Cancel");
+    cancel.type = "button";
+    cancel.title = this.cancelButton.title;
+    cancel.addEventListener("click", () => this.cancel());
+    this.sendButtons.push(send);
+    this.cancelButtons.push(cancel);
+    const actions = el("div", "actions");
+    actions.append(cancel, send);
+    card.append(actions);
+    this.refresh();
+    return card;
+  }
+
+  /** The unit's value of a setting (as last read), if known. */
+  rawValue(block: number, param: number): number | undefined {
+    return this.raw.get(globalKey(block, param));
   }
 
   setConnected(on: boolean): void {
@@ -113,7 +146,7 @@ export class SettingsView {
   private edit(key: string, raw: number): void {
     if (raw === this.raw.get(key)) this.pending.delete(key);
     else this.pending.set(key, raw);
-    this.rows.get(key)?.();
+    this.rows.get(key)?.forEach((d) => d());
     this.refreshNote();
     this.scheduleCache();
   }
@@ -135,8 +168,8 @@ export class SettingsView {
     const failed = [...this.sent.keys()].filter((key) => this.pending.has(key)).length;
     const total = this.sent.size;
     this.sent = null;
-    this.onNotice?.(failed ? `${failed} réglage(s) sur ${total} non confirmé(s) par le G-System`
-      : `${total} réglage(s) écrit(s) dans le G-System et vérifié(s)`);
+    this.onNotice?.(failed ? `${failed} of ${total} setting(s) not confirmed by the G-System`
+      : `${total} setting(s) written to the G-System and verified`);
     this.refresh();
   }
 
@@ -156,7 +189,7 @@ export class SettingsView {
     this.readAt = null;
     // A change the unit now holds is no longer pending (confirmed after a send, or made on its panel too).
     if (this.pending.get(key) === raw) this.pending.delete(key);
-    draw();
+    draw.forEach((d) => d());
     this.refreshNote();
     this.scheduleCache();
   }
@@ -174,28 +207,30 @@ export class SettingsView {
   }
 
   private refresh(): void {
-    for (const draw of this.rows.values()) draw();
+    for (const draws of this.rows.values()) draws.forEach((d) => d());
     this.refreshNote();
   }
 
   private refreshNote(): void {
     const n = this.pending.size;
-    this.sendButton.textContent = this.sent ? "Envoi…" : n ? `Envoyer (${n})` : "Envoyer";
-    this.sendButton.disabled = !this.connected || !n || !!this.sent;
-    this.cancelButton.disabled = !n || !!this.sent;
+    for (const b of this.sendButtons) {
+      b.textContent = this.sent ? "Sending…" : n ? `Send (${n})` : "Send";
+      b.disabled = !this.connected || !n || !!this.sent;
+    }
+    for (const b of this.cancelButtons) b.disabled = !n || !!this.sent;
     const unread = !this.connected && !this.raw.size;
     this.body.classList.toggle("unread", unread);
     for (const b of [this.cancelButton, this.readButton, this.sendButton]) b.hidden = unread;
-    const at = this.readAt ? new Date(this.readAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "";
-    const changes = n ? ` ${n} modification(s) en attente${this.connected ? " : Envoyer pour les écrire dans le G-System."
-      : ", envoyées à la prochaine connexion avec Envoyer."}` : "";
+    const at = this.readAt ? new Date(this.readAt).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" }) : "";
+    const changes = n ? ` ${n} change(s) pending${this.connected ? ": Send to write them to the G-System."
+      : ", sent with Send at the next connection."}` : "";
     this.note.textContent = !this.connected
       ? this.raw.size
-        ? `G-System non connecté : dernières valeurs lues${at ? ` (${at})` : ""}.${changes}`
-          + (n ? "" : " Vous pouvez préparer des modifications, elles seront envoyées une fois connecté.")
-        : "Connectez le G-System (vue MIDI) : ses réglages globaux seront lus puis modifiables ici."
-      : this.raw.size ? `Réglages globaux du G-System (pas ceux d'un preset).${changes || " Aucune modification en attente."}`
-        : "Lecture des réglages…";
+        ? `G-System not connected: last values read${at ? ` (${at})` : ""}.${changes}`
+          + (n ? "" : " You can prepare changes; they will be sent once connected.")
+        : "Connect the G-System (MIDI view): its global settings will be read and can then be edited here."
+      : this.raw.size ? `G-System global settings (not a preset's).${changes || " No changes pending."}`
+        : "Reading settings…";
   }
 
   /** One footswitch: its function, then the style, the preset to recall or the CC to send. */
@@ -213,13 +248,13 @@ export class SettingsView {
     row.append(control);
     const select = (label: string, options: string[]) => {
       const s = el("select", "type-select");
-      s.setAttribute("aria-label", `Switch #${n + 1} : ${label}`);
+      s.setAttribute("aria-label", `Switch #${n + 1}: ${label}`);
       options.forEach((o, i) => s.append(new Option(o, String(i))));
       return s;
     };
-    const fn = select("fonction", [...FUNCTIONS]);
-    const style = toggle(`Switch #${n + 1} : style`, STYLES, (i) => { const c = current(); if (c) send({ ...c, p1: i }); });
-    const bank = select("banque", SWITCH_BANKS);
+    const fn = select("function", [...FUNCTIONS]);
+    const style = toggle(`Switch #${n + 1}: style`, STYLES, (i) => { const c = current(); if (c) send({ ...c, p1: i }); });
+    const bank = select("bank", SWITCH_BANKS);
     const preset = select("preset", ["1", "2", "3", "4", "5"]);
     preset.classList.add("narrow");
     const cc = select("CC", Array.from({ length: 120 }, (_, i) => `CC ${i}`));
@@ -254,8 +289,12 @@ export class SettingsView {
       if (kind === "preset") { set(bank, c.p1); set(preset, c.p2); }
       if (kind === "cc") set(cc, c.p1);
     };
-    this.rows.set(key, draw);
+    this.register(key, draw);
     return row;
+  }
+
+  private register(key: string, draw: () => void): void {
+    this.rows.set(key, [...(this.rows.get(key) ?? []), draw]);
   }
 
   private row(g: GlobalParam): HTMLElement {
@@ -303,8 +342,8 @@ export class SettingsView {
       };
     } else {
       const value = el("span", "setting-value");
-      const minus = stepButton("−", `${g.name} : diminuer`, () => send((current() ?? 0) - 1));
-      const plus = stepButton("+", `${g.name} : augmenter`, () => send((current() ?? 0) + 1));
+      const minus = stepButton("−", `${g.name}: decrease`, () => send((current() ?? 0) - 1));
+      const plus = stepButton("+", `${g.name}: increase`, () => send((current() ?? 0) + 1));
       control.append(minus, value, plus);
       draw = () => {
         const v = current();
@@ -312,7 +351,7 @@ export class SettingsView {
         minus.disabled = plus.disabled = v === null;
       };
     }
-    this.rows.set(key, () => {
+    this.register(key, () => {
       row.classList.toggle("modified", this.pending.has(key));
       draw();
     });

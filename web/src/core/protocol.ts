@@ -16,8 +16,9 @@
  *   altered a neighbouring preset. On this unit the freezes stayed in banks 27-29,
  *   which the app never writes; elsewhere stores are read back to verify them.
  * - Bank Select + Program Change: sent by the unit when a preset is recalled.
- *   Over USB the unit ignores incoming Program Changes, so the editor auditions
- *   a preset by writing its parameters into the edit buffer instead.
+ *   The editor sends the same pair to recall a preset (Prg.Chng.In on, on the
+ *   unit's MIDI channel). A first test over USB saw it ignored, so in Live mode
+ *   the editor also writes the preset's parameters into the edit buffer.
  */
 
 import { MODEL_G_SYSTEM, Preset, TC_MANUFACTURER, USER_PRESET_BASE, USER_SLOTS, isPresetDump, userNumber } from "./sysex";
@@ -62,6 +63,13 @@ export function storeMessages(slot: number, preset: Preset, sysexId: number): Ui
     preset.toSysex(userNumber(slot), sysexId),
     sysex(0x57, 0x01), // end transfer
   ];
+}
+
+/** Bank Select (CC 0: 1 for user presets 1-100, 2 for 101-200) and Program Change recalling a user slot. */
+export function presetSelectMessages(slot: number, channel: number): Uint8Array[] {
+  const ch = (channel - 1) & 0x0f;
+  return [new Uint8Array([0xb0 | ch, 0x00, 1 + Math.floor(slot / USER_BANK_SIZE)]),
+    new Uint8Array([0xc0 | ch, slot % USER_BANK_SIZE])];
 }
 
 export function paramsRequest(blockId: number, first: number, count: number, deviceId: number): Uint8Array {
@@ -159,6 +167,11 @@ export class GSystemLink {
         }
       }, SEND_INTERVAL_MS);
     }
+  }
+
+  /** Recall a user preset on the unit, on MIDI channel 1-16. */
+  selectPreset(slot: number, channel: number): void {
+    for (const msg of presetSelectMessages(slot, channel)) this.transport.send(msg);
   }
 
   /** Ask for parameter values; they arrive through onParam. */

@@ -6,7 +6,7 @@
  * bits 4-7   boost level in dB (block 1 parameter 11)
  * bits 9-12  loops 1 to 4 (block 1 parameters 19-22)
  * bit  13    insert loop (block 1 parameter 23)
- * bits 16-23 relays (block 1 parameters 17 and 18, one nibble each)
+ * bits 16-23 relays A and B (block 1 parameters 17 and 18, one nibble each, see presetRelays)
  *
  * Matched against the levels the unit sent for preset "Chute - drive" (loop 2 on,
  * relays 6 and 12) and those Vyzor sent with "Fragile - clean" (insert and boost
@@ -32,6 +32,10 @@ export const ROUTING_PARAM = 0;
 export const BOOST_LEVEL_PARAM = 11;
 export const BOOST_LEVEL_MAX = 10;
 export const OUTPUT_PARAMS: readonly [number, number] = [26, 27];
+/** Block 1 parameters of relay settings A and B (the Relay footswitch toggles between them). */
+export const RELAY_PARAMS: readonly [number, number] = [17, 18];
+/** Contacts of a relay setting: the tip and ring of the Relay 1 and Relay 2 jacks. */
+export const RELAY_CONTACTS = 4;
 
 export interface PresetLevels {
   loops: [boolean, boolean, boolean, boolean];
@@ -87,3 +91,22 @@ export function writeBoostLevel(data: Uint8Array, level: number): Uint8Array {
   const raw = (readField(data, LEVELS_FIELD) & 0xffff0f) | (value << 4);
   return writeField(data, LEVELS_FIELD, signed(raw, 24));
 }
+
+/**
+ * Relay settings A and B, 4 bits each: bit n closes contact n + 1. The firmware lists
+ * them as OOOO to CCCC, first contact first ("Chute - drive": A = OCCO, B = OOCC).
+ */
+export function presetRelays(data: Uint8Array): [number, number] {
+  const raw = readField(data, LEVELS_FIELD) & 0xffffff;
+  return [(raw >> 16) & 0x0f, (raw >> 20) & 0x0f];
+}
+
+export function writeRelay(data: Uint8Array, which: number, value: number): Uint8Array {
+  const shift = which ? 20 : 16;
+  const raw = (readField(data, LEVELS_FIELD) & 0xffffff & ~(0x0f << shift)) | ((value & 0x0f) << shift);
+  return writeField(data, LEVELS_FIELD, signed(raw, 24));
+}
+
+/** "OCCO": open (O) or closed (C), contact 1 first, as the unit shows a relay setting. */
+export const relayText = (value: number) =>
+  Array.from({ length: RELAY_CONTACTS }, (_, i) => ((value >> i) & 1 ? "C" : "O")).join("");

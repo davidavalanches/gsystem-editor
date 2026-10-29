@@ -53,7 +53,7 @@ class WebMidi implements MidiAccess {
   private access: MIDIAccess | null = null;
 
   private async midi(): Promise<MIDIAccess> {
-    if (!navigator.requestMIDIAccess) throw new Error("Ce navigateur ne gère pas le MIDI (utilisez Chrome ou Chromium).");
+    if (!navigator.requestMIDIAccess) throw new Error("This browser does not support MIDI (use Chrome or Chromium).");
     this.access ??= await navigator.requestMIDIAccess({ sysex: true });
     return this.access;
   }
@@ -67,7 +67,7 @@ class WebMidi implements MidiAccess {
     const midi = await this.midi();
     const output = [...midi.outputs.values()].find((o) => (o.name ?? o.id) === id);
     const input = [...midi.inputs.values()].find((i) => i.name === output?.name);
-    if (!output || !input) throw new Error(`Port MIDI introuvable : ${id}`);
+    if (!output || !input) throw new Error(`MIDI port not found: ${id}`);
     await Promise.all([output.open(), input.open()]);
     const transport: Transport = {
       onMessage: null,

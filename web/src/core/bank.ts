@@ -93,7 +93,7 @@ export class BankStore {
   presets: Slots = new Array(USER_SLOTS).fill(null);
   /** The .sqs file the bank came from, kept so it can be saved back. */
   sqs: SqsFile | null = null;
-  title = "Nouvelle banque";
+  title = "New bank";
   readonly undo = new UndoStack();
   /** Called with the slots that changed, or null when the whole bank was replaced. */
   onChange: ((slots: number[] | null) => void) | null = null;
@@ -139,6 +139,12 @@ export class BankStore {
 
   clearPending(slot: number): void {
     if (this.pending.delete(slot)) this.onChange?.([slot]);
+  }
+
+  /** Take slots off the list to write into the unit (their editor version stays). */
+  dropPending(slots: Iterable<number>): void {
+    const gone = [...slots].filter((s) => this.pending.delete(s));
+    if (gone.length) this.onChange?.(gone);
   }
 
   preset(slot: number): Preset | null {

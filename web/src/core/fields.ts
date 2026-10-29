@@ -14,18 +14,18 @@ export interface FieldInfo {
 export function describeField(data: Uint8Array, index: number): FieldInfo {
   const blk = owner(index);
   if (blk) {
-    if (index === blk.countField) return { group: blk.label, name: "Nombre de paramètres", param: null };
+    if (index === blk.countField) return { group: blk.label, name: "Number of parameters", param: null };
     const param = blk.fields(data).find(([f]) => f === index)?.[1] ?? null;
-    return { group: blk.label, name: param?.name ?? "(non utilisé par ce type)", param };
+    return { group: blk.label, name: param?.name ?? "(not used by this type)", param };
   }
   if (index >= MODIFIER_FIELD && index < MODIFIER_FIELD + MODIFIER_SLOTS) {
     const slot = index - MODIFIER_FIELD;
     const target = modifierTargets(data, true).find((t) => t.slot === slot);
     return { group: "Modifiers", name: target ? `${target.key} · ${target.name}` : `Slot ${slot + 1}`, param: null };
   }
-  if (index === LEVELS_FIELD) return { group: "Preset", name: "Routing, boost, loops, relais", param: null };
+  if (index === LEVELS_FIELD) return { group: "Preset", name: "Routing, boost, loops, relays", param: null };
   if (index === OUTPUTS_FIELD) return { group: "Preset", name: "Output L / R", param: null };
-  return { group: "Preset", name: "(inconnu)", param: null };
+  return { group: "Preset", name: "(unknown)", param: null };
 }
 
 /** The value as shown: the parameter's display, a modifier's source, else the raw value. */

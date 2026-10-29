@@ -224,6 +224,11 @@ button:disabled { opacity: 0.4; cursor: default; }
 .slot:last-child { border-bottom: 0; }
 .slot-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 /* Routing of the preset, at the right of its row. */
+/* Output levels and boost of the preset, left of its tempo and routing. */
+.slot-levels { flex-shrink: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 66px; margin-right: 8px; padding-right: 8px; border-right: 1px solid var(--groove); }
+.slot-level { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; font-family: var(--mono); font-size: 10.5px; line-height: 1.1; color: var(--soft); white-space: nowrap; }
+.slot-level-name { font-family: var(--display); font-size: 7.5px; letter-spacing: 0.05em; color: var(--dim); }
+.slot-level.boost, .slot-level.boost .slot-level-name { color: var(--red); }
 .slot-routing { flex-shrink: 0; width: 62px; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--soft); }
 .slot-tempo { display: flex; align-items: baseline; justify-content: center; gap: 3px; width: 100%; color: #f2f2f2; font-family: "Doto", monospace; font-weight: 800; line-height: 0.9; white-space: nowrap; }
 .slot-tempo .bpm { font-size: 17px; }
@@ -260,11 +265,19 @@ button:disabled { opacity: 0.4; cursor: default; }
 .pill.live.active .live-dot { background: var(--amber); }
 .pill.store { border: 0; background: #2a2d31; color: #8e949a; margin-left: 4px; padding: 0 12px; }
 .pill.store.dirty { background: var(--ink); color: var(--dark-ink); }
+/* Amber LED while the preset has changes not stored. */
+.edit-led { display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-right: 2px; font-family: var(--display); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--amber); }
+.edit-led-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 8px rgba(242, 194, 48, 0.85); }
+/* The unit's two green tempo LEDs, side by side: they take turns, one lit per beat of the preset's tempo. */
+.tempo-leds { display: flex; align-items: center; gap: 5px; flex-shrink: 0; margin: 0 2px 0 8px; }
+.tempo-led { width: 8px; height: 8px; border-radius: 50%; background: #17361c; animation: beat calc(var(--beat, 500ms) * 2) steps(1, end) infinite; }
+.tempo-led + .tempo-led { animation-delay: calc(var(--beat, 500ms) * -1); }
+@keyframes beat { 0% { background: var(--green); box-shadow: 0 0 6px rgba(91, 196, 106, 0.9); } 50% { background: #17361c; box-shadow: none; } }
 
 .preset-body { flex: 1; min-height: 0; display: flex; position: relative; }
 .preset-main { flex: 1; min-width: 0; min-height: 0; display: flex; }
 /* Desktop-only parts (see the desktop layout at the end). */
-.bank-grid, .bank-detail, .preset-browser, .preset-inspector { display: none; }
+.bank-grid, .bank-detail, .preset-browser { display: none; }
 /* Effect blocks: a 2 × 4 panel of footswitches, like the unit's. */
 .blocks-column { width: 236px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--panel) var(--scanlines); border-right: 1px solid var(--edge); }
 .blocks { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); }
@@ -324,6 +337,15 @@ button:disabled { opacity: 0.4; cursor: default; }
 .routing-choice button { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; min-width: 0; padding: 7px 2px 6px; border: 0; border-radius: 6px; background: var(--surface-2); color: var(--muted); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
 .routing-choice button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .routing-choice button.on { background: var(--accent); color: #fff; box-shadow: 0 0 10px rgba(255, 90, 71, 0.35); }
+/* Relay settings A and B: four contacts each, lit when closed. */
+.relay-row { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-top: 1px solid var(--surface-2); }
+.relay-name { width: 64px; flex-shrink: 0; font-family: var(--display); font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--soft); }
+.relay-contacts { display: flex; gap: 4px; }
+.relay-contact { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--surface-2); color: var(--muted); font-family: var(--mono); font-size: 12px; font-weight: 600; }
+.relay-contact::before { content: ""; width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--line-3); }
+.relay-contact.on { color: var(--ink); }
+.relay-contact.on::before { background: var(--red); border: 0; box-shadow: 0 0 6px rgba(240, 83, 62, 0.8); }
+.relay-text { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--dim); }
 .tile.stack { flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; padding: 0 10px; }
 .tile-routing { display: flex; align-items: center; gap: 6px; color: var(--soft); }
 .tile-count { font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--amber); }
@@ -373,7 +395,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 .level.on { color: var(--ink); }
 .level.on::before { background: var(--red); border: 0; box-shadow: 0 0 6px rgba(240, 83, 62, 0.8); }
 
-.params-section { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); }
+.params-section { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--surface); }
 .params-head { display: flex; align-items: center; gap: 8px; height: 46px; flex-shrink: 0; padding: 0 10px 0 14px; border-bottom: 1px solid var(--bg); }
 .params-head .label { font-family: var(--display); font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; }
 .type-select {
@@ -723,8 +745,13 @@ button:disabled { opacity: 0.4; cursor: default; }
   .param-name { font-size: 10px; }
   .param-value { font-size: 14px; }
 
-  .preset-inspector { display: flex; flex-direction: column; width: clamp(260px, 17vw, 330px); flex-shrink: 0; min-height: 0; background: var(--bar); border-left: 1px solid var(--edge); }
-  .inspector-hint { margin: auto 24px; text-align: center; color: var(--dim); font-size: 13px; }
+  /* Controls used in place: knobs turn with the mouse or the keys, lists drop down. */
+  .param.direct { cursor: default; }
+  .knob-control { display: block; border-radius: 50%; cursor: ns-resize; touch-action: none; }
+  .knob-control:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  .knob-control:hover .knob-cap { stroke: var(--line-3); }
+  .param-select { width: 100%; height: 32px; margin: auto 0; padding: 0 24px 0 8px; border-radius: 6px; border: 1px solid var(--line-2); appearance: none; font-family: var(--mono); font-size: 12px; font-weight: 500; text-overflow: ellipsis;
+    background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%23A1A8B0' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 7px center / 10px; }
   /* Views of the parameters panel: Bloc, Tous les blocs, Brut, Comparer. */
   .desk-tabs { display: flex; gap: 2px; padding: 3px; flex-shrink: 0; border-radius: 9px; background: var(--bg); font-size: 13px; }
   .desk-tabs button { padding: 6px 14px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; white-space: nowrap; }
@@ -746,11 +773,6 @@ button:disabled { opacity: 0.4; cursor: default; }
   .field-table tr.changed td.num { color: var(--amber); }
   .field-table .take { height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--surface-2); font-size: 12px; cursor: pointer; }
   .compare-select { max-width: 320px; }
-  .sheet.docked { flex: 1; width: auto; min-height: 0; padding: 20px; border: 0; border-radius: 0; background: transparent; animation: none; overflow-y: auto; }
-  .sheet.docked .sheet-value { margin: 18px 0 16px; }
-  .sheet.docked .sheet-range { margin-bottom: 0; }
-  .sheet.docked .sheet-choices { margin-bottom: 0; max-height: none; }
-  .sheet.docked .sheet-buttons { margin-top: 20px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
@@ -758,7 +780,21 @@ button:disabled { opacity: 0.4; cursor: default; }
 
 /* Phone: the block header keeps room for the type list beside the Mix / Output readouts. */
 @media (max-width: 1199px), (max-height: 699px) {
+  .edit-led-text { display: none; }
   .params-head { gap: 6px; padding-left: 10px; }
   .params-head .label { font-size: 11px; }
   .params-head .type-select { min-width: 100px; }
 }
+
+/* List of presets waiting to be written into the G-System. */
+.checklist { display: flex; flex-direction: column; max-height: 86vh; width: min(520px, 92vw); }
+.checklist-all { display: flex; align-items: center; gap: 10px; }
+.checklist-all .dialog-title { color: var(--ink); font-weight: 600; }
+.checklist-note { margin: 8px 0; font-size: 12px; color: var(--dim); }
+.checklist-items { flex: 1; min-height: 0; overflow-y: auto; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.checklist-item { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 4px; border-bottom: 1px solid var(--surface-2); font-family: var(--mono); font-size: 13px; cursor: pointer; }
+.checklist-item:last-child { border-bottom: 0; }
+.checklist-label { white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.checklist input[type="checkbox"] { width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--amber); }
+.checklist .dialog-actions { flex-wrap: wrap; }
+.midi-body .settings-card { flex: 1 1 340px; min-width: min(340px, 100%); max-width: 520px; }

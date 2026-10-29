@@ -231,7 +231,7 @@ export class Block {
 }
 
 export const BLOCKS: readonly Block[] = [
-  new Block("comp", "Compresseur", 3, 9, family(["Advanced", "Sustaining", "Percussive"], COMP), [], "Comp"),
+  new Block("comp", "Compressor", 3, 9, family(["Advanced", "Sustaining", "Percussive"], COMP), [], "Comp"),
   new Block("filter", "Filter", 13, 15, [
     ...family(["Resonance Filter", "Touch Res Filter", "Auto Res Filter"], FILTER_RES),
     ...family(["Wah wah", "Touch Wah", "Auto Wah"], FILTER_WAH),
