@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { BankStore, bankPosition, slotLabel } from "../src/core/bank";
-import { applyFavorite, captureFavorite } from "../src/core/favorites";
+import { applyFavorite, captureFavorite, matchingFavorite } from "../src/core/favorites";
 import { GLOBAL_PARAMS, formatGlobal, globalValue } from "../src/core/globals";
 import { LEVELS_FIELD, presetLevels, writeBoostLevel } from "../src/core/levels";
 import { BLOCKS, block, diffFields, fieldOffset, FIELD_COUNT, freq, readField, writeField } from "../src/core/params";
@@ -263,6 +263,9 @@ describe("favorites", () => {
     expect(readField(out, blk.firstField + 3)).toBe(42);
     expect(readField(out, enable(out))).toBe(0);
     expect(() => applyFavorite(BLANK, "comp", fav)).toThrow();
+    // The block matches the favorite whatever its on/off state, and no longer once a value differs.
+    expect(matchingFavorite(out, "reverb", [null, fav])).toBe(1);
+    expect(matchingFavorite(writeField(out, blk.firstField + 3, 41), "reverb", [null, fav])).toBe(-1);
   });
 });
 

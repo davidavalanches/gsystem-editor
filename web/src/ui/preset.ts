@@ -11,7 +11,7 @@ import {
   writeRelay, writeRouting,
 } from "../core/levels";
 import { ALL_FIELDS, describeField, formatField, rawHex } from "../core/fields";
-import { FAVORITE_COUNT, applyFavorite, captureFavorite, type Favorite, type Favorites } from "../core/favorites";
+import { FAVORITE_COUNT, FAVORITE_NAME_LEN, applyFavorite, captureFavorite, favoriteName, matchingFavorite, type Favorite, type Favorites } from "../core/favorites";
 import { BLOCKS, Param, block, diffFields, owner, readField, writeField, type Block } from "../core/params";
 import { BLOCK_IDS, LEVELS_BLOCK_ID, LEVEL_SWITCHES } from "../core/protocol";
 import { TAP_MAX_MS, TAP_MIN_MS, TEMPO_BLOCKS, bpmToMs, msToBpm, presetTempoMs, syncToTempo, writeTempoMs } from "../core/tempo";
@@ -716,17 +716,19 @@ export class PresetView {
     this.favoriteBar.hidden = !isEffect || !this.buffer;
     if (this.favoriteBar.hidden) return;
     const slots = this.favorites[key] ?? [];
+    const match = matchingFavorite(this.buffer!.data, key, slots);
     this.favoriteBar.replaceChildren(el("span", "favorites-title", "FAV"), ...Array.from({ length: FAVORITE_COUNT }, (_, i) => {
       const fav = slots[i] ?? null;
-      const b = el("button", fav ? "favorite" : "favorite empty");
+      const b = el("button", fav ? `favorite${i === match ? " match" : ""}` : "favorite empty");
       b.type = "button";
-      b.append(el("span", "favorite-num", String(i + 1)), el("span", "favorite-label", fav ? fav.label : "+"));
-      b.title = fav ? `Load favorite ${i + 1} (${fav.label}) — long press: more options`
+      b.append(el("span", "favorite-num", String(i + 1)), el("span", "favorite-label", fav ? favoriteName(fav) : "+"));
+      b.title = fav ? `Load favorite ${i + 1}: ${favoriteName(fav)} (${fav.label}) — long press: more options`
         : `Save the current settings to favorite ${i + 1}`;
       onLongPress(b, (x, y) => showMenu({ x, y }, [
         { label: "Load", action: () => this.loadFavorite(key, i), disabled: !fav },
         { label: fav ? "Replace with current settings" : "Save current settings",
           action: () => this.saveFavorite(key, i) },
+        { label: "Rename", action: () => this.renameFavorite(key, i), disabled: !fav },
         { label: "Clear", action: () => this.saveFavorite(key, i, true), disabled: !fav },
       ]));
       b.addEventListener("click", () => (fav ? this.loadFavorite(key, i) : this.saveFavorite(key, i)));
@@ -734,11 +736,36 @@ export class PresetView {
     }));
   }
 
-  private saveFavorite(key: string, index: number, clear = false): void {
+  /** Saves the current settings into a favorite, under a name asked for first (the previous one, else the effect type). */
+  private async saveFavorite(key: string, index: number, clear = false): Promise<void> {
     if (!this.buffer) return;
+    let name: string | undefined;
+    if (!clear) {
+      const previous = this.favorites[key]?.[index];
+      const suggested = previous?.name ?? block(key).effectType(this.buffer.data)?.name ?? block(key).label;
+      const answer = await askText(`Favorite ${index + 1} name (${FAVORITE_NAME_LEN} characters max.)`, suggested, FAVORITE_NAME_LEN);
+      if (answer === null || !this.buffer) return;
+      name = answer.trim() || undefined;
+    }
+    this.storeFavorite(key, index, clear ? null : captureFavorite(this.buffer.data, key, name));
+    const fav = this.favorites[key]?.[index];
+    this.onNotice?.(fav ? `Favorite ${index + 1} saved: ${favoriteName(fav)}` : `Favorite ${index + 1} cleared`);
+  }
+
+  private async renameFavorite(key: string, index: number): Promise<void> {
+    const fav = this.favorites[key]?.[index];
+    if (!fav) return;
+    const answer = await askText(`Favorite ${index + 1} name (${FAVORITE_NAME_LEN} characters max.)`, favoriteName(fav), FAVORITE_NAME_LEN);
+    if (answer === null) return;
+    const { name: _old, ...rest } = fav;
+    const name = answer.trim();
+    this.storeFavorite(key, index, name ? { ...rest, name } : rest);
+  }
+
+  private storeFavorite(key: string, index: number, fav: Favorite | null): void {
     const slots: (Favorite | null)[] = [...(this.favorites[key] ?? [])];
     while (slots.length < FAVORITE_COUNT) slots.push(null);
-    slots[index] = clear ? null : captureFavorite(this.buffer.data, key);
+    slots[index] = fav;
     this.favorites = { ...this.favorites, [key]: slots };
     try {
       localStorage.setItem(FAVORITES_KEY, JSON.stringify(this.favorites));
@@ -746,7 +773,6 @@ export class PresetView {
       alert("Cannot save favorites on this device.");
     }
     this.renderFavorites();
-    this.onNotice?.(clear ? `Favorite ${index + 1} cleared` : `Favorite ${index + 1} saved: ${slots[index]!.label}`);
   }
 
   private loadFavorite(key: string, index: number): void {
@@ -755,7 +781,7 @@ export class PresetView {
     try {
       const data = applyFavorite(this.buffer.data, key, fav);
       if (diffFields(this.buffer.data, data).length) this.pushBuffer(this.buffer.withData(data));
-      this.onNotice?.(`Favorite ${index + 1} loaded: ${fav.label}`);
+      this.onNotice?.(`Favorite ${index + 1} loaded: ${favoriteName(fav)}`);
     } catch (e) {
       alert(`Unreadable favorite: ${(e as Error).message}`);
     }
