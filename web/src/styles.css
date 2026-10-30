@@ -146,6 +146,8 @@ button:disabled { opacity: 0.4; cursor: default; }
 .rail .midi-icon { position: relative; display: block; }
 .rail .midi-dot { position: absolute; top: -2px; right: -4px; width: 7px; height: 7px; border-radius: 50%; background: var(--line-2); }
 .rail .midi-dot.on { background: var(--green); }
+/* Connection lost: red until the next connection. */
+.rail .midi-dot.lost { background: var(--red); box-shadow: 0 0 6px var(--red); }
 
 .view { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
@@ -585,6 +587,7 @@ button:disabled { opacity: 0.4; cursor: default; }
   transition: opacity 200ms;
 }
 .toast.hidden { opacity: 0; pointer-events: none; }
+.toast.warn { border-color: var(--red); color: var(--ink); }
 
 /* In-app dialog (the WebView prompt ignores default values). */
 .dialog-layer { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: rgba(0, 0, 0, 0.55); }

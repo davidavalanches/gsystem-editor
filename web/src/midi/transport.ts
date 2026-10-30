@@ -23,6 +23,7 @@ interface GSystemMidiPlugin {
   send(options: { data: number[] }): Promise<void>;
   close(): Promise<void>;
   addListener(event: "data", cb: (e: { data: number[] }) => void): Promise<PluginListenerHandle>;
+  addListener(event: "lost", cb: () => void): Promise<PluginListenerHandle>;
 }
 
 const NativeMidi = registerPlugin<GSystemMidiPlugin>("GSystemMidi");
@@ -36,15 +37,22 @@ class AndroidMidi implements MidiAccess {
     await NativeMidi.open({ id });
     const transport: Transport = {
       onMessage: null,
+      onLost: null,
       send: (msg) => void NativeMidi.send({ data: Array.from(msg) }),
       close: () => {
         void handle.then((h) => h.remove());
+        void lost.then((h) => h.remove());
         void NativeMidi.close();
       },
     };
     // The native side delivers raw byte chunks; SysEx may be split.
     const parser = new MidiParser((msg) => transport.onMessage?.(msg));
     const handle = NativeMidi.addListener("data", (e) => parser.push(e.data));
+    // Sent when Android reports the open device removed; the native side has closed it.
+    const lost = NativeMidi.addListener("lost", () => {
+      transport.close();
+      transport.onLost?.();
+    });
     return transport;
   }
 }
@@ -69,10 +77,21 @@ class WebMidi implements MidiAccess {
     const input = [...midi.inputs.values()].find((i) => i.name === output?.name);
     if (!output || !input) throw new Error(`MIDI port not found: ${id}`);
     await Promise.all([output.open(), input.open()]);
+    // Unplugging the device disconnects its ports.
+    const onState = (e: Event) => {
+      const port = (e as MIDIConnectionEvent).port;
+      if ((port === input || port === output) && port.state === "disconnected") {
+        transport.close();
+        transport.onLost?.();
+      }
+    };
+    midi.addEventListener("statechange", onState);
     const transport: Transport = {
       onMessage: null,
+      onLost: null,
       send: (msg) => output.send(msg),
       close: () => {
+        midi.removeEventListener("statechange", onState);
         input.onmidimessage = null;
         void input.close();
         void output.close();

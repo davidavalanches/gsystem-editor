@@ -28,7 +28,8 @@ import java.util.List;
  * USB MIDI for the web layer, built on android.media.midi.
  *
  * Bytes received from the device are forwarded as "data" events in the chunks
- * Android delivers them; the JavaScript side reassembles SysEx messages.
+ * Android delivers them; the JavaScript side reassembles SysEx messages. When the
+ * open device is unplugged or switched off, it is closed and a "lost" event sent.
  */
 @CapacitorPlugin(name = "GSystemMidi")
 public class GSystemMidiPlugin extends Plugin {
@@ -42,6 +43,17 @@ public class GSystemMidiPlugin extends Plugin {
     @Override
     public void load() {
         manager = (MidiManager) getContext().getSystemService(Context.MIDI_SERVICE);
+        if (manager != null) {
+            manager.registerDeviceCallback(new MidiManager.DeviceCallback() {
+                @Override
+                public void onDeviceRemoved(MidiDeviceInfo info) {
+                    if (device != null && device.getInfo().getId() == info.getId()) {
+                        closeAll();
+                        notifyListeners("lost", new JSObject());
+                    }
+                }
+            }, handler);
+        }
     }
 
     private List<MidiDeviceInfo> devices() {

@@ -114,6 +114,8 @@ export function identityVersion(msg: Uint8Array): string | null {
 export interface Transport {
   send(msg: Uint8Array): void;
   onMessage: ((msg: Uint8Array) => void) | null;
+  /** The device went away (unplugged, switched off): the transport is already closed. */
+  onLost: (() => void) | null;
   close(): void;
 }
 

@@ -310,7 +310,9 @@ export class App {
         this.midiView.setStatus("No MIDI device", false, "Plug the G-System in over USB (OTG cable on a phone), then try again.");
         return;
       }
-      const link = new GSystemLink(await midi.open(port.id));
+      const transport = await midi.open(port.id);
+      transport.onLost = () => this.connectionLost(port.name);
+      const link = new GSystemLink(transport);
       link.sysexId = this.sysexId;
       this.link = link;
       link.onIdentity = (version) => {
@@ -343,6 +345,26 @@ export class App {
     }
   }
 
+  /** The G-System went away (unplugged, switched off): stop everything that needs it and say so. */
+  private connectionLost(name: string): void {
+    if (!this.link) return;
+    const wasLive = this.preset.isLive;
+    const reading = this.readMode === "all" || this.readMode === "bank";
+    const unwritten = this.writeQueue.length;
+    this.link.close();
+    this.link = null;
+    this.readMode = null;
+    this.writeQueue = [];
+    this.verifying = null;
+    this.revertSlots = [];
+    this.banks.setReading(null);
+    this.setConnected(false, "Connection lost", `“${name}” was unplugged or switched off. Plug it back in, then Connect.`);
+    this.midiDot.classList.add("lost");
+    this.notify(["G-System disconnected", wasLive ? "Live mode off" : "",
+      reading ? "reading interrupted: only the presets read so far are in the bank" : "",
+      unwritten ? `${unwritten} preset(s) not written, still in the sync list` : ""].filter(Boolean).join(" — "), true);
+  }
+
   /** Ask the unit for its global settings (answers arrive as parameter messages). */
   private readSettings(): void {
     if (!this.link) return;
@@ -352,6 +374,7 @@ export class App {
   private setConnected(on: boolean, text: string, detail = ""): void {
     this.midiView.setStatus(text, on, detail);
     this.midiDot.classList.toggle("on", on);
+    this.midiDot.classList.remove("lost");
     this.banks.setConnected(on);
     this.preset.sendParam = on && this.link ? (b, p, v) => this.link!.sendParam(b, p, v) : null;
     this.preset.setConnected(on);
@@ -570,10 +593,13 @@ export class App {
     if (this.link && !this.link.busy) this.startRead("refresh");
   }
 
-  private notify(text: string): void {
+  /** A short message at the bottom; a warning stays longer. */
+  private notify(text: string, warn = false): void {
     this.toast.textContent = text;
     this.toast.classList.remove("hidden");
+    this.toast.classList.toggle("warn", warn);
+    this.toast.setAttribute("role", warn ? "alert" : "status");
     if (this.toastTimer) clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => this.toast.classList.add("hidden"), 2500);
+    this.toastTimer = setTimeout(() => this.toast.classList.add("hidden"), warn ? 8000 : 2500);
   }
 }
