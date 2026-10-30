@@ -7,7 +7,7 @@ import { SqsFile, USER_BANK_KIND, readSyx } from "../core/sqs";
 import { USER_PRESET_BASE, USER_SLOTS, sameBytes, type Preset } from "../core/sysex";
 import { midiAccess } from "../midi/transport";
 import { BanksView } from "./banks";
-import { askText, showChecklist } from "./dialog";
+import { askText, showChecklist, showChoices } from "./dialog";
 import { el } from "./dom";
 import { loadSession, pickFile, saveFile, storeSession } from "./files";
 import { MidiView } from "./midiview";
@@ -56,7 +56,10 @@ export class App {
         else this.startRead("all");
       },
       sync: () => this.syncPending(),
-    });
+      select: (slot) => {
+        if (this.preset.isLive) this.preset.openSlot(slot);
+      },
+    }, this.preset.liveButton());
 
     const rail = el("nav", "rail");
     rail.setAttribute("aria-label", "Navigation");
@@ -133,6 +136,17 @@ export class App {
 
     this.restore();
     this.show("banks");
+    this.welcome();
+  }
+
+  /** At start: connect the G-System or open a bank file; closing keeps the last session's bank. */
+  private welcome(): void {
+    const used = this.bank.presets.filter(Boolean).length;
+    showChoices("G-System Editor", used ? `Last session: “${this.bank.title}”, ${used} presets.` : "No bank loaded yet.", [
+      { label: "Connect the G-System", detail: "Over USB MIDI: read its banks, edit and play Live", primary: true,
+        run: () => void this.toggleConnection().then(() => this.link || this.show("midi")) },
+      { label: "Open a .sqs file", detail: "A Vyzor bank file (a .syx SysEx dump works too)", run: () => void this.open() },
+    ], used ? "Continue" : "Close");
   }
 
   private show(view: ViewKey): void {

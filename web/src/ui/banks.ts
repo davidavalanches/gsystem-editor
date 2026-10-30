@@ -20,6 +20,8 @@ export interface BanksActions {
   bankMenu(bank: number): MenuItem[];
   readUnit(): void;
   sync(): void;
+  /** Desktop: a preset was selected (in Live mode the unit recalls it). */
+  select(slot: number): void;
 }
 
 export class BanksView {
@@ -41,7 +43,7 @@ export class BanksView {
   private bankButtons: HTMLButtonElement[] = [];
   private reading: [number, number] | null = null;
 
-  constructor(private bank: BankStore, private actions: BanksActions) {
+  constructor(private bank: BankStore, private actions: BanksActions, live: HTMLButtonElement) {
     this.readButton.type = "button";
     this.readButton.addEventListener("click", () => actions.readUnit());
     this.syncButton.type = "button";
@@ -52,7 +54,7 @@ export class BanksView {
     const more = iconButton(ICONS.more, "More actions: open, export, undo", () => showMenu(more, actions.menu()));
     const header = el("header", "header");
     header.append(titles, iconButton(ICONS.search, "Search for a preset", () => void this.search()),
-      this.syncButton, this.readButton, more);
+      this.syncButton, live, this.readButton, more);
 
     this.list.setAttribute("role", "listbox");
     this.list.setAttribute("aria-label", "Banks");
@@ -121,6 +123,7 @@ export class BanksView {
     this.current = slot;
     this.bankIndex = Math.floor(slot / PRESETS_PER_BANK);
     this.refresh();
+    this.actions.select(slot);
   }
 
   private renderGrid(): void {

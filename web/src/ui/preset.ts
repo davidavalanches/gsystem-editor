@@ -145,7 +145,8 @@ export class PresetView {
   private readonly number = el("div", "dot-number");
   private readonly nameButton = el("button", "preset-name");
   private readonly tempoButton = el("button", "preset-tempo");
-  private readonly liveButton = el("button", "pill live");
+  /** Live is global: the same toggle shows in the Preset and Banks headers. */
+  private readonly liveButtons: HTMLButtonElement[] = [];
   private readonly storeButton = el("button", "pill store", "Store");
   /** Back to the preset as stored, in one go (Ctrl+Z still undoes step by step). */
   private readonly undoButton = iconButton(ICONS.undo, "Back to the preset before changes", () => this.revert());
@@ -175,12 +176,6 @@ export class PresetView {
     this.tempoButton.type = "button";
     this.tempoButton.title = "Preset tempo";
     this.tempoButton.addEventListener("click", () => this.openTempoSheet());
-    this.liveButton.type = "button";
-    this.liveButton.innerHTML = '<span class="live-dot"></span>Live';
-    this.liveButton.title = "Send each change to the G-System (working memory, no Store) "
-      + "and follow the unit";
-    this.liveButton.disabled = true;
-    this.liveButton.addEventListener("click", () => this.setLive(!this.live));
     this.storeButton.type = "button";
     this.storeButton.title = "Store the preset in the editor's bank "
       + "and in the G-System if connected (otherwise at the next sync)";
@@ -197,7 +192,7 @@ export class PresetView {
       iconButton(ICONS.prev, "Previous preset", () => this.openSlot((this.slot + USER_SLOTS - 1) % USER_SLOTS)),
       this.number, lcd, this.tempoLeds,
       iconButton(ICONS.next, "Next preset", () => this.openSlot((this.slot + 1) % USER_SLOTS)),
-      el("div", "separator"), this.editLed, this.undoButton, this.liveButton, this.storeButton,
+      el("div", "separator"), this.editLed, this.undoButton, this.liveButton(), this.storeButton,
     );
 
     const column = el("section", "blocks-column");
@@ -233,8 +228,21 @@ export class PresetView {
 
   // Live link
 
+  /** A new Live toggle, kept in step with the others. */
+  liveButton(): HTMLButtonElement {
+    const button = el("button", "pill live");
+    button.type = "button";
+    button.innerHTML = '<span class="live-dot"></span>Live';
+    button.title = "Send each change to the G-System (working memory, no Store) and follow the unit";
+    button.disabled = this.sendParam === null;
+    button.addEventListener("click", () => this.setLive(!this.live));
+    this.liveButtons.push(button);
+    this.renderLive();
+    return button;
+  }
+
   setConnected(connected: boolean): void {
-    this.liveButton.disabled = !connected;
+    for (const b of this.liveButtons) b.disabled = !connected;
     if (!connected) this.setLive(false);
   }
 
@@ -532,6 +540,13 @@ export class PresetView {
 
   // Rendering
 
+  private renderLive(): void {
+    for (const b of this.liveButtons) {
+      b.classList.toggle("active", this.isLive);
+      b.setAttribute("aria-pressed", String(this.isLive));
+    }
+  }
+
   private render(): void {
     const [b, position] = bankPosition(this.slot);
     fillDotNumber(this.number, b, position);
@@ -550,8 +565,7 @@ export class PresetView {
       this.tempoLeds.title = `Tempo ${msToBpm(ms)} BPM`;
     }
     this.editLed.hidden = !this.isDirty;
-    this.liveButton.classList.toggle("active", this.isLive);
-    this.liveButton.setAttribute("aria-pressed", String(this.isLive));
+    this.renderLive();
     this.storeButton.classList.toggle("dirty", this.isDirty);
     this.storeButton.disabled = !this.isDirty;
     this.undoButton.disabled = !this.isDirty;
