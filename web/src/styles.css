@@ -828,18 +828,22 @@ button:disabled { opacity: 0.4; cursor: default; }
 .checklist .dialog-actions { flex-wrap: wrap; }
 
 /* Welcome dialog: large choices */
-.choices { width: min(480px, 92vw); }
+.choices { width: min(480px, 92vw); display: flex; flex-direction: column; gap: 12px; }
 .choices-title { font-family: var(--display); font-size: 15px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink); }
 .choice-list { display: flex; flex-direction: column; gap: 8px; }
-.choice { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; width: 100%; padding: 12px 14px; border-radius: 10px;
-  border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); text-align: left; cursor: pointer; }
-.choice:hover { border-color: var(--line-3); }
-.choice.primary { border-color: var(--accent); }
+.choice { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; width: 100%; padding: 12px 14px 12px 18px;
+  border-radius: 10px; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); text-align: left; cursor: pointer;
+  transition: background 120ms, border-color 120ms; }
+/* Hover (and keyboard focus): lighter face, red frame and a lit bar on the left. */
+.choice::before { content: ""; position: absolute; left: 6px; top: 12px; bottom: 12px; width: 3px; border-radius: 2px; background: transparent; transition: background 120ms; }
+.choice:hover, .choice:focus-visible { background: var(--selected); border-color: var(--accent); outline: none; }
+.choice:hover::before, .choice:focus-visible::before { background: var(--accent); box-shadow: 0 0 8px rgba(255, 90, 71, 0.7); }
+.choice:active { background: var(--panel); }
+.choices:focus { outline: none; }
 .choice-label { font-size: 14px; font-weight: 600; }
 .choice-detail { font-size: 12px; color: var(--dim); }
 @media (max-height: 420px) {
   .choices { padding: 10px 14px; }
-  .choice { padding: 8px 12px; }
-  .choices .checklist-note { margin: 4px 0; }
+  .choice { padding: 8px 12px 8px 18px; }
 }
 .midi-body .settings-card { flex: 1 1 340px; min-width: min(340px, 100%); max-width: 520px; }

@@ -140,14 +140,16 @@ export class App {
     this.welcome();
   }
 
-  /** At start: connect the G-System or open a bank file; closing keeps the last session's bank. */
+  /** At start: connect the G-System, open a bank file, or go on with the last session's bank. */
   private welcome(): void {
     const used = this.bank.presets.filter(Boolean).length;
-    showChoices("G-System Editor", used ? `Last session: “${this.bank.title}”, ${used} presets.` : "No bank loaded yet.", [
-      { label: "Connect the G-System", detail: "Over USB MIDI: read its banks, edit and play Live", primary: true,
+    showChoices("G-System Editor", [
+      { label: "Connect the G-System", detail: "Over USB MIDI: read its banks, edit and play Live",
         run: () => void this.toggleConnection().then(() => this.link || this.show("midi")) },
       { label: "Open a .sqs file", detail: "A Vyzor bank file (a .syx SysEx dump works too)", run: () => void this.open() },
-    ], used ? "Continue" : "Close");
+      used ? { label: "Continue with last session", detail: `“${this.bank.title}”, ${used} presets`, run: () => {} }
+        : { label: "Start with an empty bank", detail: "Presets can be read or opened later", run: () => {} },
+    ]);
   }
 
   private show(view: ViewKey): void {

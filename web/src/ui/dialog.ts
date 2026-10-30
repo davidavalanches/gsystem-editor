@@ -130,16 +130,16 @@ export function showChecklist(title: string, note: string, items: ChecklistItem[
 export interface Choice {
   label: string;
   detail: string;
-  primary?: boolean;
   run(): void;
 }
 
-/** A few large choices; closing (button, Escape or outside) picks none of them. */
-export function showChoices(title: string, note: string, choices: Choice[], closeLabel: string): void {
+/** A few large choices, all alike; Escape or a click outside closes it without choosing. */
+export function showChoices(title: string, choices: Choice[]): void {
   const layer = el("div", "dialog-layer");
   const box = el("div", "dialog choices");
   box.setAttribute("role", "dialog");
   box.setAttribute("aria-label", title);
+  box.tabIndex = -1;
   const close = () => {
     layer.remove();
     document.removeEventListener("keydown", onKey);
@@ -147,8 +147,9 @@ export function showChoices(title: string, note: string, choices: Choice[], clos
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") close();
   };
-  const buttons = choices.map((c) => {
-    const b = el("button", c.primary ? "choice primary" : "choice");
+  const list = el("div", "choice-list");
+  list.append(...choices.map((c) => {
+    const b = el("button", "choice");
     b.type = "button";
     b.append(el("span", "choice-label", c.label), el("span", "choice-detail", c.detail));
     // Closed first: a choice may open a file picker, which needs the click's user gesture.
@@ -157,20 +158,14 @@ export function showChoices(title: string, note: string, choices: Choice[], clos
       c.run();
     });
     return b;
-  });
-  const dismiss = el("button", "pill", closeLabel);
-  dismiss.type = "button";
-  dismiss.addEventListener("click", close);
-  const footer = el("div", "dialog-actions");
-  footer.append(dismiss);
-  const list = el("div", "choice-list");
-  list.append(...buttons);
-  box.append(el("div", "choices-title", title), el("p", "checklist-note", note), list, footer);
+  }));
+  box.append(el("div", "choices-title", title), list);
   layer.append(box);
   layer.addEventListener("pointerdown", (e) => {
     if (e.target === layer) close();
   });
   document.addEventListener("keydown", onKey);
   document.body.append(layer);
-  (buttons.find((b) => b.classList.contains("primary")) ?? dismiss).focus();
+  // The dialog itself takes the focus: no choice looks picked in advance.
+  box.focus();
 }
