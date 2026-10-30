@@ -4,6 +4,8 @@
  * - Universal Device Inquiry, answered with the firmware version.
  * - 55 45 01 <num>: request a stored preset (read-only), answered by a dump in
  *   about 0.77 s. The unit ignores requests while busy; empty slots never answer.
+ *   A slot whose memory is damaged answers 55 28 <num:2> 00 01 instead (seen for
+ *   27-3 to 28-4; the firmware has "Corrupt preset!" and "Checksum Error" messages).
  * - 55 22 <block> <param:2> <value:6 nibbles>: set one parameter of the edit
  *   buffer. The unit sends the same message when a switch or knob is used.
  *   Writing needs SysEx ID 7F; nothing is stored until Store is pressed.
@@ -25,6 +27,8 @@ import { MODEL_G_SYSTEM, Preset, TC_MANUFACTURER, USER_PRESET_BASE, USER_SLOTS, 
 
 export const DEVICE_INQUIRY = new Uint8Array([0xf0, 0x7e, 0x7f, 0x06, 0x01, 0xf7]);
 export const REQUEST_PRESET = 0x45;
+/** The unit's answer to a preset request for a damaged slot. */
+export const CORRUPT_PRESET = 0x28;
 /** 55 47 <block> <first:2> <count:2>: the unit answers with 55 22 messages for those parameters (as Vyzor reads globals). */
 export const REQUEST_PARAMS = 0x47;
 export const SET_PARAM = 0x22;
@@ -119,6 +123,14 @@ export interface Transport {
   close(): void;
 }
 
+/** The preset number of a "damaged slot" answer (55 28 <num:2> 00 01), else null. */
+export function corruptNumber(msg: Uint8Array): number | null {
+  if (msg.length !== 12 || msg[0] !== 0xf0 || msg[1] !== TC_MANUFACTURER[0] || msg[2] !== TC_MANUFACTURER[1]
+    || msg[3] !== TC_MANUFACTURER[2] || msg[5] !== MODEL_G_SYSTEM || msg[6] !== CORRUPT_PRESET
+    || msg[9] !== 0x00 || msg[10] !== 0x01) return null;
+  return (msg[7] << 7) | msg[8];
+}
+
 type Listener<T extends unknown[]> = (...args: T) => void;
 
 /** Requests to the unit: identification, preset reading and parameter changes. */
@@ -128,13 +140,15 @@ export class GSystemLink {
   onPresetSelected: Listener<[number]> | null = null;
   onPresetRead: Listener<[Preset]> | null = null;
   onProgress: Listener<[number, number]> | null = null;
-  onReadFinished: Listener<[Preset[], number[]]> | null = null;
+  /** Presets read, numbers that did not answer (empty), numbers reported damaged. */
+  onReadFinished: Listener<[Preset[], number[], number[]]> | null = null;
   onActivity: Listener<[]> | null = null;
 
   private queue: number[] = [];
   private current: number | null = null;
   private received: Preset[] = [];
   private missing: number[] = [];
+  private corrupt: number[] = [];
   private total = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private sendQueue: Uint8Array[] = [];
@@ -205,6 +219,7 @@ export class GSystemLink {
     this.total = this.queue.length;
     this.received = [];
     this.missing = [];
+    this.corrupt = [];
     this.next();
   }
 
@@ -242,7 +257,7 @@ export class GSystemLink {
 
   private finish(): void {
     this.current = null;
-    this.onReadFinished?.(this.received, this.missing);
+    this.onReadFinished?.(this.received, this.missing, this.corrupt);
   }
 
   private handle(msg: Uint8Array): void {
@@ -267,6 +282,13 @@ export class GSystemLink {
     const changes = parseParamValues(msg);
     if (changes) {
       for (const change of changes) this.onParam?.(...change);
+      return;
+    }
+    if (this.current !== null && corruptNumber(msg) === this.current) {
+      if (this.timer) clearTimeout(this.timer);
+      this.corrupt.push(this.current);
+      this.onProgress?.(this.total - this.queue.length, this.total);
+      this.next();
       return;
     }
     if (this.current === null || !isPresetDump(msg)) return;

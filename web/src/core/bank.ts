@@ -100,6 +100,8 @@ export class BankStore {
 
   /** Slots changed in the editor and not yet written into the unit. */
   pending = new Set<number>();
+  /** Slots the unit reports as damaged: a state of its memory, kept whatever bank is loaded. */
+  corrupt = new Set<number>();
 
   load(presets: Slots, title: string, sqs: SqsFile | null = null, pending: Iterable<number> = []): void {
     this.presets = [...presets, ...new Array(Math.max(0, USER_SLOTS - presets.length)).fill(null)].slice(0, USER_SLOTS);

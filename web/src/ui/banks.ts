@@ -13,6 +13,8 @@ import { ICONS, fillDotNumber, iconButton, onLongPress, routingIcon, showMenu, t
 const STRIP: [string, string][] = [["filter", "FILTER"], ["comp", "COMP"], ["mod", "MOD"], ["pitch", "PITCH"],
   ["delay", "DELAY"], ["reverb", "REVERB"], ["eq", "EQ"], ["gate", "GATE"]];
 
+const DAMAGED = "The G-System reports this slot's memory as damaged (it answers \u201ccorrupt preset\u201d).";
+
 export interface BanksActions {
   open(slot: number): void;
   menu(): MenuItem[];
@@ -140,11 +142,14 @@ export class BanksView {
       head.append(el("span", "bank-cell-num", String(b).padStart(2, "0")), more);
       cell.append(head, ...slots.map((slot) => {
         const p = this.bank.preset(slot);
+        const damaged = this.bank.corrupt.has(slot);
         const button = el("button", ["cell-slot", p ? "" : "empty", slot === this.current ? "selected" : "",
-          this.bank.pending.has(slot) ? "pending" : ""].filter(Boolean).join(" "));
+          this.bank.pending.has(slot) ? "pending" : "", damaged ? "corrupt" : ""].filter(Boolean).join(" "));
         button.type = "button";
-        button.setAttribute("aria-label", `${slotLabel(slot)} ${p ? p.name : "empty"}`);
-        button.append(el("span", "cell-pos", String((slot % PRESETS_PER_BANK) + 1)), el("span", "cell-name", p ? p.name : ""));
+        button.setAttribute("aria-label", `${slotLabel(slot)} ${p ? p.name : "empty"}${damaged ? ", damaged on the G-System" : ""}`);
+        if (damaged) button.title = DAMAGED;
+        button.append(el("span", "cell-pos", String((slot % PRESETS_PER_BANK) + 1)),
+          el("span", "cell-name", p ? p.name : damaged ? "damaged" : ""));
         onLongPress(button, (x, y) => showMenu({ x, y }, this.slotMenu(slot)));
         button.addEventListener("click", () => this.select(slot));
         button.addEventListener("dblclick", () => this.actions.open(slot));
@@ -187,9 +192,10 @@ export class BanksView {
       if (ms) fact("Tempo", `${msToBpm(ms)} BPM (${ms} ms)`);
       if (!p.checksumOk) fact("Checksum", "needs fixing");
       if (this.bank.pending.has(slot)) fact("G-System", "to sync");
+      if (this.bank.corrupt.has(slot)) fact("G-System", "memory damaged");
       parts.push(blocks, facts);
     } else {
-      parts.push(el("p", "detail-empty", "Empty slot."));
+      parts.push(el("p", "detail-empty", this.bank.corrupt.has(slot) ? `Empty slot. ${DAMAGED}` : "Empty slot."));
     }
     const actions = el("div", "detail-actions");
     if (p) {
@@ -237,11 +243,13 @@ export class BanksView {
 
   private slotRow(slot: number): HTMLElement {
     const p = this.bank.preset(slot);
+    const damaged = this.bank.corrupt.has(slot);
     const classes = ["slot", p ? "" : "empty", slot === this.current ? "current" : "", p && !p.checksumOk ? "warn" : "",
-      this.bank.pending.has(slot) ? "pending" : ""];
+      this.bank.pending.has(slot) ? "pending" : "", damaged ? "corrupt" : ""];
     const row = el("button", classes.filter(Boolean).join(" "));
     row.type = "button";
-    row.setAttribute("aria-label", `${slotLabel(slot)} ${p ? p.name : "empty"}`);
+    row.setAttribute("aria-label", `${slotLabel(slot)} ${p ? p.name : "empty"}${damaged ? ", damaged on the G-System" : ""}`);
+    if (damaged) row.title = DAMAGED;
     const lv = p ? presetLevels(p.data) : null;
     // Position and name, with the tempo and routing at the right of the row.
     const head = el("span", "slot-head");
@@ -249,6 +257,7 @@ export class BanksView {
       el("span", "slot-name", p ? p.name || "(no name)" : "empty"));
     // Not yet synced with the G-System: a dot after the name, low like a subscript.
     if (this.bank.pending.has(slot)) head.append(el("span", "slot-pending"));
+    if (damaged) head.append(el("span", "slot-corrupt", "damaged"));
     const main = el("span", "slot-main");
     main.append(head);
     row.append(main);

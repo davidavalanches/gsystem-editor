@@ -340,21 +340,30 @@ button:disabled { opacity: 0.4; cursor: default; }
 .routing-choice { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; padding: 6px 0 8px; }
 .routing-choice button { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; min-width: 0; padding: 7px 2px 6px; border: 0; border-radius: 6px; background: var(--surface-2); color: var(--muted); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
 .routing-choice button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-.routing-choice button.on { background: var(--accent); color: #fff; box-shadow: 0 0 10px rgba(255, 90, 71, 0.35); }
+/* The routing in use: red frame and a neon icon, the button itself stays dark. */
+.routing-choice button.on { color: var(--ink); box-shadow: inset 0 0 0 1px var(--accent), 0 0 10px rgba(255, 90, 71, 0.25); }
+.routing-choice button.on svg { color: var(--accent); filter: drop-shadow(0 0 2px var(--accent)) drop-shadow(0 0 5px rgba(255, 90, 71, 0.7)); }
 /* Relay settings A and B: four contacts each, lit when closed. */
 .relay-row { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-top: 1px solid var(--surface-2); }
-.relay-name { width: 64px; flex-shrink: 0; font-family: var(--display); font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--soft); }
 .relay-contacts { display: flex; gap: 4px; }
 .relay-contact { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--surface-2); color: var(--muted); font-family: var(--mono); font-size: 12px; font-weight: 600; }
 .relay-contact::before { content: ""; width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--line-3); }
 .relay-contact.on { color: var(--ink); }
 .relay-contact.on::before { background: var(--red); border: 0; box-shadow: 0 0 6px rgba(240, 83, 62, 0.8); }
+.relay-pick { display: flex; align-items: center; gap: 7px; flex-shrink: 0; height: 32px; padding: 0 10px; border: 1px solid var(--line-2);
+  border-radius: 6px; background: transparent; color: var(--muted); font-family: var(--display); font-size: 10px; letter-spacing: 0.04em;
+  text-transform: uppercase; white-space: nowrap; }
+.relay-pick-dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--line-3); }
+.relay-row.in-use .relay-pick { border-color: var(--accent); color: var(--ink); box-shadow: 0 0 8px rgba(255, 90, 71, 0.25); }
+.relay-row.in-use .relay-pick-dot { background: var(--red); border: 0; box-shadow: 0 0 6px rgba(240, 83, 62, 0.8); }
+.relay-row:not(.in-use) .relay-contacts { opacity: 0.6; }
 .relay-text { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--dim); }
 /* Phone: the four contacts share the row, at a touch size. */
 @media (max-width: 1199px), (max-height: 699px) {
   .relay-contacts { flex: 1; gap: 6px; }
   .relay-contact { flex: 1; justify-content: center; height: 40px; font-size: 14px; }
-  .relay-name { width: 52px; }
+  .relay-pick { height: 40px; padding: 0 8px; font-size: 10px; }
+  .relay-text { display: none; }
 }
 .tile.stack { flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; padding: 0 10px; }
 .tile-routing { display: flex; align-items: center; gap: 6px; color: var(--soft); }
@@ -404,6 +413,9 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 .level::before { content: ""; flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--line-3); }
 .level.on { color: var(--ink); }
+.level.relay { gap: 3px; }
+.level.relay::before { display: none; }
+.relay-letter { color: var(--accent); font-weight: 700; text-shadow: 0 0 6px rgba(255, 90, 71, 0.7); }
 .level.on::before { background: var(--red); border: 0; box-shadow: 0 0 6px rgba(240, 83, 62, 0.8); }
 
 .params-section { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--surface); }
@@ -620,6 +632,9 @@ button:disabled { opacity: 0.4; cursor: default; }
 /* Presets changed offline, waiting to be written into the unit. */
 .pill.sync { border-color: var(--amber); color: var(--amber); }
 .slot-pending { flex-shrink: 0; align-self: flex-end; width: 6px; height: 6px; margin: 0 0 3px -6px; border-radius: 50%; background: var(--amber); }
+/* Slot the unit reports as damaged. */
+.slot-corrupt { flex-shrink: 0; padding: 1px 6px; border: 1px solid var(--red); border-radius: 4px; color: var(--red);
+  font-family: var(--display); font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; }
 /* Unsynced changes in the bank: an amber dot clear of the number's top right. */
 .bank-list button.has-pending .bank-num { position: relative; }
 .bank-list button.has-pending .bank-num::after { content: ""; position: absolute; top: 0; right: -10px; width: 6px; height: 6px; border-radius: 50%; background: var(--amber); }
@@ -697,6 +712,8 @@ button:disabled { opacity: 0.4; cursor: default; }
   .cell-slot.empty { color: var(--faint); }
   .bank-cell:not(.used) .cell-pos { opacity: 0.45; }
   .cell-slot.selected { background: var(--line-2); color: #fff; box-shadow: inset 3px 0 0 var(--ink); }
+  .cell-slot.corrupt { box-shadow: inset 2px 0 0 var(--red); }
+  .cell-slot.corrupt.empty .cell-name { color: var(--red); text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; }
   .cell-slot.pending .cell-name::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 5px; border-radius: 50%; background: var(--amber); }
   .cell-pos { flex-shrink: 0; font-size: 11px; color: var(--dim); }
   .cell-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }

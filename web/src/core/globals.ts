@@ -58,7 +58,7 @@ export const GLOBAL_GROUPS: GlobalGroup[] = [
     // Stored in dB, as the firmware table gives it (-8 to 18) and the unit sends it.
     p(1, 3, "Input Gain", -8, 18, { format: db(), help: "Instrument input gain, from −8 to +18 dB" }),
     p(1, 4, "Loop Level", 0, 10, { format: db(), help: "Level sent into the loops" }),
-    p(1, 5, "Loop Headroom", 0, 10, { help: "Headroom at the effects input; its range depends on Loop Level" }),
+    p(1, 5, "Loop Headroom", 2, 6, { format: db(), help: "Headroom at the effects input, from 2 to 6 dB (firmware range)" }),
     p(1, 6, "Volume", -100, 0, { format: db() }),
     e(1, 7, "Volume Pos.", ["Input", "Output"], "Volume before (Input) or after (Output) the effects"),
     p(1, 8, "Output Level", -100, 0, { format: db() }),
@@ -92,10 +92,11 @@ export const GLOBAL_GROUPS: GlobalGroup[] = [
     e(5, 17, "Prg. Change Out", ["Off", "On", "On Map"]),
     p(5, 19, "SysEx ID", 0, 126, { help: "Must match the SysEx ID in the MIDI view for Store" }),
     e(5, 20, "MIDI Clock In", ONOFF),
-    p(5, 21, "Enc. A CC", 0, 127),
-    p(5, 22, "Enc. B CC", 0, 127),
-    p(5, 23, "Enc. C CC", 0, 127),
-    p(5, 24, "Tap CC", 0, 127),
+    // CC 120-127 are MIDI channel mode messages: the firmware stops at 119.
+    p(5, 21, "Enc. A CC", 0, 119),
+    p(5, 22, "Enc. B CC", 0, 119),
+    p(5, 23, "Enc. C CC", 0, 119),
+    p(5, 24, "Tap CC", 0, 119),
   ] },
   { title: "Tuner", params: [
     e(5, 5, "Output", ["Mute", "On"], "Whether the output is muted in tuner mode"),

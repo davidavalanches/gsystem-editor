@@ -12,8 +12,8 @@ import {
   MODIFIER_FIELD, MODIFIER_SLOTS, UNASSIGNED, decodeModifier, encodeModifier, modifierTargets, writeModifier,
 } from "../src/core/modifiers";
 import {
-  BLOCK_IDS, MidiParser, identityVersion, paramMessage, paramsRequest, parseParamMessage, parseParamValues, presetRequest,
-  storeMessages,
+  BLOCK_IDS, GSystemLink, MidiParser, corruptNumber, identityVersion, paramMessage, paramsRequest, parseParamMessage,
+  parseParamValues, presetRequest, storeMessages, type Transport,
 } from "../src/core/protocol";
 import { decodeSwitch, describeSwitch, encodeSwitch } from "../src/core/switches";
 import { SqsFile, USER_BANK_KIND, readSyx, writeSyx } from "../src/core/sqs";
@@ -344,5 +344,26 @@ describe.skipIf(!FILES.length)("real .sqs banks", () => {
       if (p && p.checksumOk && p.userSlot === slot) sqs.setUserPreset(slot, p);
     });
     expect(sqs.toBytes()).toEqual(bytes);
+  });
+});
+
+describe("damaged slots", () => {
+  // The unit's answer to a request for slot 27-3 (preset number 237), as captured.
+  const answer = new Uint8Array([0xf0, 0x00, 0x20, 0x1f, 0x7f, 0x55, 0x28, 0x01, 0x6d, 0x00, 0x01, 0xf7]);
+
+  it("decodes the corrupt preset answer", () => {
+    expect(corruptNumber(answer)).toBe(237);
+    expect(corruptNumber(presetRequest(237))).toBeNull();
+  });
+
+  it("reports a damaged slot at once instead of waiting for the timeout", () => {
+    const transport: Transport = { onMessage: null, onLost: null, send: () => {}, close: () => {} };
+    const link = new GSystemLink(transport);
+    let result: [number, number[], number[]] | null = null;
+    link.onReadFinished = (presets, missing, corrupt) => (result = [presets.length, missing, corrupt]);
+    link.readSlots([137]);
+    transport.onMessage!(answer);
+    expect(result).toEqual([0, [], [237]]);
+    link.close();
   });
 });

@@ -658,17 +658,32 @@ export class PresetView {
   private renderLevels(): void {
     this.levelBar.replaceChildren(...LEVEL_LABELS.map(([key, label]) => {
       const on = this.buffer ? levelOn(this.buffer.data, key) : false;
+      if (key === "relay") return this.relaySwitch(on);
       const b = el("button", on ? "level on" : "level", label);
       b.type = "button";
       b.disabled = !this.buffer;
-      b.title = label === "INS" ? "Insert (loop 5)" : label === "RLY" ? "Relay switch (Relay jacks: settings A and B, Routing panel)"
-        : label === "BST"
+      b.title = label === "INS" ? "Insert (loop 5)" : label === "BST"
         ? `Boost ${this.buffer ? presetLevels(this.buffer.data).boostLevel : 0} dB` : `Loop ${label.slice(1)}`;
       b.setAttribute("aria-pressed", String(on));
       b.addEventListener("click", () => this.setLevel(key, !on));
       return b;
     }));
     this.renderBoostBlock();
+  }
+
+  /**
+   * The relay switch picks which of the preset's two relay settings drives the Relay jacks: A or B, never
+   * both, like the unit's Relay footswitch. Taken to be A when the switch (block 1 parameter 16) is 0.
+   */
+  private relaySwitch(b: boolean): HTMLButtonElement {
+    const button = el("button", "level relay");
+    button.type = "button";
+    button.disabled = !this.buffer;
+    button.title = `Relay ${b ? "B" : "A"} in use: tap for Relay ${b ? "A" : "B"} (settings in the Routing panel)`;
+    button.setAttribute("aria-label", `Relay ${b ? "B" : "A"} in use, switch to ${b ? "A" : "B"}`);
+    button.append("RLY", el("span", "relay-letter", b ? "B" : "A"));
+    button.addEventListener("click", () => this.setLevel("relay", !b));
+    return button;
   }
 
   /** Boost: its switch (LED) toggles it, its label shows its level and opens it like an effect block. */
@@ -1094,15 +1109,24 @@ export class PresetView {
     const ms = presetTempoMs(preset.data);
     if (ms !== null) rows.push(this.paramRow(TEMPO_ROW, TEMPO, msToBpm(ms), () => this.openTempoSheet(), (bpm) => this.setTempo(bpm)));
     // Relay settings A and B: which contacts of the Relay jacks close (amp channels…), toggled by the Relay switch.
-    rows.push(...presetRelays(preset.data).map((value, which) => this.relayRow(which, value)));
+    const inUse = levelOn(preset.data, "relay") ? 1 : 0;
+    rows.push(...presetRelays(preset.data).map((value, which) => this.relayRow(which, value, which === inUse)));
     this.paramsList.replaceChildren(...rows);
   }
 
-  private relayRow(which: number, value: number): HTMLElement {
+  /** One relay setting: picked as the one in use (A or B), and its four contacts. */
+  private relayRow(which: number, value: number, inUse: boolean): HTMLElement {
     const name = which ? "Relay B" : "Relay A";
-    const row = el("div", "relay-row");
+    const row = el("div", inUse ? "relay-row in-use" : "relay-row");
     row.setAttribute("role", "group");
-    row.setAttribute("aria-label", `${name}: ${relayText(value)}`);
+    row.setAttribute("aria-label", `${name}${inUse ? " (in use)" : ""}: ${relayText(value)}`);
+    const pick = el("button", "relay-pick");
+    pick.type = "button";
+    pick.setAttribute("role", "radio");
+    pick.setAttribute("aria-checked", String(inUse));
+    pick.title = inUse ? `${name} drives the Relay jacks` : `Use ${name}`;
+    pick.append(el("span", "relay-pick-dot"), el("span", "", name));
+    pick.addEventListener("click", () => this.setLevel("relay", which === 1));
     const contacts = el("span", "relay-contacts");
     for (let i = 0; i < RELAY_CONTACTS; i++) {
       const closed = ((value >> i) & 1) === 1;
@@ -1113,7 +1137,7 @@ export class PresetView {
       b.addEventListener("click", () => this.setRelay(which, value ^ (1 << i)));
       contacts.append(b);
     }
-    row.append(el("span", "relay-name", name), contacts, el("span", "relay-text", relayText(value)));
+    row.append(pick, contacts, el("span", "relay-text", relayText(value)));
     return row;
   }
 

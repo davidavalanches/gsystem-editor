@@ -17,6 +17,7 @@ import { ICONS, type MenuItem } from "./widgets";
 
 type ReadMode = "all" | "bank" | "refresh" | "verify" | "revert";
 const SYSEX_ID_KEY = "gsystem-editor.sysex-id";
+const CORRUPT_KEY = "gsystem-editor.corrupt";
 /** Write stored presets into the unit (Vyzor's Sync sequence, checked by reading back). */
 const STORE_TO_UNIT = true;
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -202,7 +203,27 @@ export class App {
 
   // Session and files
 
+  /** The unit said which of the slots read are damaged; the others it answered (or left empty) are fine. */
+  private updateCorrupt(presets: Preset[], missing: number[], corrupt: number[]): void {
+    const before = this.bank.corrupt.size;
+    for (const p of presets) if (p.userSlot !== null) this.bank.corrupt.delete(p.userSlot);
+    for (const n of missing) this.bank.corrupt.delete(n - USER_PRESET_BASE);
+    for (const n of corrupt) this.bank.corrupt.add(n - USER_PRESET_BASE);
+    if (!corrupt.length && before === this.bank.corrupt.size) return;
+    try {
+      localStorage.setItem(CORRUPT_KEY, JSON.stringify([...this.bank.corrupt]));
+    } catch {
+      // Not kept: the next read finds them again.
+    }
+    this.banks.refresh();
+  }
+
   private restore(): void {
+    try {
+      for (const s of JSON.parse(localStorage.getItem(CORRUPT_KEY) ?? "[]") as number[]) this.bank.corrupt.add(s);
+    } catch {
+      // Nothing known about damaged slots yet.
+    }
     const session = loadSession();
     if (!session) return;
     const presets: (Preset | null)[] = new Array(USER_SLOTS).fill(null);
@@ -331,7 +352,7 @@ export class App {
       link.onProgress = (done, total) => {
         if (this.readMode === "all" || this.readMode === "bank") this.banks.setReading([done, total]);
       };
-      link.onReadFinished = (presets, missing) => this.readFinished(presets, missing);
+      link.onReadFinished = (presets, missing, corrupt) => this.readFinished(presets, missing, corrupt);
       this.midiView.setStatus(`${port.name}…`, false, "Identifying…");
       link.identify();
       // The unit answers the identity request at once; without an answer it is not a G-System.
@@ -536,7 +557,8 @@ export class App {
     this.link.readSlots(slots);
   }
 
-  private readFinished(presets: Preset[], missing: number[]): void {
+  private readFinished(presets: Preset[], missing: number[], corrupt: number[]): void {
+    this.updateCorrupt(presets, missing, corrupt);
     const mode = this.readMode;
     this.readMode = null;
     this.banks.setReading(null);
@@ -557,7 +579,9 @@ export class App {
         const left = this.writeQueue.length - 1;
         this.writeQueue = [];
         alert(`The G-System did not confirm storing “${expected.preset.name}” in ${slotLabel(expected.slot)}`
-          + (got ? ": the preset read back is different." : ": the slot does not answer (G-System locked up? Switch it off and on again).")
+          + (got ? ": the preset read back is different."
+            : corrupt.length ? ": the G-System reports the slot's memory as damaged."
+              : ": the slot does not answer (G-System locked up? Switch it off and on again).")
           + (left ? `\n${left} other write(s) cancelled.` : "")
           + "\nThe presets stay stored in the editor and in the “to sync” list.");
       }
@@ -565,14 +589,20 @@ export class App {
     }
     if (mode === "all") {
       this.bank.undo.setClean();
-      this.notify(`${presets.length} presets read, ${missing.length} empty slot(s). Remember to export the bank.`);
+      this.notify(`${presets.length} presets read, ${missing.length} empty slot(s)`
+        + (corrupt.length ? `, ${corrupt.length} damaged (${corrupt.map((n) => slotLabel(n - USER_PRESET_BASE)).join(", ")})` : "")
+        + ". Remember to export the bank.", corrupt.length > 0);
       return;
     }
     const changes = new Map<number, Preset | null>();
     for (const p of presets) if (p.userSlot !== null) changes.set(p.userSlot, p);
     for (const n of missing) changes.set(n - USER_PRESET_BASE, null);
     for (const [s, p] of [...changes]) if (sameBytes(this.bank.preset(s)?.data, p?.data)) changes.delete(s);
-    if (mode === "bank") this.notify(`${presets.length} preset(s) read, ${changes.size} different from the bank shown.`);
+    // A damaged slot keeps the editor's copy: it may be the only good one left.
+    if (mode === "bank") {
+      this.notify(`${presets.length} preset(s) read, ${changes.size} different from the bank shown`
+        + (corrupt.length ? `, ${corrupt.length} damaged on the G-System (editor copy kept)` : "") + ".", corrupt.length > 0);
+    }
     if (mode === "revert") {
       if (changes.size) this.bank.setSlots(changes, "Re-read from the G-System");
       this.bank.dropPending(this.revertSlots);
