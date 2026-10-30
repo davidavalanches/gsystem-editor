@@ -143,7 +143,7 @@ export class PresetView {
   onStore: ((slot: number, preset: Preset) => void) | null = null;
   onNotice: ((text: string) => void) | null = null;
   onSlotChange: ((slot: number) => void) | null = null;
-  /** A preset was picked in the editor (not followed from the unit): recall it on the G-System. */
+  /** A preset was picked in the editor in Live mode (not followed from the unit): recall it on the G-System. */
   onSelect: ((slot: number) => void) | null = null;
 
   private readonly number = el("div", "dot-number");
@@ -402,7 +402,8 @@ export class PresetView {
     this.setBuffer(this.stored, false);
     this.onSlotChange?.(slot);
     this.renderBrowser();
-    if (changed && !this.fromUnit) {
+    // Only in Live mode does picking a preset in the editor recall it on the unit.
+    if (changed && !this.fromUnit && this.isLive) {
       this.onSelect?.(slot);
       // After the unit's own recall, so that the edit buffer ends up as the editor shows it.
       setTimeout(() => {
