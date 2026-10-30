@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { LEVELS_FIELD, presetLevels, presetRelays, relayText, writeRelay } from "../src/core/levels";
+import { LEVELS_FIELD, levelOn, presetLevels, presetRelays, relayText, writeLevel, writeRelay } from "../src/core/levels";
 import { block, lfo, readField, writeField } from "../src/core/params";
 import { presetSelectMessages } from "../src/core/protocol";
 import { PRESET_DATA_LEN } from "../src/core/sysex";
@@ -31,6 +31,19 @@ describe("relays", () => {
     expect(presetRelays(out)).toEqual([6, 1]);
     expect(presetLevels(out)).toEqual(presetLevels(chute));
     expect(readField(out, LEVELS_FIELD) & 0x0fffff).toBe(readField(chute, LEVELS_FIELD) & 0x0fffff);
+  });
+
+  // The unit sent relay switch (block 1 parameter 16) 1 with "Chute - drive"; Vyzor sent 0 with "Fragile - clean".
+  it("reads the relay switch from bit 8", () => {
+    expect(levelOn(chute, "relay")).toBe(true);
+    expect(levelOn(writeField(BLANK, LEVELS_FIELD, signed24(0xad202c)), "relay")).toBe(false);
+  });
+
+  it("switches the relay without touching its settings", () => {
+    const off = writeLevel(chute, "relay", false);
+    expect(levelOn(off, "relay")).toBe(false);
+    expect(presetRelays(off)).toEqual([6, 12]);
+    expect(presetLevels(off)).toEqual(presetLevels(chute));
   });
 });
 

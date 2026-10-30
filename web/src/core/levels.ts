@@ -3,12 +3,13 @@
  *
  * bits 0-1   routing, see ROUTINGS (block 1 parameter 0)
  * bit  2     boost on (block 1 parameter 10)
+ * bit  8     relay switch on (block 1 parameter 16): the Relay footswitch, like a block's on/off
  * bits 4-7   boost level in dB (block 1 parameter 11)
  * bits 9-12  loops 1 to 4 (block 1 parameters 19-22)
  * bit  13    insert loop (block 1 parameter 23)
  * bits 16-23 relays A and B (block 1 parameters 17 and 18, one nibble each, see presetRelays)
  *
- * Matched against the levels the unit sent for preset "Chute - drive" (loop 2 on,
+ * Matched against the levels the unit sent for preset "Chute - drive" (loop 2 on, relay on,
  * relays 6 and 12) and those Vyzor sent with "Fragile - clean" (insert and boost
  * on, boost 2 dB). The factory presets bear it out: all loops off, boost 3-6 dB.
  * Loops 1, 3 and 4 follow the bit order rather than an observation.
@@ -23,8 +24,8 @@ import { readField, writeField } from "./params";
 export const LEVELS_FIELD = 0;
 /** Routing names in the firmware's order. */
 export const ROUTINGS = ["Serial", "Parallel", "Semi Parallel", "Serial2"] as const;
-/** Bits of the loop, insert and boost switches in field 0, by the keys of protocol's LEVEL_SWITCHES. */
-export const LEVEL_BITS: Record<string, number> = { loop1: 9, loop2: 10, loop3: 11, loop4: 12, insert: 13, boost: 2 };
+/** Bits of the loop, insert, boost and relay switches in field 0, by the keys of protocol's LEVEL_SWITCHES. */
+export const LEVEL_BITS: Record<string, number> = { loop1: 9, loop2: 10, loop3: 11, loop4: 12, insert: 13, boost: 2, relay: 8 };
 export const OUTPUTS_FIELD = 2;
 export const OUTPUT_MIN = -100;
 /** Block 1 parameters of the routing and the output levels, for Live mode. */

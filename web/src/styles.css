@@ -350,6 +350,12 @@ button:disabled { opacity: 0.4; cursor: default; }
 .relay-contact.on { color: var(--ink); }
 .relay-contact.on::before { background: var(--red); border: 0; box-shadow: 0 0 6px rgba(240, 83, 62, 0.8); }
 .relay-text { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--dim); }
+/* Phone: the four contacts share the row, at a touch size. */
+@media (max-width: 1199px), (max-height: 699px) {
+  .relay-contacts { flex: 1; gap: 6px; }
+  .relay-contact { flex: 1; justify-content: center; height: 40px; font-size: 14px; }
+  .relay-name { width: 52px; }
+}
 .tile.stack { flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; padding: 0 10px; }
 .tile-routing { display: flex; align-items: center; gap: 6px; color: var(--soft); }
 .tile-count { font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--amber); }
@@ -366,7 +372,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 .favorite.empty { border-style: dashed; background: transparent; color: var(--faint); font-weight: 500; }
 .favorite.empty .favorite-num { color: var(--faint); }
 .preset-strip { display: flex; align-items: center; gap: 8px; flex-shrink: 0; padding: 5px 8px; background: var(--panel) var(--scanlines); border-bottom: 1px solid var(--edge); }
-.levels { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; }
+.levels { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; }
 /* Boost: a small footswitch block at the end of the loops, like BOOST at the end of the unit's bottom row. */
 .boost-block { flex-shrink: 0; display: flex; align-items: stretch; height: 32px; border: 1px solid var(--groove); border-radius: 6px; background: rgba(0, 0, 0, 0.18); }
 /* Selected like an effect tile: a lighter ground and the red bar along the bottom. */

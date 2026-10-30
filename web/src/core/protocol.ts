@@ -45,7 +45,7 @@ export const BLOCK_IDS: Record<string, number> = {
 };
 export const LEVELS_BLOCK_ID = 1;
 export const LEVEL_SWITCHES: Record<string, number> = {
-  loop1: 19, loop2: 20, loop3: 21, loop4: 22, insert: 23, boost: 10,
+  loop1: 19, loop2: 20, loop3: 21, loop4: 22, insert: 23, boost: 10, relay: 16,
 };
 
 export function presetRequest(number: number, deviceId = 0): Uint8Array {

@@ -45,7 +45,7 @@ const STORED = -1;
 const TEMPO_ROW = 1002;
 const isModifierField = (index: number) => index >= MODIFIER_FIELD && index < MODIFIER_FIELD + MODIFIER_SLOTS;
 const LEVEL_LABELS: [string, string][] = [
-  ["loop1", "L1"], ["loop2", "L2"], ["loop3", "L3"], ["loop4", "L4"], ["insert", "INS"],
+  ["loop1", "L1"], ["loop2", "L2"], ["loop3", "L3"], ["loop4", "L4"], ["insert", "INS"], ["relay", "RLY"],
 ];
 /** Pseudo block: the preset's boost, its own footswitch on the unit, with a level per preset. */
 const BOOST = "boost";
@@ -197,7 +197,7 @@ export class PresetView {
 
     const column = el("section", "blocks-column");
     column.setAttribute("aria-label", "Effect blocks");
-    this.levelBar.setAttribute("aria-label", "Preset loops, insert and boost");
+    this.levelBar.setAttribute("aria-label", "Preset loops, insert, relay and boost");
     column.append(this.tiles);
     const params = el("section", "params-section");
     params.setAttribute("aria-label", "Parameters");
@@ -284,14 +284,20 @@ export class PresetView {
       if (index === LEVELS_FIELD) {
         const level = presetLevels(after).boostLevel;
         if (level !== presetLevels(before).boostLevel) this.sendParam!(LEVELS_BLOCK_ID, BOOST_LEVEL_PARAM, level);
+        // Relay settings first: the unit applies them to its jacks when the relay switch is set.
+        const relays = presetRelays(before);
+        let relaysChanged = false;
+        presetRelays(after).forEach((v, which) => {
+          if (v === relays[which]) return;
+          this.sendParam!(LEVELS_BLOCK_ID, RELAY_PARAMS[which], v);
+          relaysChanged = true;
+        });
         for (const key of Object.keys(LEVEL_BITS)) {
           const on = levelOn(after, key);
-          if (on !== levelOn(before, key)) this.sendParam!(LEVELS_BLOCK_ID, LEVEL_SWITCHES[key], Number(on));
+          if (on !== levelOn(before, key) || (key === "relay" && relaysChanged)) {
+            this.sendParam!(LEVELS_BLOCK_ID, LEVEL_SWITCHES[key], Number(on));
+          }
         }
-        const relays = presetRelays(before);
-        presetRelays(after).forEach((v, which) => {
-          if (v !== relays[which]) this.sendParam!(LEVELS_BLOCK_ID, RELAY_PARAMS[which], v);
-        });
       }
     }
   }
@@ -655,7 +661,8 @@ export class PresetView {
       const b = el("button", on ? "level on" : "level", label);
       b.type = "button";
       b.disabled = !this.buffer;
-      b.title = label === "INS" ? "Insert (loop 5)" : label === "BST"
+      b.title = label === "INS" ? "Insert (loop 5)" : label === "RLY" ? "Relay switch (Relay jacks: settings A and B, Routing panel)"
+        : label === "BST"
         ? `Boost ${this.buffer ? presetLevels(this.buffer.data).boostLevel : 0} dB` : `Loop ${label.slice(1)}`;
       b.setAttribute("aria-pressed", String(on));
       b.addEventListener("click", () => this.setLevel(key, !on));
