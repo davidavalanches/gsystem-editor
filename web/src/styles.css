@@ -57,9 +57,11 @@
   /* Brushed panel of the unit and its metal footswitches. */
   --scanlines: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 3px);
   --metal: radial-gradient(circle at 40% 32%, #fff 0%, #e4e6e8 38%, #9da2a8 78%, #c7cbcf 100%);
-  /* Footswitch cap: a chrome dome with its inner groove. */
-  --dome: radial-gradient(circle, transparent 0 50%, rgba(60, 63, 68, 0.55) 54%, transparent 60%),
-    radial-gradient(circle at 38% 30%, #fff 0%, #eef0f2 20%, #c4c8cd 48%, #8f949a 72%, #c9cdd1 90%, #7d8187 100%);
+  /* Footswitch cap: polished chrome — a hot spot, a soft reflection below, bands of sky and floor around. */
+  --dome: radial-gradient(circle at 34% 27%, #fff 0%, rgba(255, 255, 255, 0.95) 7%, rgba(255, 255, 255, 0) 24%),
+    radial-gradient(ellipse 60% 35% at 60% 82%, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0) 70%),
+    radial-gradient(circle, rgba(0, 0, 0, 0) 60%, rgba(0, 0, 0, 0.28) 100%),
+    conic-gradient(from 200deg, #f6f8fa, #a3a9b0 16%, #eef1f4 30%, #737980 50%, #d9dde1 66%, #8a9097 82%, #f6f8fa);
   color-scheme: dark;
 }
 
@@ -373,8 +375,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 .tile:nth-child(odd):not(.wide) { border-right: 1px solid var(--groove); }
 .tile.selected { background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 -3px 0 var(--accent); }
-/* Chrome footswitch: metal bezel, black ring, then the dome; when on, a red neon ring glows around the bezel
-   (the LED ring of the first mock-up). */
+/* Chrome footswitch: metal bezel, dark ring, then the polished dome; when on, the dark ring lights up red. */
 .footswitch {
   --size: 30px;
   flex-shrink: 0;
@@ -388,11 +389,12 @@ button:disabled { opacity: 0.4; cursor: default; }
   background: var(--dome);
   box-shadow: 0 0 0 calc(var(--size) * 0.05) #6f7378, 0 0 0 calc(var(--size) * 0.08) #2c2e31,
     inset 0 0 calc(var(--size) * 0.06) rgba(0, 0, 0, 0.7);
+  transition: border-color 120ms, box-shadow 120ms;
 }
 .footswitch.on {
+  border-color: #ff5a47;
   box-shadow: 0 0 0 calc(var(--size) * 0.05) #6f7378, 0 0 0 calc(var(--size) * 0.08) #2c2e31,
-    0 0 0 calc(var(--size) * 0.08 + 2.5px) #ff5a47, 0 0 10px calc(var(--size) * 0.08 + 2px) rgba(255, 70, 50, 0.45),
-    0 0 22px calc(var(--size) * 0.08) rgba(255, 70, 50, 0.25), inset 0 0 calc(var(--size) * 0.06) rgba(0, 0, 0, 0.7);
+    0 0 calc(var(--size) * 0.3) rgba(255, 70, 50, 0.55), inset 0 0 calc(var(--size) * 0.12) rgba(255, 70, 50, 0.6);
 }
 /* 5" phones (360 px high): the five rows fit without scrolling. */
 @media (max-height: 380px) {
