@@ -14,6 +14,7 @@ import { ALL_FIELDS, describeField, formatField, rawHex } from "../core/fields";
 import { FAVORITE_COUNT, FAVORITE_NAME_LEN, applyFavorite, captureFavorite, favoriteName, matchingFavorite, type Favorite, type Favorites } from "../core/favorites";
 import { BLOCKS, Param, block, diffFields, owner, readField, writeField, type Block } from "../core/params";
 import { BLOCK_IDS, LEVELS_BLOCK_ID, LEVEL_SWITCHES } from "../core/protocol";
+import { NOVA_BLOCK_ID, NOVA_FIELD, NOVA_HEADER_FIELD, NOVA_PRESETS, novaPreset, novaWord, writeNovaPreset, writeNovaWord } from "../core/novadrive";
 import { TAP_MAX_MS, TAP_MIN_MS, TEMPO_BLOCKS, bpmToMs, msToBpm, presetTempoMs, syncToTempo, writeTempoMs } from "../core/tempo";
 import { NAME_LEN, Preset, SysexError, USER_SLOTS } from "../core/sysex";
 import { askText } from "./dialog";
@@ -43,6 +44,9 @@ const DESK_TABS: [DeskTab, string][] = [["block", "Block"], ["all", "All blocks"
 /** Compare target: the stored version of the preset, else a bank slot. */
 const STORED = -1;
 const TEMPO_ROW = 1002;
+const NOVA_ROW = 1003;
+/** Preset of a TC NDR-1 pedal recalled with the preset. */
+const NOVA = new Param("NovaDrive", 0, NOVA_PRESETS, ["None", ...Array.from({ length: NOVA_PRESETS }, (_, i) => `Preset ${i + 1}`)]);
 const isModifierField = (index: number) => index >= MODIFIER_FIELD && index < MODIFIER_FIELD + MODIFIER_SLOTS;
 const LEVEL_LABELS: [string, string][] = [
   ["loop1", "L1"], ["loop2", "L2"], ["loop3", "L3"], ["loop4", "L4"], ["insert", "INS"], ["relay", "RLY"],
@@ -271,6 +275,7 @@ export class PresetView {
       this.sendParam!(MODIFIER_BLOCK_ID, MODIFIER_PARAM_BASE + slot, readField(this.buffer.data, MODIFIER_FIELD + slot));
     }
     this.sendRouting(this.buffer.data);
+    this.sendParam!(NOVA_BLOCK_ID, 0, novaWord(this.buffer.data));
     this.onNotice?.(`“${this.buffer.name}” loaded into the G-System's working memory`);
   }
 
@@ -281,6 +286,7 @@ export class PresetView {
       if (blk && index !== blk.countField) this.sendParam!(BLOCK_IDS[blk.key], index - blk.firstField, value);
       else if (isModifierField(index)) this.sendParam!(MODIFIER_BLOCK_ID, MODIFIER_PARAM_BASE + index - MODIFIER_FIELD, value);
       else if (index === LEVELS_FIELD || index === OUTPUTS_FIELD) this.sendRouting(after, index);
+      else if (index === NOVA_HEADER_FIELD || index === NOVA_FIELD) this.sendParam!(NOVA_BLOCK_ID, 0, novaWord(after));
       if (index === LEVELS_FIELD) {
         const level = presetLevels(after).boostLevel;
         if (level !== presetLevels(before).boostLevel) this.sendParam!(LEVELS_BLOCK_ID, BOOST_LEVEL_PARAM, level);
@@ -332,6 +338,16 @@ export class PresetView {
         } finally {
           this.fromUnit = false;
         }
+      }
+      return;
+    }
+    if (blockId === NOVA_BLOCK_ID) {
+      if (param !== 0 || !this.buffer || !this.live || novaWord(this.buffer.data) === (value & 0xffffff)) return;
+      this.fromUnit = true;
+      try {
+        this.pushBuffer(this.buffer.withData(writeNovaWord(this.buffer.data, value)));
+      } finally {
+        this.fromUnit = false;
       }
       return;
     }
@@ -455,6 +471,10 @@ export class PresetView {
     if (this.buffer && presetLevels(this.buffer.data).routing !== routing) {
       this.pushBuffer(this.buffer.withData(writeRouting(this.buffer.data, routing)));
     }
+  }
+
+  private setNovaPreset(n: number): void {
+    if (this.buffer && novaPreset(this.buffer.data) !== n) this.pushBuffer(this.buffer.withData(writeNovaPreset(this.buffer.data, n)));
   }
 
   private setRelay(which: number, value: number): void {
@@ -1108,6 +1128,9 @@ export class PresetView {
           (next) => this.setOutput(side, next)), (next) => this.setOutput(side, next)))];
     const ms = presetTempoMs(preset.data);
     if (ms !== null) rows.push(this.paramRow(TEMPO_ROW, TEMPO, msToBpm(ms), () => this.openTempoSheet(), (bpm) => this.setTempo(bpm)));
+    const nova = novaPreset(preset.data);
+    rows.push(this.paramRow(NOVA_ROW, NOVA, nova, () => this.openValueSheet("Routing · NovaDrive", "NDR-1 pedal preset", NOVA, nova,
+      (next) => this.setNovaPreset(next)), (next) => this.setNovaPreset(next)));
     // Relay settings A and B: which contacts of the Relay jacks close (amp channels…), toggled by the Relay switch.
     const inUse = levelOn(preset.data, "relay") ? 1 : 0;
     rows.push(...presetRelays(preset.data).map((value, which) => this.relayRow(which, value, which === inUse)));

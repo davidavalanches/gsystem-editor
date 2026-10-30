@@ -4,6 +4,7 @@ import { LEVELS_FIELD, levelOn, presetLevels, presetRelays, relayText, writeLeve
 import { block, lfo, readField, writeField } from "../src/core/params";
 import { presetSelectMessages } from "../src/core/protocol";
 import { PRESET_DATA_LEN } from "../src/core/sysex";
+import { NOVA_FIELD, NOVA_HEADER_FIELD, novaPreset, novaWord, writeNovaPreset } from "../src/core/novadrive";
 import { noteQuarters, syncToTempo, writeTempoMs } from "../src/core/tempo";
 
 const BLANK = new Uint8Array(PRESET_DATA_LEN);
@@ -87,5 +88,22 @@ describe("preset recall", () => {
   it("sends Bank Select and Program Change on the unit's channel", () => {
     expect(presetSelectMessages(0, 1).map((m) => [...m])).toEqual([[0xb0, 0, 1], [0xc0, 0]]);
     expect(presetSelectMessages(150, 3).map((m) => [...m])).toEqual([[0xb2, 0, 2], [0xc2, 50]]);
+  });
+});
+
+describe("novadrive", () => {
+  it("reads the NDR-1 preset only behind the extension header", () => {
+    const vyzor = writeField(writeField(BLANK, NOVA_HEADER_FIELD, signed24(0xedab01)), NOVA_FIELD, signed24(0x12ffff));
+    expect(novaPreset(vyzor)).toBe(18);
+    expect(novaWord(vyzor)).toBe(0x12ffff);
+    expect(novaPreset(writeField(BLANK, NOVA_FIELD, signed24(0x12ffff)))).toBe(0);
+  });
+
+  it("writes the header and keeps the low bits", () => {
+    const set = writeNovaPreset(BLANK, 3);
+    expect(readField(set, NOVA_HEADER_FIELD) & 0xffffff).toBe(0xedab01);
+    expect(novaWord(set)).toBe(0x030000);
+    const vyzor = writeField(writeField(BLANK, NOVA_HEADER_FIELD, signed24(0xedab01)), NOVA_FIELD, signed24(0x01ffff));
+    expect(novaWord(writeNovaPreset(vyzor, 0))).toBe(0x00ffff);
   });
 });

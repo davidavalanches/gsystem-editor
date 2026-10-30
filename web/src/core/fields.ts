@@ -1,6 +1,7 @@
 /** What each of a preset's 165 fields is, for the raw view and the comparison. */
 
 import { LEVELS_FIELD, OUTPUTS_FIELD } from "./levels";
+import { NOVA_FIELD, NOVA_HEADER_FIELD, novaPreset } from "./novadrive";
 import { MODIFIER_FIELD, MODIFIER_SLOTS, SOURCES, modifierTargets, readModifier } from "./modifiers";
 import { FIELD_COUNT, owner, readField, type Param } from "./params";
 
@@ -25,6 +26,8 @@ export function describeField(data: Uint8Array, index: number): FieldInfo {
   }
   if (index === LEVELS_FIELD) return { group: "Preset", name: "Routing, boost, loops, relays", param: null };
   if (index === OUTPUTS_FIELD) return { group: "Preset", name: "Output L / R", param: null };
+  if (index === NOVA_HEADER_FIELD) return { group: "NovaDrive", name: "Extension header", param: null };
+  if (index === NOVA_FIELD) return { group: "NovaDrive", name: "NDR-1 preset", param: null };
   return { group: "Preset", name: "(unknown)", param: null };
 }
 
@@ -33,6 +36,7 @@ export function formatField(data: Uint8Array, index: number): string {
   const info = describeField(data, index);
   const value = readField(data, index);
   if (info.param) return info.param.format(value);
+  if (index === NOVA_FIELD) return novaPreset(data) ? String(novaPreset(data)) : "None";
   if (info.group === "Modifiers") {
     const m = readModifier(data, index - MODIFIER_FIELD);
     return m.source ? `${SOURCES[m.source] ?? m.source}` : "—";
