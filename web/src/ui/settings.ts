@@ -6,7 +6,7 @@
  * be prepared offline from the last values read, and dropped with "Annuler".
  */
 
-import { GLOBAL_GROUPS, formatGlobal, globalKey, globalRaw, globalValue, type GlobalGroup, type GlobalParam } from "../core/globals";
+import { GLOBAL_GROUPS, GLOBAL_PARAMS, formatGlobal, globalKey, globalRaw, globalValue, type GlobalGroup, type GlobalParam } from "../core/globals";
 import {
   FIXED_SWITCHES, FUNCTIONS, STYLES, SWITCH_BANKS, SWITCH_BLOCK, SWITCH_COUNT, SWITCH_FIRST, decodeSwitch, encodeSwitch, switchKind,
   withFunction, type SwitchSetting,
@@ -159,16 +159,21 @@ export class SettingsView {
       return [block, param, raw];
     }));
     this.refreshNote();
-    // The read-back answers within a second; whatever is still unconfirmed then was refused.
-    setTimeout(() => this.finishSend(), 2500);
+    // The read-back (asked 300 ms after the send) answers within a second. The unit sometimes drops a
+    // read while it applies the changes, so what is still unconfirmed is read once more before giving up.
+    setTimeout(() => {
+      if (this.sent && [...this.sent.keys()].some((key) => this.pending.has(key))) this.onRead?.();
+    }, 1300);
+    setTimeout(() => this.finishSend(), 2800);
   }
 
   private finishSend(): void {
     if (!this.sent) return;
-    const failed = [...this.sent.keys()].filter((key) => this.pending.has(key)).length;
+    const failed = [...this.sent.keys()].filter((key) => this.pending.has(key));
     const total = this.sent.size;
     this.sent = null;
-    this.onNotice?.(failed ? `${failed} of ${total} setting(s) not confirmed by the G-System`
+    const names = failed.map((key) => GLOBAL_PARAMS.get(key)?.name ?? key);
+    this.onNotice?.(failed.length ? `Not confirmed by the G-System: ${names.join(", ")} (${failed.length} of ${total})`
       : `${total} setting(s) written to the G-System and verified`);
     this.refresh();
   }

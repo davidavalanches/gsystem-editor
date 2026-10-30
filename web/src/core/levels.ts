@@ -3,7 +3,7 @@
  *
  * bits 0-1   routing, see ROUTINGS (block 1 parameter 0)
  * bit  2     boost on (block 1 parameter 10)
- * bit  8     relay switch on (block 1 parameter 16): the Relay footswitch, like a block's on/off
+ * bit  8     relay switch (block 1 parameter 16): on = relay setting A drives the Relay jacks, off = B
  * bits 4-7   boost level in dB (block 1 parameter 11)
  * bits 9-12  loops 1 to 4 (block 1 parameters 19-22)
  * bit  13    insert loop (block 1 parameter 23)

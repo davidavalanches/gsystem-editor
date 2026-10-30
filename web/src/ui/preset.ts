@@ -693,16 +693,18 @@ export class PresetView {
 
   /**
    * The relay switch picks which of the preset's two relay settings drives the Relay jacks: A or B, never
-   * both, like the unit's Relay footswitch. Taken to be A when the switch (block 1 parameter 16) is 0.
+   * both, like the unit's Relay footswitch. Relay A is in use when the switch (block 1 parameter 16) is on:
+   * tried on the unit, editing the other setting in Live changed the amp's channel.
    */
-  private relaySwitch(b: boolean): HTMLButtonElement {
+  private relaySwitch(on: boolean): HTMLButtonElement {
+    const [inUse, other] = on ? ["A", "B"] : ["B", "A"];
     const button = el("button", "level relay");
     button.type = "button";
     button.disabled = !this.buffer;
-    button.title = `Relay ${b ? "B" : "A"} in use: tap for Relay ${b ? "A" : "B"} (settings in the Routing panel)`;
-    button.setAttribute("aria-label", `Relay ${b ? "B" : "A"} in use, switch to ${b ? "A" : "B"}`);
-    button.append("RLY", el("span", "relay-letter", b ? "B" : "A"));
-    button.addEventListener("click", () => this.setLevel("relay", !b));
+    button.title = `Relay ${inUse} in use: tap for Relay ${other} (settings in the Routing panel)`;
+    button.setAttribute("aria-label", `Relay ${inUse} in use, switch to ${other}`);
+    button.append("RLY", el("span", "relay-letter", inUse));
+    button.addEventListener("click", () => this.setLevel("relay", !on));
     return button;
   }
 
@@ -1132,7 +1134,7 @@ export class PresetView {
     rows.push(this.paramRow(NOVA_ROW, NOVA, nova, () => this.openValueSheet("Routing · NovaDrive", "NDR-1 pedal preset", NOVA, nova,
       (next) => this.setNovaPreset(next)), (next) => this.setNovaPreset(next)));
     // Relay settings A and B: which contacts of the Relay jacks close (amp channels…), toggled by the Relay switch.
-    const inUse = levelOn(preset.data, "relay") ? 1 : 0;
+    const inUse = levelOn(preset.data, "relay") ? 0 : 1;
     rows.push(...presetRelays(preset.data).map((value, which) => this.relayRow(which, value, which === inUse)));
     this.paramsList.replaceChildren(...rows);
   }
@@ -1149,7 +1151,7 @@ export class PresetView {
     pick.setAttribute("aria-checked", String(inUse));
     pick.title = inUse ? `${name} drives the Relay jacks` : `Use ${name}`;
     pick.append(el("span", "relay-pick-dot"), el("span", "", name));
-    pick.addEventListener("click", () => this.setLevel("relay", which === 1));
+    pick.addEventListener("click", () => this.setLevel("relay", which === 0));
     const contacts = el("span", "relay-contacts");
     for (let i = 0; i < RELAY_CONTACTS; i++) {
       const closed = ((value >> i) & 1) === 1;
