@@ -13,6 +13,7 @@ import { loadSession, pickFile, saveFile, storeSession } from "./files";
 import { MidiView } from "./midiview";
 import { PresetView } from "./preset";
 import { SettingsView } from "./settings";
+import { SKINS, chooseSkin, currentSkin } from "./skin";
 import { ICONS, type MenuItem } from "./widgets";
 
 type ReadMode = "all" | "bank" | "refresh" | "verify" | "revert";
@@ -176,7 +177,16 @@ export class App {
       { label: `Undo${this.bank.undo.undoText ? `: ${this.bank.undo.undoText}` : ""}`,
         action: () => this.bank.undoLast(), disabled: !this.bank.undo.canUndo },
       { label: "Redo", action: () => this.bank.redoLast(), disabled: !this.bank.undo.canRedo },
+      { label: "Appearance…", action: () => this.chooseSkin() },
     ];
+  }
+
+  /** The panels' finish, after the G-System's black, grey and red editions. */
+  private chooseSkin(): void {
+    const now = currentSkin();
+    showChoices("Appearance", SKINS.map(([key, label]) => ({
+      label, detail: key === now ? "In use" : `Panels in ${label.toLowerCase()} metal`, run: () => chooseSkin(key),
+    })));
   }
 
   /** The actions of one bank; each first makes it the bank shown. */

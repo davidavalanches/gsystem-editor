@@ -54,6 +54,55 @@
   color-scheme: dark;
 }
 
+/* Panel finishes, after the G-System's grey and red editions: only the brushed surfaces change; the black
+   header, the LCD and the accents stay. The tokens above are Black brushed; Grey brushed is the app's
+   default until the user picks one (ui/skin.ts). */
+:root[data-skin="grey"] {
+  --bg: #3c3e42;
+  --bar: #45484c;
+  --panel: #6a6d72;
+  --surface: #55585c;
+  --surface-2: #616469;
+  --surface-3: #616469;
+  --selected: #6e7176;
+  --current: rgba(255, 255, 255, 0.12);
+  --sheet: #505357;
+  --edge: #2b2d30;
+  --groove: #33353a;
+  --line: #74777c;
+  --line-2: #82858a;
+  --line-3: #979a9f;
+  --soft: #e0e2e5;
+  --muted: #d3d5d8;
+  --dim: #c4c7cb;
+  --faint: #a4a7ab;
+  --scanlines: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 3px);
+}
+:root[data-skin="red"] {
+  --bg: #2b1718;
+  --bar: #331b1c;
+  --panel: #6e1f20;
+  --surface: #45191a;
+  --surface-2: #552022;
+  --surface-3: #552022;
+  --selected: #642a2b;
+  --current: rgba(255, 255, 255, 0.1);
+  --sheet: #3f1718;
+  --edge: #1a0b0c;
+  --groove: #210e0f;
+  --line: #6a3334;
+  --line-2: #7b4041;
+  --line-3: #935657;
+  --soft: #ecd9d8;
+  --muted: #dcc4c3;
+  --dim: #c9adac;
+  --faint: #a58584;
+  /* On red panels the accent moves towards orange to stay visible. */
+  --accent: #ff8a5c;
+  --red: #ff6b4f;
+  --scanlines: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 3px);
+}
+
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 
@@ -584,10 +633,16 @@ button:disabled { opacity: 0.4; cursor: default; }
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
+  /* Taller than the screen (a phone in landscape): it scrolls. */
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
 }
-.menu button { height: 44px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; text-align: left; font-size: 14px; }
+.menu button { flex-shrink: 0; height: 44px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; text-align: left; font-size: 14px; }
 .menu button:active:not(:disabled) { background: var(--selected); }
 .menu-scrim { position: fixed; inset: 0; z-index: 19; }
+@media (max-height: 699px) {
+  .menu button { height: 36px; }
+}
 
 .toast {
   position: fixed;

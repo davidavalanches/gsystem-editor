@@ -63,7 +63,10 @@ export function showMenu(anchor: HTMLElement | { x: number; y: number }, items: 
   const width = menu.offsetWidth, height = menu.offsetHeight;
   menu.style.left = `${Math.max(8, Math.min(window.innerWidth - width - 8, r.right - width))}px`;
   const below = r.bottom + 4;
-  menu.style.top = `${below + height > window.innerHeight - 8 ? Math.max(8, r.top - height - 4) : below}px`;
+  // Below the anchor, else above it, else as low as it fits (it scrolls when taller than the screen).
+  const top = below + height <= window.innerHeight - 8 ? below
+    : r.top - height - 4 >= 8 ? r.top - height - 4 : Math.max(8, window.innerHeight - height - 8);
+  menu.style.top = `${top}px`;
   (menu.querySelector("button:not(:disabled)") as HTMLButtonElement | null)?.focus();
 }
 
