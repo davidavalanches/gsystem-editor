@@ -40,7 +40,7 @@
     -webkit-font-smoothing: antialiased;
   }
   a { color: inherit; }
-  img { max-width: 100%; display: block; }
+  img { max-width: 100%; height: auto; display: block; }
   .wrap { max-width: var(--wrap); margin: 0 auto; padding: 0 16px; }
   .label {
     font-family: "Michroma", sans-serif;
@@ -138,14 +138,14 @@
   .feature li::before { content: ""; position: absolute; left: 0; top: .65em; width: 7px; height: 7px; border-radius: 50%; background: var(--red); }
 
   /* Gallery */
-  .gallery { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .gallery { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; align-items: start; }
   @media (max-width: 860px) { .gallery { grid-template-columns: repeat(2, 1fr); } }
-  .gallery button { padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); cursor: zoom-in; aspect-ratio: 16/10; }
-  .gallery img { width: 100%; height: 100%; object-fit: cover; object-position: top left; transition: transform .3s; }
+  .gallery button { padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); cursor: zoom-in; }
+  .gallery img { width: 100%; height: auto; transition: transform .3s; }
   .gallery button:hover img { transform: scale(1.04); }
   dialog { border: 0; padding: 0; background: transparent; max-width: 96vw; max-height: 94vh; }
   dialog::backdrop { background: rgba(0,0,0,.85); }
-  dialog img { max-width: 96vw; max-height: 94vh; border-radius: 8px; cursor: zoom-out; }
+  dialog img { max-width: 96vw; max-height: 94vh; width: auto; height: auto; object-fit: contain; border-radius: 8px; cursor: zoom-out; }
 
   /* Downloads */
   .download { background: linear-gradient(180deg, #121215, var(--bg)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
@@ -339,10 +339,10 @@
     <div class="wrap">
       <div class="label" style="margin-bottom:16px"><span lang="en">More screenshots</span><span lang="fr">Plus de captures</span></div>
       <div class="gallery">
-        <button type="button" data-full="screenshots/compact-banks.jpg"><img src="screenshots/compact-banks.jpg" loading="lazy" alt="Bank list, compact window"></button>
-        <button type="button" data-full="screenshots/menu.jpg"><img src="screenshots/menu.jpg" loading="lazy" alt="File and bank menu"></button>
-        <button type="button" data-full="screenshots/midi.jpg"><img src="screenshots/midi.jpg" loading="lazy" alt="MIDI and connection screen"></button>
-        <button type="button" data-full="screenshots/preset-editor.jpg"><img src="screenshots/preset-editor.jpg" loading="lazy" alt="Preset editor, full screen"></button>
+        <button type="button" data-full="screenshots/compact-banks.jpg"><img src="screenshots/compact-banks.jpg" width="1643" height="1026" loading="lazy" alt="Bank list, compact window"></button>
+        <button type="button" data-full="screenshots/menu.jpg"><img src="screenshots/menu.jpg" width="1643" height="1026" loading="lazy" alt="File and bank menu"></button>
+        <button type="button" data-full="screenshots/midi.jpg"><img src="screenshots/midi.jpg" width="1920" height="1200" loading="lazy" alt="MIDI and connection screen"></button>
+        <button type="button" data-full="screenshots/preset-editor.jpg"><img src="screenshots/preset-editor.jpg" width="1920" height="1200" loading="lazy" alt="Preset editor, full screen"></button>
       </div>
     </div>
   </section>
