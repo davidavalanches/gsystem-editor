@@ -135,3 +135,15 @@ npm test
 
 Les tests sur fichiers réels utilisent les banques de `GSYSTEM_SAMPLES` (par défaut
 `~/Documents/Psicraft/Vyzor G-System`). Ces fichiers ne sont pas versionnés.
+
+## Licence
+
+G-System Editor est un logiciel libre distribué sous licence **GNU GPL v3** (voir [`LICENSE`](LICENSE)).
+Vous pouvez l'utiliser, l'étudier, le modifier et le redistribuer. Toute version redistribuée, modifiée ou
+non, doit rester sous GPL v3 et être accompagnée de son code source.
+
+Composants tiers : Capacitor, Vite et Electron (MIT) ; polices IBM Plex, Michroma, Doto et VT323 (SIL Open
+Font License).
+
+G-System, Nova System et TC Electronic sont des marques de leurs propriétaires. Ce projet n'est ni affilié à
+TC Electronic ni approuvé par la marque. Les tables du firmware servent uniquement à l'interopérabilité.
