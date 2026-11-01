@@ -604,17 +604,14 @@ export class App {
       return;
     }
     const channel = this.settings.rawValue(SYSTEM_BLOCK, MIDI_CHANNEL_PARAM);
-    if (channel === 0) {
-      this.notify("The G-System's MIDI channel is Off: it ignores preset changes (Settings → MIDI)", true);
-      return;
-    }
-    if (this.settings.rawValue(SYSTEM_BLOCK, PRG_CHANGE_IN_PARAM) === 0) {
-      this.notify("Prg. Change In is Off on the G-System: it ignores preset changes (Settings → MIDI)", true);
-      return;
-    }
     this.recalled = { slot, at: Date.now() };
-    // Omni (17) and an unknown channel: channel 1.
+    // The unit's channel as read; Off, Omni (17) and an unknown channel: channel 1. Always sent:
+    // the settings read are only used to warn.
     this.link.selectPreset(slot, channel !== undefined && channel >= 1 && channel <= 16 ? channel : 1);
+    if (channel === 0) this.notify("The G-System's MIDI channel reads Off: it may ignore preset changes (Settings → MIDI)", true);
+    else if (this.settings.rawValue(SYSTEM_BLOCK, PRG_CHANGE_IN_PARAM) === 0) {
+      this.notify("Prg. Change In reads Off on the G-System: it may ignore preset changes (Settings → MIDI)", true);
+    }
   }
 
   private writeQueue: { slot: number; preset: Preset }[] = [];
