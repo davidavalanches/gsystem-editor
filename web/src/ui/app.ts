@@ -18,6 +18,7 @@ import { ICONS, type MenuItem } from "./widgets";
 
 type ReadMode = "all" | "bank" | "refresh" | "verify" | "revert";
 const SYSEX_ID_KEY = "gsystem-editor.sysex-id";
+/** Damaged slots used to be kept between sessions; they belong to one unit, so they are dropped. */
 const CORRUPT_KEY = "gsystem-editor.corrupt";
 const PROTECTED_KEY = "gsystem-editor.protected-banks";
 /** Write stored presets into the unit (Vyzor's Sync sequence, checked by reading back). */
@@ -271,11 +272,6 @@ export class App {
     for (const n of missing) this.bank.corrupt.delete(n - USER_PRESET_BASE);
     for (const n of corrupt) this.bank.corrupt.add(n - USER_PRESET_BASE);
     if (!corrupt.length && before === this.bank.corrupt.size) return;
-    try {
-      localStorage.setItem(CORRUPT_KEY, JSON.stringify([...this.bank.corrupt]));
-    } catch {
-      // Not kept: the next read finds them again.
-    }
     this.banks.refresh();
   }
 
@@ -286,9 +282,9 @@ export class App {
       // No bank protected.
     }
     try {
-      for (const s of JSON.parse(localStorage.getItem(CORRUPT_KEY) ?? "[]") as number[]) this.bank.corrupt.add(s);
+      localStorage.removeItem(CORRUPT_KEY);
     } catch {
-      // Nothing known about damaged slots yet.
+      // Nothing stored.
     }
     const session = loadSession();
     if (!session) return;
@@ -403,6 +399,12 @@ export class App {
       link.sysexId = this.sysexId;
       this.link = link;
       link.onIdentity = (version) => {
+        // Damaged slots are a state of one unit's memory, and nothing tells units apart:
+        // whatever was found before belongs to the previous connection.
+        if (this.bank.corrupt.size) {
+          this.bank.corrupt.clear();
+          this.banks.refresh();
+        }
         this.setConnected(true, `G-System ${version}`, port.name);
         if (this.readOffer) {
           this.readOffer = false;

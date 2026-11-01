@@ -96,7 +96,8 @@ export class BankStore {
 
   /** Slots changed in the editor and not yet written into the unit. */
   pending = new Set<number>();
-  /** Slots the unit reports as damaged: a state of its memory, kept whatever bank is loaded. */
+  /** Slots the connected unit reported damaged: a state of its memory, kept whatever bank is loaded,
+   * cleared on each new connection. */
   corrupt = new Set<number>();
   /** Banks the user excluded from writing: on some units, stores into a faulty memory area
    * freeze the G-System. A state of the unit, kept whatever bank is loaded. */
