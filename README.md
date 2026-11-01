@@ -92,7 +92,7 @@ codesign --force --deep -s - "/Applications/G-System Editor.app"   # si macOS la
 - **Routing et relais** (tuile ROUTING) : routing, niveaux de sortie, tempo, et les réglages de relais A et B
   (4 contacts chacun, ouvert / fermé, basculés par le switch Relay du pédalier).
 - **Sélection de preset** : choisir un preset dans l'éditeur, G-System connecté, envoie Bank Select +
-  Program Change sur le canal MIDI du G-System pour qu'il le rappelle (Prg.Chng.In doit être sur On).
+  Program Change sur le canal MIDI du G-System pour qu'il le rappelle (en USB, même avec Prg.Chng.In sur Off).
   En Live, le preset est aussi écrit dans la mémoire de travail.
 - **Store** : enregistre dans la banque de l'éditeur et, si le G-System est connecté, l'écrit dans le pédalier
   (séquence de Vyzor, adressée au SysEx ID du G-System, réglable dans la vue MIDI), puis le relit pour vérifier.
@@ -125,7 +125,7 @@ codesign --force --deep -s - "/Applications/G-System Editor.app"   # si macOS la
 | `F0 00 20 1F 00 55 45 01 <n° hi> <n° lo> F7` | Demande d'un preset stocké (réponse en 0,77 s ; une requête à la fois) |
 | `F0 00 20 1F <dev> 55 20 01 <n°> <1032 quartets> <somme> F7` | Dump de preset (1044 octets) |
 | `F0 00 20 1F 7F 55 22 <bloc> <param:2> <valeur:6 quartets> F7` | Écriture d'un paramètre de la mémoire de travail ; envoyé aussi par le G-System |
-| `B0 00 <1\|2>` + `C0 <n>` | Changement de preset envoyé par le G-System ; l'éditeur envoie le même pour rappeler un preset (ignoré lors d'un premier essai en USB, à confirmer) |
+| `B0 00 <1\|2>` + `C0 <n>` | Changement de preset envoyé par le G-System ; l'éditeur envoie le même pour rappeler un preset (suivi en USB même avec Prg.Chng.In sur Off) |
 
 Blocs : 1 = niveaux (loops 19–22, insert 23, boost 10, relais A 17 et B 18), 2 = EQ, 4 = Mod, 7 = Filter, 8 = Pitch,
 9 = Delay, 10 = Comp, 11 = Reverb, 12 = Noise gate, 13 = modifiers (paramètres 20–57).

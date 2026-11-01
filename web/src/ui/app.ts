@@ -2,7 +2,7 @@
 
 import { emptyPreset } from "../core/empty";
 import { BANK_COUNT, BankStore, PRESETS_PER_BANK, slotLabel } from "../core/bank";
-import { GLOBAL_RANGES, MIDI_CHANNEL_PARAM, PRG_CHANGE_IN_PARAM, SYSTEM_BLOCK } from "../core/globals";
+import { GLOBAL_RANGES, MIDI_CHANNEL_PARAM, SYSTEM_BLOCK } from "../core/globals";
 import { DEFAULT_SYSEX_ID, GSystemLink } from "../core/protocol";
 import { SqsFile, USER_BANK_KIND, readSyx } from "../core/sqs";
 import { USER_PRESET_BASE, USER_SLOTS, sameBytes, type Preset } from "../core/sysex";
@@ -605,13 +605,10 @@ export class App {
     }
     const channel = this.settings.rawValue(SYSTEM_BLOCK, MIDI_CHANNEL_PARAM);
     this.recalled = { slot, at: Date.now() };
-    // The unit's channel as read; Off, Omni (17) and an unknown channel: channel 1. Always sent:
-    // the settings read are only used to warn.
+    // The unit's channel as read; Off, Omni (17) and an unknown channel: channel 1. Over USB the unit
+    // follows these messages even with Prg. Change In Off (seen on the user's G-System), so that
+    // setting is not checked.
     this.link.selectPreset(slot, channel !== undefined && channel >= 1 && channel <= 16 ? channel : 1);
-    if (channel === 0) this.notify("The G-System's MIDI channel reads Off: it may ignore preset changes (Settings → MIDI)", true);
-    else if (this.settings.rawValue(SYSTEM_BLOCK, PRG_CHANGE_IN_PARAM) === 0) {
-      this.notify("Prg. Change In reads Off on the G-System: it may ignore preset changes (Settings → MIDI)", true);
-    }
   }
 
   private writeQueue: { slot: number; preset: Preset }[] = [];
