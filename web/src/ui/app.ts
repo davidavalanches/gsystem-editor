@@ -1,5 +1,6 @@
 /** Application shell: navigation rail, views, file actions, MIDI connection and Live wiring. */
 
+import { emptyPreset } from "../core/empty";
 import { BANK_COUNT, BankStore, PRESETS_PER_BANK, slotLabel } from "../core/bank";
 import { GLOBAL_RANGES, MIDI_CHANNEL_PARAM, PRG_CHANGE_IN_PARAM, SYSTEM_BLOCK } from "../core/globals";
 import { DEFAULT_SYSEX_ID, GSystemLink } from "../core/protocol";
@@ -251,7 +252,10 @@ export class App {
     const slots = [...Array(PRESETS_PER_BANK).keys()].map((i) => b * PRESETS_PER_BANK + i);
     const names = slots.filter((s) => this.bank.preset(s)).map((s) => `${slotLabel(s)}  ${this.bank.preset(s)!.name}`);
     if (!names.length || !confirm(`Clear bank ${pad2(b)}?\n\n${names.join("\n")}\n\nYou can undo this.`)) return;
-    this.bank.setSlots(new Map(slots.map((s) => [s, null])), `Clear bank ${pad2(b)}`);
+    // The unit only takes complete presets: each slot gets an empty one ("Empty", everything off).
+    const template = this.bank.template(slots[0]);
+    if (!template) return;
+    this.bank.setSlots(new Map(slots.map((s) => [s, emptyPreset(this.bank.preset(s) ?? template, s)])), `Clear bank ${pad2(b)}`);
     this.bank.markPending(slots.filter((s) => !this.bank.isProtected(s)));
   }
 

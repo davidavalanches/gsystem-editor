@@ -110,6 +110,11 @@ export class BankStore {
     return false;
   }
 
+  /** A preset to build an empty one from: the slot's own, else any preset of the bank. */
+  template(slot: number): Preset | null {
+    return this.presets[slot] ?? this.presets.find((p) => p) ?? null;
+  }
+
   isProtected(slot: number): boolean {
     return this.isProtectedBank(Math.floor(slot / PRESETS_PER_BANK));
   }

@@ -107,3 +107,31 @@ describe("novadrive", () => {
     expect(novaWord(writeNovaPreset(vyzor, 0))).toBe(0x00ffff);
   });
 });
+
+describe("empty preset", async () => {
+  const { emptyPreset } = await import("../src/core/empty");
+  const { Preset, userNumber } = await import("../src/core/sysex");
+  const { SWITCH_BLOCKS } = await import("../src/core/params");
+  const { readModifier, writeModifier } = await import("../src/core/modifiers");
+
+  it("turns every effect, loop, insert, boost and modifier off and keeps the relays", () => {
+    let data = writeField(BLANK, LEVELS_FIELD, signed24(0xc63f0c)); // loops 1-4, insert, boost on
+    for (const key of SWITCH_BLOCKS) {
+      const f = block(key).enableField(data);
+      if (f !== null) data = writeField(data, f, 1);
+    }
+    data = writeModifier(data, 0, { source: 2, min: 0, mid: 50, max: 100 });
+    data = writeNovaPreset(data, 7);
+    const empty = emptyPreset(new Preset(userNumber(3), data).withName("Solo"), 12);
+    expect(empty.name).toBe("Empty");
+    expect(empty.userSlot).toBe(12);
+    for (const key of ["loop1", "loop2", "loop3", "loop4", "insert", "boost"]) expect(levelOn(empty.data, key)).toBe(false);
+    expect(presetRelays(empty.data)).toEqual(presetRelays(data));
+    for (const key of SWITCH_BLOCKS) {
+      const f = block(key).enableField(empty.data);
+      if (f !== null) expect(readField(empty.data, f)).toBe(0);
+    }
+    expect(readModifier(empty.data, 0).source).toBe(0);
+    expect(novaPreset(empty.data)).toBe(0);
+  });
+});

@@ -2,6 +2,7 @@
 
 import { BANK_COUNT, PRESETS_PER_BANK, slotLabel, type BankStore } from "../core/bank";
 import { ROUTINGS, presetLevels, presetOutputs, type PresetLevels } from "../core/levels";
+import { emptyPreset } from "../core/empty";
 import { block, readField } from "../core/params";
 import { msToBpm, presetTempoMs } from "../core/tempo";
 import { NAME_LEN, type Preset } from "../core/sysex";
@@ -431,7 +432,7 @@ export class BanksView {
   private clear(slot: number): void {
     const old = this.bank.preset(slot);
     if (old && confirm(`Clear ${slotLabel(slot)} “${old.name}”? You can undo this.`)) {
-      this.edit(new Map([[slot, null]]), `Clear ${slotLabel(slot)}`);
+      this.edit(new Map([[slot, emptyPreset(old, slot)]]), `Clear ${slotLabel(slot)}`);
     }
   }
 
