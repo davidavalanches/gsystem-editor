@@ -29,10 +29,11 @@ function createWindow() {
     minHeight: 360,
     backgroundColor: "#26272a",
     autoHideMenuBar: true,
-    fullscreen: process.platform !== "darwin",
+    // Full screen everywhere; on macOS in its own Space, left with the green button or Ctrl+Cmd+F.
+    fullscreen: true,
+    fullscreenable: true,
     title: "G-System Editor",
   });
-  if (process.platform === "darwin") win.maximize();
   // Links leave the app for the default browser.
   win.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
