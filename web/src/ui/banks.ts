@@ -5,7 +5,7 @@ import { ROUTINGS, presetLevels, presetOutputs, type PresetLevels } from "../cor
 import { block, readField } from "../core/params";
 import { msToBpm, presetTempoMs } from "../core/tempo";
 import { NAME_LEN, type Preset } from "../core/sysex";
-import { askText } from "./dialog";
+import { askText, showChoices } from "./dialog";
 import { DESKTOP, el } from "./dom";
 import { ICONS, fillDotNumber, iconButton, onLongPress, routingIcon, showMenu, type MenuItem } from "./widgets";
 
@@ -24,6 +24,8 @@ export interface BanksActions {
   sync(): void;
   /** Desktop: a preset was selected (in Live mode the unit recalls it). */
   select(slot: number): void;
+  /** Desktop: a bank was dragged onto another one (offer to swap them). */
+  dropBank(from: number, to: number): void;
 }
 
 export class BanksView {
@@ -49,7 +51,7 @@ export class BanksView {
     this.readButton.type = "button";
     this.readButton.addEventListener("click", () => actions.readUnit());
     this.syncButton.type = "button";
-    this.syncButton.title = "Modified presets not yet written to the G-System: write them (each one verified) or remove them from the list";
+    this.syncButton.title = "Presets changed in the editor, not yet stored in the G-System: write them (each one verified) or remove them from the list";
     this.syncButton.addEventListener("click", () => actions.sync());
     const titles = el("div", "grow");
     titles.append(this.title, this.sub);
@@ -136,7 +138,12 @@ export class BanksView {
       const cell = el("section", ["bank-cell", used ? "used" : "", this.bank.isProtectedBank(b) ? "avoided" : "",
         b === this.bankIndex ? "current" : ""].filter(Boolean).join(" "));
       cell.setAttribute("aria-label", `Bank ${String(b).padStart(2, "0")}`);
+      cell.dataset.bank = String(b);
       const head = el("div", "bank-cell-head");
+      head.title = "Click to select the bank; drag it onto another bank to swap them";
+      head.addEventListener("pointerdown", (e) => {
+        if (e.button === 0 && !(e.target as HTMLElement).closest(".bank-cell-more")) this.dragBank(e, b);
+      });
       const more = iconButton(ICONS.more, `Bank ${String(b).padStart(2, "0")} actions`,
         () => showMenu(more, this.actions.bankMenu(b)));
       more.classList.add("bank-cell-more");
@@ -147,7 +154,13 @@ export class BanksView {
         const button = el("button", ["cell-slot", p ? "" : "empty", slot === this.current ? "selected" : "",
           this.bank.pending.has(slot) ? "pending" : "", damaged ? "corrupt" : ""].filter(Boolean).join(" "));
         button.type = "button";
+        button.dataset.slot = String(slot);
         button.setAttribute("aria-label", `${slotLabel(slot)} ${p ? p.name : "empty"}${damaged ? ", damaged on the G-System" : ""}`);
+        if (p) {
+          button.addEventListener("pointerdown", (e) => {
+            if (e.button === 0 && e.pointerType === "mouse") this.dragSlot(e, slot);
+          });
+        }
         if (damaged) button.title = DAMAGED;
         button.append(el("span", "cell-pos", String((slot % PRESETS_PER_BANK) + 1)),
           el("span", "cell-name", p ? p.name : damaged ? "damaged" : ""));
@@ -158,6 +171,118 @@ export class BanksView {
       }));
       return cell;
     }));
+  }
+
+  /** Pressing a bank's header selects it; moving onto another bank, still pressed, offers to swap them. */
+  private dragBank(down: PointerEvent, from: number): void {
+    down.preventDefault();
+    if (this.bankIndex !== from) this.showBank(from);
+    this.drag(down, {
+      source: () => this.grid.querySelector<HTMLElement>(`.bank-cell[data-bank="${from}"]`),
+      targetOf: (node) => {
+        const b = node.closest<HTMLElement>(".bank-cell[data-bank]")?.dataset.bank;
+        return b === undefined || Number(b) === from ? null : Number(b);
+      },
+      element: (b) => this.grid.querySelector<HTMLElement>(`.bank-cell[data-bank="${b}"]`),
+      hint: (b) => `⇄ swap with bank ${String(b).padStart(2, "0")}`,
+      drop: (b) => this.actions.dropBank(from, b),
+    });
+  }
+
+  /** Holding a preset and moving onto another one offers to swap them (a click still selects). */
+  private dragSlot(down: PointerEvent, from: number): void {
+    this.drag(down, {
+      source: () => this.grid.querySelector<HTMLElement>(`.cell-slot[data-slot="${from}"]`),
+      targetOf: (node) => {
+        const s = node.closest<HTMLElement>(".cell-slot[data-slot]")?.dataset.slot;
+        return s === undefined || Number(s) === from ? null : Number(s);
+      },
+      element: (s) => this.grid.querySelector<HTMLElement>(`.cell-slot[data-slot="${s}"]`),
+      hint: (s) => `⇄ swap with ${slotLabel(s)}`,
+      drop: (s) => this.dropSlot(from, s),
+    });
+  }
+
+  /** Drag from a pressed pointer: past a few pixels a copy of the source follows the pointer, the item
+   * under it is highlighted, and releasing there calls `drop`. Escape cancels. */
+  private drag(down: PointerEvent, o: {
+    source: () => HTMLElement | null;
+    targetOf: (node: Element) => number | null;
+    element: (target: number) => HTMLElement | null;
+    hint: (target: number) => string;
+    drop: (target: number) => void;
+  }): void {
+    let ghost: HTMLElement | null = null;
+    let source: HTMLElement | null = null;
+    let target: number | null = null;
+    let dx = 0, dy = 0;
+    const setTarget = (t: number | null) => {
+      if (t === target) return;
+      if (target !== null) o.element(target)?.classList.remove("drop-target");
+      target = t;
+      if (target !== null) o.element(target)?.classList.add("drop-target");
+      if (ghost) ghost.querySelector(".drag-hint")!.textContent = target !== null ? o.hint(target) : "";
+    };
+    const move = (e: PointerEvent) => {
+      if (!ghost) {
+        if (Math.hypot(e.clientX - down.clientX, e.clientY - down.clientY) < 6) return;
+        source = o.source();
+        if (!source) return;
+        const box = source.getBoundingClientRect();
+        dx = down.clientX - box.left;
+        dy = down.clientY - box.top;
+        ghost = source.cloneNode(true) as HTMLElement;
+        ghost.classList.add("drag-ghost");
+        ghost.style.width = `${box.width}px`;
+        ghost.style.height = `${box.height}px`;
+        ghost.append(el("span", "drag-hint"));
+        document.body.append(ghost);
+        source.classList.add("dragging");
+        document.body.classList.add("dragging-item");
+      }
+      ghost.style.transform = `translate(${e.clientX - dx}px, ${e.clientY - dy}px)`;
+      const over = document.elementFromPoint(e.clientX, e.clientY);
+      setTarget(over ? o.targetOf(over) : null);
+    };
+    const end = (drop: boolean) => {
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", up);
+      document.removeEventListener("pointercancel", cancel);
+      document.removeEventListener("keydown", key);
+      const to = target;
+      setTarget(null);
+      ghost?.remove();
+      source?.classList.remove("dragging");
+      document.body.classList.remove("dragging-item");
+      if (drop && ghost && to !== null) o.drop(to);
+    };
+    const up = () => end(true);
+    const cancel = () => end(false);
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") end(false);
+    };
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", up);
+    document.addEventListener("pointercancel", cancel);
+    document.addEventListener("keydown", key);
+  }
+
+  /** A preset dropped onto another: swap them, or copy it there. */
+  private dropSlot(from: number, to: number): void {
+    const a = this.bank.preset(from), b = this.bank.preset(to);
+    const name = (p: Preset | null, s: number) => `${slotLabel(s)} ${p ? `“${p.name}”` : "(empty)"}`;
+    const locked = [from, to].filter((s) => this.bank.isProtected(s));
+    if (locked.length) {
+      alert(`${locked.map(slotLabel).join(" and ")}: protected bank (bank menu, “Allow writing”).`);
+      return;
+    }
+    showChoices(`${name(a, from)} onto ${name(b, to)}`, [
+      { label: `Swap ${slotLabel(from)} and ${slotLabel(to)}`, detail: "Exchange the two presets (undoable), then Store to write them",
+        run: () => this.edit(new Map([[from, b], [to, a]]), `Swap ${slotLabel(from)} and ${slotLabel(to)}`) },
+      { label: `Copy ${slotLabel(from)} to ${slotLabel(to)}`, detail: b ? `Replaces “${b.name}”` : "Into the empty slot",
+        run: () => this.edit(new Map([[to, a]]), `Copy ${slotLabel(from)} to ${slotLabel(to)}`) },
+      { label: "Cancel", detail: "Leave both presets as they are", run: () => {} },
+    ]);
   }
 
   private renderDetail(): void {
@@ -222,7 +347,7 @@ export class BanksView {
     this.title.textContent = this.bank.title + (this.bank.undo.isClean ? "" : " *");
     const pending = this.bank.pending.size;
     this.syncButton.hidden = !pending;
-    this.syncButton.textContent = `Sync (${pending})`;
+    this.syncButton.textContent = `Store (${pending})`;
     // Offline too: the list can be looked at and trimmed.
     this.syncButton.disabled = !!this.reading;
     if (this.reading) {
@@ -285,7 +410,7 @@ export class BanksView {
     const name = (await askText(`Preset name (${NAME_LEN} characters max.)`, p.name, NAME_LEN))?.trim();
     if (!name || name === p.name) return;
     try {
-      this.bank.setSlots(new Map([[slot, p.withName(name.slice(0, NAME_LEN))]]), `Rename “${p.name}”`);
+      this.edit(new Map([[slot, p.withName(name.slice(0, NAME_LEN))]]), `Rename “${p.name}”`);
     } catch {
       alert("Use printable ASCII characters only.");
     }
@@ -294,13 +419,19 @@ export class BanksView {
   private paste(slot: number): void {
     const old = this.bank.preset(slot);
     if (old && !confirm(`Replace “${old.name}” (${slotLabel(slot)})? You can undo this.`)) return;
-    this.bank.setSlots(new Map([[slot, this.clipboard]]), `Paste into ${slotLabel(slot)}`);
+    this.edit(new Map([[slot, this.clipboard]]), `Paste into ${slotLabel(slot)}`);
+  }
+
+  /** An edit of the editor's bank; the slots join the list to store into the G-System. */
+  private edit(changes: Map<number, Preset | null>, text: string): void {
+    this.bank.setSlots(changes, text);
+    this.bank.markPending([...changes.keys()].filter((s) => !this.bank.isProtected(s)));
   }
 
   private clear(slot: number): void {
     const old = this.bank.preset(slot);
     if (old && confirm(`Clear ${slotLabel(slot)} “${old.name}”? You can undo this.`)) {
-      this.bank.setSlots(new Map([[slot, null]]), `Clear ${slotLabel(slot)}`);
+      this.edit(new Map([[slot, null]]), `Clear ${slotLabel(slot)}`);
     }
   }
 

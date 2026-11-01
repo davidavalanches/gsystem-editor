@@ -55,6 +55,13 @@ export class App {
       },
       menu: () => this.fileMenu(),
       bankMenu: (b) => this.bankMenu(b),
+      dropBank: (from, to) => showChoices(`Bank ${pad2(from)} onto bank ${pad2(to)}`, [
+        { label: `Swap banks ${pad2(from)} and ${pad2(to)}`, detail: "Exchange their presets (undoable), then Store to write them",
+          run: () => void this.bankOperation("swap", from, to) },
+        { label: `Copy bank ${pad2(from)} to ${pad2(to)}`, detail: `Replaces the presets of bank ${pad2(to)}`,
+          run: () => void this.bankOperation("copy", from, to) },
+        { label: "Cancel", detail: "Leave both banks as they are", run: () => {} },
+      ]),
       readUnit: () => {
         // Offline, the button connects, then offers to read; when connecting fails the MIDI view says why.
         if (!this.link) this.connectAndOfferRead();
@@ -231,10 +238,21 @@ export class App {
       { label: "Swap with bank…", action: on(() => void this.bankOperation("swap")) },
       { label: "Copy to bank…", action: on(() => void this.bankOperation("copy")) },
       { label: "Export bank (.syx)", action: on(() => void this.exportBankSyx(b)) },
+      { label: "Clear bank", action: on(() => this.clearBank(b)),
+        disabled: ![...Array(PRESETS_PER_BANK).keys()].some((i) => this.bank.preset(b * PRESETS_PER_BANK + i)) },
       this.bank.protectedBanks.has(b)
         ? { label: "Allow writing", action: on(() => this.protectBank(b, false)) }
         : { label: "Protect from writing", action: on(() => this.protectBank(b, true)) },
     ];
+  }
+
+  /** Empties the bank's slots in the editor (undoable); they join the list to store. */
+  private clearBank(b: number): void {
+    const slots = [...Array(PRESETS_PER_BANK).keys()].map((i) => b * PRESETS_PER_BANK + i);
+    const names = slots.filter((s) => this.bank.preset(s)).map((s) => `${slotLabel(s)}  ${this.bank.preset(s)!.name}`);
+    if (!names.length || !confirm(`Clear bank ${pad2(b)}?\n\n${names.join("\n")}\n\nYou can undo this.`)) return;
+    this.bank.setSlots(new Map(slots.map((s) => [s, null])), `Clear bank ${pad2(b)}`);
+    this.bank.markPending(slots.filter((s) => !this.bank.isProtected(s)));
   }
 
   /** Protected banks are never written into the G-System (for a faulty memory area). */
@@ -413,7 +431,7 @@ export class App {
           this.offerRead();
         }
         const n = this.bank.pending.size;
-        if (n) this.notify(`${n} preset(s) modified offline: tap “Sync” to write them to the G-System`);
+        if (n) this.notify(`${n} preset(s) modified offline: tap “Store” to write them to the G-System`);
       };
       link.onParam = (b, p, v) => {
         this.settings.update(b, p, v);
@@ -508,12 +526,14 @@ export class App {
   }
 
   /** Swap the shown bank with another one, or copy it over another one (5 presets each). */
-  private async bankOperation(kind: "swap" | "copy"): Promise<void> {
-    const from = this.banks.bankIndex;
-    const answer = await askText(kind === "swap" ? `Swap bank ${pad2(from)} with bank (00–39):`
-      : `Copy bank ${pad2(from)} to bank (00–39):`, "", 2);
-    if (answer === null || answer.trim() === "") return;
-    const to = Number(answer);
+  private async bankOperation(kind: "swap" | "copy", from = this.banks.bankIndex, target?: number): Promise<void> {
+    let to = target;
+    if (to === undefined) {
+      const answer = await askText(kind === "swap" ? `Swap bank ${pad2(from)} with bank (00–39):`
+        : `Copy bank ${pad2(from)} to bank (00–39):`, "", 2);
+      if (answer === null || answer.trim() === "") return;
+      to = Number(answer);
+    }
     if (!Number.isInteger(to) || to < 0 || to >= BANK_COUNT || to === from) {
       alert("Enter a bank number from 00 to 39, other than the bank shown.");
       return;
@@ -539,7 +559,8 @@ export class App {
     this.bank.setSlots(changes, kind === "swap" ? `Swap banks ${pad2(from)} and ${pad2(to)}`
       : `Copy bank ${pad2(from)} to ${pad2(to)}`);
     this.banks.showBank(to, true);
-    this.writeToUnit(changes);
+    // Written with Store, like the other edits of the bank.
+    this.bank.markPending(changes.keys());
   }
 
   /** The presets waiting to be written into the unit: write them, take them off the list, or re-read the unit's. */
@@ -547,7 +568,7 @@ export class App {
     const slots = [...this.bank.pending].sort((a, b) => a - b);
     if (!slots.length) return;
     const offline = !this.link;
-    showChecklist(`Presets to sync (${slots.length})`,
+    showChecklist(`Presets to store (${slots.length})`,
       offline ? "Offline: you can remove presets from the list; writing happens once the G-System is connected."
         : "Write writes the checked presets to the G-System (each one verified). Re-read replaces the editor's version with the G-System's.",
       slots.map((s) => ({ id: s, label: `${slotLabel(s)}  ${this.bank.preset(s)?.name ?? "(empty)"}` })), [
@@ -619,6 +640,8 @@ export class App {
       else if (!preset) notes.push(`${slotLabel(slot)}: the G-System cannot empty a slot, it keeps its previous preset`);
       else todo.push({ slot, preset });
     }
+    // Nothing can be written for an emptied slot: it leaves the list.
+    this.bank.dropPending([...changes].filter(([, preset]) => !preset).map(([slot]) => slot));
     if (notes.length) alert(notes.join("\n"));
     this.writeQueue = todo;
     this.writeTotal = todo.length;

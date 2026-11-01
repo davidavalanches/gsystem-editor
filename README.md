@@ -65,6 +65,10 @@ codesign --force --deep -s - "/Applications/G-System Editor.app"   # si macOS la
 
 - **Banques** : liste des 40 banques, les 5 presets de la banque avec le voyant de chacun des 8 effets,
   recherche par nom, appui long sur un preset pour renommer / copier / coller / vider, annulation (menu ⋮, Ctrl+Z).
+  Sur ordinateur, glisser l'en-tête d'une banque sur une autre (ou un preset sur un autre) propose de les échanger
+  ou de copier. Menu d'une banque : lire, échanger, copier, exporter, vider (« Clear bank »), protéger en écriture.
+  Toute modification de la banque (renommer, coller, vider, échanger, copier) s'ajoute à la liste « Store (n) » pour
+  être écrite dans le G-System ; un emplacement vidé ne peut pas l'être sur le G-System, qui garde son preset.
 - **Interface** : thème sombre en paysage, conçue pour un téléphone 5" (740×360 dp), polices IBM Plex et Doto
   embarquées (OFL).
 - **Fichiers** : ouverture des banques Vyzor `.sqs` et des `.syx` ; export `.syx` (téléchargement
@@ -96,7 +100,7 @@ codesign --force --deep -s - "/Applications/G-System Editor.app"   # si macOS la
   un emplacement endommagé est protégée d'office, jusqu'à une relecture qui le trouve sain.
 - **Hors connexion** : sans G-System branché, chaque Store ou opération sur les banques est ajouté à une liste
   « à synchroniser » (gardée d'une session à l'autre, presets marqués en orange). Une fois le G-System connecté,
-  « Sync (n) » ouvre la liste : écrire les presets cochés (chacun vérifié), les retirer de la liste,
+  « Store (n) » ouvre la liste : écrire les presets cochés (chacun vérifié), les retirer de la liste,
   ou relire la version du G-System pour abandonner la modification (annulable).
 - **Tester sur ordinateur** : `./scripts/gsystem-editor.sh` ouvre la même application dans Chrome/Chromium
   (vue téléphone : F12 puis mode appareil, 740×360).

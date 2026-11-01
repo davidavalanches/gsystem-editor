@@ -78,13 +78,19 @@ export function onLongPress(target: HTMLElement, action: (x: number, y: number) 
     if (timer) clearTimeout(timer);
     timer = null;
   };
+  let x0 = 0, y0 = 0;
   target.addEventListener("pointerdown", (e) => {
     fired = false;
     cancel();
+    [x0, y0] = [e.clientX, e.clientY];
     timer = setTimeout(() => {
       fired = true;
       action(e.clientX, e.clientY);
     }, 500);
+  });
+  // Moving away is a drag, not a long press.
+  target.addEventListener("pointermove", (e) => {
+    if (timer && Math.hypot(e.clientX - x0, e.clientY - y0) > 8) cancel();
   });
   target.addEventListener("pointerup", cancel);
   target.addEventListener("pointerleave", cancel);
