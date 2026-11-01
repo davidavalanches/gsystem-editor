@@ -20,6 +20,8 @@ export const LEVELS_BLOCK = 1;
 export const SYSTEM_BLOCK = 5;
 /** Block 5 parameter of the unit's MIDI channel (0 Off, 1-16, 17 Omni). */
 export const MIDI_CHANNEL_PARAM = 15;
+/** Block 5 parameter of Prg. Change In (0 Off, 1 On). */
+export const PRG_CHANGE_IN_PARAM = 16;
 /** Ranges read in one 55 47 request each: [block, first parameter, count]. */
 export const GLOBAL_RANGES: [number, number, number][] = [[LEVELS_BLOCK, 0, 30], [SYSTEM_BLOCK, 3, 23], [0x0d, 58, 1],
   [SWITCH_BLOCK, SWITCH_FIRST, SWITCH_COUNT]];

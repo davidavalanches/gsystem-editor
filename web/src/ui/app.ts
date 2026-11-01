@@ -1,7 +1,7 @@
 /** Application shell: navigation rail, views, file actions, MIDI connection and Live wiring. */
 
 import { BANK_COUNT, BankStore, PRESETS_PER_BANK, slotLabel } from "../core/bank";
-import { GLOBAL_RANGES, MIDI_CHANNEL_PARAM, SYSTEM_BLOCK } from "../core/globals";
+import { GLOBAL_RANGES, MIDI_CHANNEL_PARAM, PRG_CHANGE_IN_PARAM, SYSTEM_BLOCK } from "../core/globals";
 import { DEFAULT_SYSEX_ID, GSystemLink } from "../core/protocol";
 import { SqsFile, USER_BANK_KIND, readSyx } from "../core/sqs";
 import { USER_PRESET_BASE, USER_SLOTS, sameBytes, type Preset } from "../core/sysex";
@@ -406,6 +406,8 @@ export class App {
           this.banks.refresh();
         }
         this.setConnected(true, `G-System ${version}`, port.name);
+        // Preset recalls need the unit's MIDI channel and Prg. Change In: read the settings now.
+        this.readSettings();
         if (this.readOffer) {
           this.readOffer = false;
           this.offerRead();
@@ -487,7 +489,6 @@ export class App {
     this.settings.setConnected(on);
     if (on) {
       this.notify(`${text} connected`);
-      if (this.view === "settings") this.readSettings();
     }
   }
 
@@ -572,9 +573,22 @@ export class App {
 
   /** Recall the preset picked in the editor on the unit (Bank Select + Program Change on its MIDI channel). */
   private recallOnUnit(slot: number): void {
-    if (!this.link || this.link.busy) return;
+    if (!this.link) return;
+    if (this.link.busy) {
+      this.notify("The G-System is busy reading or writing: preset not recalled on it", true);
+      return;
+    }
     const channel = this.settings.rawValue(SYSTEM_BLOCK, MIDI_CHANNEL_PARAM);
+    if (channel === 0) {
+      this.notify("The G-System's MIDI channel is Off: it ignores preset changes (Settings → MIDI)", true);
+      return;
+    }
+    if (this.settings.rawValue(SYSTEM_BLOCK, PRG_CHANGE_IN_PARAM) === 0) {
+      this.notify("Prg. Change In is Off on the G-System: it ignores preset changes (Settings → MIDI)", true);
+      return;
+    }
     this.recalled = { slot, at: Date.now() };
+    // Omni (17) and an unknown channel: channel 1.
     this.link.selectPreset(slot, channel !== undefined && channel >= 1 && channel <= 16 ? channel : 1);
   }
 
