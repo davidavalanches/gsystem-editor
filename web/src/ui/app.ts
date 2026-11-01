@@ -693,18 +693,20 @@ export class App {
         if (this.writeQueue.length) {
           this.nextWrite();
         } else {
+          this.link?.editorModeOff();
           this.notify(this.writeTotal > 1 ? `${this.writeTotal} presets written to the G-System (verified)`
             : `“${expected.preset.name}” stored in the G-System (${slotLabel(expected.slot)}, verified)`);
         }
       } else {
         const left = this.writeQueue.length - 1;
         this.writeQueue = [];
+        this.link?.editorModeOff();
         alert(`The G-System did not confirm storing “${expected.preset.name}” in ${slotLabel(expected.slot)}`
           + (got ? ": the preset read back is different."
             : corrupt.length ? ": the G-System reports the slot's memory as damaged."
               : ": the slot does not answer (G-System locked up? Switch it off and on again).")
           + (left ? `\n${left} other write(s) cancelled.` : "")
-          + "\nThe presets stay stored in the editor and in the “to sync” list.");
+          + "\nThe presets stay stored in the editor and in the Store list.");
       }
       return;
     }

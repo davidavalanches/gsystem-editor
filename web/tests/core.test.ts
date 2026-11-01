@@ -13,7 +13,7 @@ import {
 } from "../src/core/modifiers";
 import {
   BLOCK_IDS, GSystemLink, MidiParser, corruptNumber, identityVersion, paramMessage, paramsRequest, parseParamMessage,
-  parseParamValues, presetRequest, storeMessages, type Transport,
+  editorModeMessage, parseParamValues, presetRequest, storeMessages, type Transport,
 } from "../src/core/protocol";
 import { decodeSwitch, describeSwitch, encodeSwitch } from "../src/core/switches";
 import { SqsFile, USER_BANK_KIND, readSyx, writeSyx } from "../src/core/sqs";
@@ -153,6 +153,11 @@ describe("protocol (captures from the unit)", () => {
     expect(msgs[2].length).toBe(PRESET_DUMP_LEN);
     expect(msgs[3]).toEqual(hex("f000201f01555701f7"));
     expect(() => storeMessages(0, makePreset(), 0x7f)).toThrow(RangeError);
+  });
+
+  it("leaves editor mode with the same message, value 0", () => {
+    expect(editorModeMessage(false, 1)).toEqual(hex("f000201f015522 01001d000000000000 f7"));
+    expect(editorModeMessage(true, 1)).toEqual(storeMessages(0, makePreset(), 1)[0]);
   });
 
   it("reads parameter ranges like Vyzor", () => {

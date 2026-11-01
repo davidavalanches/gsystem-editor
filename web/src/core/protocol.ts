@@ -59,14 +59,22 @@ export function presetRequest(number: number, deviceId = 0): Uint8Array {
 
 /** The messages that store a preset into a user slot, in order. `sysexId` must be the unit's own ID. */
 export function storeMessages(slot: number, preset: Preset, sysexId: number): Uint8Array[] {
-  if (sysexId < 0 || sysexId > 0x7e) throw new RangeError(`SysEx ID out of range: ${sysexId}`);
   const sysex = (...body: number[]) => new Uint8Array([0xf0, ...TC_MANUFACTURER, sysexId, MODEL_G_SYSTEM, ...body, 0xf7]);
   return [
-    sysex(SET_PARAM, 0x01, 0x00, 0x1d, 0, 0, 0, 0, 0, 1), // editor mode on
+    editorModeMessage(true, sysexId),
     sysex(0x57, 0x00), // begin transfer
     preset.toSysex(userNumber(slot), sysexId),
     sysex(0x57, 0x01), // end transfer
   ];
+}
+
+/** Editor mode (block 1 parameter 29), switched on before a store as Vyzor does. While it is on the
+ * unit ignores preset changes from USB (seen on the user's G-System), so it is switched off once
+ * the writes are done. */
+export function editorModeMessage(on: boolean, sysexId: number): Uint8Array {
+  if (sysexId < 0 || sysexId > 0x7e) throw new RangeError(`SysEx ID out of range: ${sysexId}`);
+  return new Uint8Array([0xf0, ...TC_MANUFACTURER, sysexId, MODEL_G_SYSTEM, SET_PARAM, 0x01, 0x00, 0x1d,
+    0, 0, 0, 0, 0, on ? 1 : 0, 0xf7]);
 }
 
 /** Bank Select (CC 0: 1 for user presets 1-100, 2 for 101-200) and Program Change recalling a user slot. */
@@ -186,6 +194,11 @@ export class GSystemLink {
   }
 
   /** Recall a user preset on the unit, on MIDI channel 1-16. */
+  /** Leave editor mode once stores are done (the unit then follows preset changes again). */
+  editorModeOff(): void {
+    this.transport.send(editorModeMessage(false, this.sysexId));
+  }
+
   selectPreset(slot: number, channel: number): void {
     for (const msg of presetSelectMessages(slot, channel)) this.transport.send(msg);
   }
