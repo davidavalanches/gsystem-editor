@@ -1,6 +1,6 @@
 /** Banks view: the 40 banks on the left, the 5 presets of the chosen bank on the right. */
 
-import { AVOIDED_BANKS, BANK_COUNT, PRESETS_PER_BANK, slotLabel, type BankStore } from "../core/bank";
+import { BANK_COUNT, PRESETS_PER_BANK, slotLabel, type BankStore } from "../core/bank";
 import { ROUTINGS, presetLevels, presetOutputs, type PresetLevels } from "../core/levels";
 import { block, readField } from "../core/params";
 import { msToBpm, presetTempoMs } from "../core/tempo";
@@ -102,10 +102,11 @@ export class BanksView {
     this.bankButtons.forEach((button, b) => {
       const selected = b === this.bankIndex;
       button.setAttribute("aria-selected", String(selected));
-      button.classList.toggle("avoided", AVOIDED_BANKS.has(b));
+      const locked = this.bank.isProtectedBank(b);
+      button.classList.toggle("avoided", locked);
       button.classList.toggle("has-pending",
         [...Array(PRESETS_PER_BANK).keys()].some((i) => this.bank.pending.has(b * PRESETS_PER_BANK + i)));
-      button.title = AVOIDED_BANKS.has(b) ? "Bank excluded from writing to the G-System (faulty memory area)" : "";
+      button.title = locked ? "Bank protected: not written to the G-System" : "";
       const used = [...Array(PRESETS_PER_BANK).keys()].map((i) => !!this.bank.preset(b * PRESETS_PER_BANK + i));
       const num = el("span", used.some(Boolean) ? "bank-num used" : "bank-num", String(b).padStart(2, "0"));
       const dots = el("span", "fill-dots");
@@ -132,7 +133,7 @@ export class BanksView {
     this.grid.replaceChildren(...[...Array(BANK_COUNT).keys()].map((b) => {
       const slots = [...Array(PRESETS_PER_BANK).keys()].map((i) => b * PRESETS_PER_BANK + i);
       const used = slots.filter((s) => this.bank.preset(s)).length;
-      const cell = el("section", ["bank-cell", used ? "used" : "", AVOIDED_BANKS.has(b) ? "avoided" : "",
+      const cell = el("section", ["bank-cell", used ? "used" : "", this.bank.isProtectedBank(b) ? "avoided" : "",
         b === this.bankIndex ? "current" : ""].filter(Boolean).join(" "));
       cell.setAttribute("aria-label", `Bank ${String(b).padStart(2, "0")}`);
       const head = el("div", "bank-cell-head");

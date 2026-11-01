@@ -70,7 +70,7 @@ codesign --force --deep -s - "/Applications/G-System Editor.app"   # si macOS la
 - **Fichiers** : ouverture des banques Vyzor `.sqs` et des `.syx` ; export `.syx` (téléchargement
   sur ordinateur, `Documents/G-System/` sur Android). La banque en cours est conservée d'une
   session à l'autre.
-- **Lecture du G-System** : toutes les banques (READ ALL BANKS, ~2 min 30, la liste se remplit au fur et à mesure)
+- **Lecture du G-System** : « Connect » propose, une fois le G-System identifié, de lire toutes les banques ou la banque affichée. Toutes les banques (READ ALL BANKS, ~2 min 30, la liste se remplit au fur et à mesure)
   ou seulement la banque affichée (menu ⋮ ou vue MIDI, 0,8 s par preset).
 - **Langue** : l'interface est en anglais.
 - **Preset** : en-tête (preset précédent/suivant, numéro banque/position en points, nom, tempo avec les deux
@@ -91,7 +91,9 @@ codesign --force --deep -s - "/Applications/G-System Editor.app"   # si macOS la
   En Live, le preset est aussi écrit dans la mémoire de travail.
 - **Store** : enregistre dans la banque de l'éditeur et, si le G-System est connecté, l'écrit dans le pédalier
   (séquence de Vyzor, adressée au SysEx ID du G-System, réglable dans la vue MIDI), puis le relit pour vérifier.
-  Les banques **27 à 29** sont exclues de l'écriture : sur ce G-System, y écrire le bloque (zone mémoire défaillante).
+  Une banque peut être **protégée en écriture** (menu de la banque, « Protect from writing ») : rien n'y est alors
+  écrit dans le G-System, utile quand une zone mémoire défaillante le bloque. Une banque dont le G-System signale
+  un emplacement endommagé est protégée d'office, jusqu'à une relecture qui le trouve sain.
 - **Hors connexion** : sans G-System branché, chaque Store ou opération sur les banques est ajouté à une liste
   « à synchroniser » (gardée d'une session à l'autre, presets marqués en orange). Une fois le G-System connecté,
   « Sync (n) » ouvre la liste : écrire les presets cochés (chacun vérifié), les retirer de la liste,

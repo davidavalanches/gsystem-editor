@@ -5,10 +5,6 @@ import { Preset, USER_SLOTS, userNumber } from "./sysex";
 
 export const PRESETS_PER_BANK = 5;
 export const BANK_COUNT = USER_SLOTS / PRESETS_PER_BANK;
-/** Banks never written into the unit: on the user's G-System, stores there froze it repeatedly and
- * left slots unreadable (probably a faulty flash area). */
-export const AVOIDED_BANKS: ReadonlySet<number> = new Set([27, 28, 29]);
-export const isAvoided = (slot: number) => AVOIDED_BANKS.has(Math.floor(slot / PRESETS_PER_BANK));
 
 /** User presets are grouped in banks 00-39 of 5 presets (positions 1-5). */
 export function bankPosition(slot: number): [number, number] {
@@ -102,6 +98,20 @@ export class BankStore {
   pending = new Set<number>();
   /** Slots the unit reports as damaged: a state of its memory, kept whatever bank is loaded. */
   corrupt = new Set<number>();
+  /** Banks the user excluded from writing: on some units, stores into a faulty memory area
+   * freeze the G-System. A state of the unit, kept whatever bank is loaded. */
+  protectedBanks = new Set<number>();
+
+  /** No write into this bank: the user protected it, or the unit reported one of its slots damaged. */
+  isProtectedBank(bank: number): boolean {
+    if (this.protectedBanks.has(bank)) return true;
+    for (let i = 0; i < PRESETS_PER_BANK; i++) if (this.corrupt.has(bank * PRESETS_PER_BANK + i)) return true;
+    return false;
+  }
+
+  isProtected(slot: number): boolean {
+    return this.isProtectedBank(Math.floor(slot / PRESETS_PER_BANK));
+  }
 
   load(presets: Slots, title: string, sqs: SqsFile | null = null, pending: Iterable<number> = []): void {
     this.presets = [...presets, ...new Array(Math.max(0, USER_SLOTS - presets.length)).fill(null)].slice(0, USER_SLOTS);

@@ -15,6 +15,8 @@ export interface PortInfo {
 export interface MidiAccess {
   listPorts(): Promise<PortInfo[]>;
   open(id: string): Promise<Transport>;
+  /** Every port name, for diagnostics. */
+  describe?(): Promise<string>;
 }
 
 interface GSystemMidiPlugin {
@@ -68,7 +70,18 @@ class WebMidi implements MidiAccess {
 
   async listPorts(): Promise<PortInfo[]> {
     const midi = await this.midi();
-    return [...midi.outputs.values()].map((o) => ({ id: o.name ?? o.id, name: o.name ?? o.id }));
+    // Only outputs that have an input of the same name can carry a request and its answer.
+    const inputs = new Set([...midi.inputs.values()].map((i) => i.name));
+    return [...midi.outputs.values()]
+      .filter((o) => inputs.has(o.name))
+      .map((o) => ({ id: o.name ?? o.id, name: o.name ?? o.id }));
+  }
+
+  /** Every port name, for diagnostics. */
+  async describe(): Promise<string> {
+    const midi = await this.midi();
+    const names = (ports: Iterable<MIDIPort>) => [...ports].map((p) => p.name ?? p.id).join(", ") || "none";
+    return `inputs: ${names(midi.inputs.values())}; outputs: ${names(midi.outputs.values())}`;
   }
 
   async open(id: string): Promise<Transport> {
@@ -97,8 +110,11 @@ class WebMidi implements MidiAccess {
         void output.close();
       },
     };
+    // Messages normally arrive whole, but some systems (CoreMIDI on macOS) may split a SysEx
+    // or join several messages in one event: rebuild complete messages from the bytes.
+    const parser = new MidiParser((msg) => transport.onMessage?.(msg));
     input.onmidimessage = (e) => {
-      if (e.data) transport.onMessage?.(new Uint8Array(e.data));
+      if (e.data) parser.push(e.data);
     };
     return transport;
   }

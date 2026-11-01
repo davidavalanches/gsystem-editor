@@ -1,6 +1,6 @@
 /** Application shell: navigation rail, views, file actions, MIDI connection and Live wiring. */
 
-import { AVOIDED_BANKS, BANK_COUNT, BankStore, PRESETS_PER_BANK, isAvoided, slotLabel } from "../core/bank";
+import { BANK_COUNT, BankStore, PRESETS_PER_BANK, slotLabel } from "../core/bank";
 import { GLOBAL_RANGES, MIDI_CHANNEL_PARAM, SYSTEM_BLOCK } from "../core/globals";
 import { DEFAULT_SYSEX_ID, GSystemLink } from "../core/protocol";
 import { SqsFile, USER_BANK_KIND, readSyx } from "../core/sqs";
@@ -19,6 +19,7 @@ import { ICONS, type MenuItem } from "./widgets";
 type ReadMode = "all" | "bank" | "refresh" | "verify" | "revert";
 const SYSEX_ID_KEY = "gsystem-editor.sysex-id";
 const CORRUPT_KEY = "gsystem-editor.corrupt";
+const PROTECTED_KEY = "gsystem-editor.protected-banks";
 /** Write stored presets into the unit (Vyzor's Sync sequence, checked by reading back). */
 const STORE_TO_UNIT = true;
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -36,6 +37,8 @@ export class App {
   private view: ViewKey = "banks";
   private link: GSystemLink | null = null;
   private readMode: ReadMode | null = null;
+  /** Set by Connect: once the G-System answers, ask what to read. */
+  private readOffer = false;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   /** The preset last recalled from the editor: the unit's echo of it is not followed. */
@@ -52,10 +55,10 @@ export class App {
       menu: () => this.fileMenu(),
       bankMenu: (b) => this.bankMenu(b),
       readUnit: () => {
-        // Offline, the button connects; when that fails the MIDI view says why.
-        if (!this.link) void this.toggleConnection().then(() => this.link || this.show("midi"));
+        // Offline, the button connects, then offers to read; when connecting fails the MIDI view says why.
+        if (!this.link) this.connectAndOfferRead();
         else if (this.link.busy) this.link.cancel();
-        else this.startRead("all");
+        else this.offerRead();
       },
       sync: () => this.syncPending(),
       select: (slot) => {
@@ -146,10 +149,37 @@ export class App {
     const used = this.bank.presets.filter(Boolean).length;
     showChoices("G-System Editor", [
       { label: "Connect the G-System", detail: "Over USB MIDI: read its banks, edit and play Live",
-        run: () => void this.toggleConnection().then(() => this.link || this.show("midi")) },
+        run: () => this.connectAndOfferRead() },
       { label: "Open a .sqs file", detail: "A Vyzor bank file (a .syx SysEx dump works too)", run: () => void this.open() },
       used ? { label: "Continue with last session", detail: `“${this.bank.title}”, ${used} presets`, run: () => {} }
         : { label: "Start with an empty bank", detail: "Presets can be read or opened later", run: () => {} },
+    ]);
+  }
+
+  /** Connects; once the G-System has answered, asks what to read from it. */
+  private connectAndOfferRead(): void {
+    this.readOffer = true;
+    void this.toggleConnection().then(() => {
+      if (!this.link) {
+        this.readOffer = false;
+        this.show("midi");
+      }
+    });
+  }
+
+  /** Read every bank, only the bank shown, or nothing. */
+  private offerRead(): void {
+    if (!this.link || this.link.busy) return;
+    const slots = this.banks.bankSlots;
+    const bank = Math.floor(slots[0] / PRESETS_PER_BANK) + 1;
+    showChoices("Read the G-System", [
+      { label: "Read all banks", detail: "All 40 banks, about 2 min 30 (replaces the bank shown in the editor)",
+        run: () => {
+          this.startRead("all");
+          this.show("banks");
+        } },
+      { label: `Read bank ${bank}`, detail: `Its ${slots.length} presets, a few seconds`, run: () => this.startRead("bank") },
+      { label: "Not now", detail: "Read later with “Read G-System” or from the MIDI view", run: () => {} },
     ]);
   }
 
@@ -200,7 +230,26 @@ export class App {
       { label: "Swap with bank…", action: on(() => void this.bankOperation("swap")) },
       { label: "Copy to bank…", action: on(() => void this.bankOperation("copy")) },
       { label: "Export bank (.syx)", action: on(() => void this.exportBankSyx(b)) },
+      this.bank.protectedBanks.has(b)
+        ? { label: "Allow writing", action: on(() => this.protectBank(b, false)) }
+        : { label: "Protect from writing", action: on(() => this.protectBank(b, true)) },
     ];
+  }
+
+  /** Protected banks are never written into the G-System (for a faulty memory area). */
+  private protectBank(b: number, on: boolean): void {
+    if (on) this.bank.protectedBanks.add(b);
+    else this.bank.protectedBanks.delete(b);
+    try {
+      localStorage.setItem(PROTECTED_KEY, JSON.stringify([...this.bank.protectedBanks]));
+    } catch {
+      // Kept for this session only.
+    }
+    this.banks.refresh();
+    const damaged = !on && this.bank.isProtectedBank(b);
+    this.notify(on ? `Bank ${pad2(b)} protected: it will not be written to the G-System`
+      : damaged ? `Bank ${pad2(b)} stays protected: the G-System reported a damaged slot in it (read it again to check)`
+      : `Bank ${pad2(b)} can be written to the G-System again`);
   }
 
   private async exportBankSyx(b: number): Promise<void> {
@@ -231,6 +280,11 @@ export class App {
   }
 
   private restore(): void {
+    try {
+      for (const b of JSON.parse(localStorage.getItem(PROTECTED_KEY) ?? "[]") as number[]) this.bank.protectedBanks.add(b);
+    } catch {
+      // No bank protected.
+    }
     try {
       for (const s of JSON.parse(localStorage.getItem(CORRUPT_KEY) ?? "[]") as number[]) this.bank.corrupt.add(s);
     } catch {
@@ -350,6 +404,10 @@ export class App {
       this.link = link;
       link.onIdentity = (version) => {
         this.setConnected(true, `G-System ${version}`, port.name);
+        if (this.readOffer) {
+          this.readOffer = false;
+          this.offerRead();
+        }
         const n = this.bank.pending.size;
         if (n) this.notify(`${n} preset(s) modified offline: tap “Sync” to write them to the G-System`);
       };
@@ -366,13 +424,26 @@ export class App {
       };
       link.onReadFinished = (presets, missing, corrupt) => this.readFinished(presets, missing, corrupt);
       this.midiView.setStatus(`${port.name}…`, false, "Identifying…");
-      link.identify();
-      // The unit answers the identity request at once; without an answer it is not a G-System.
+      let received = 0;
+      link.onActivity = () => received++;
+      const identified = () => this.link !== link || this.midiDot.classList.contains("on");
+      // The unit answers the identity request at once. The first request right after opening
+      // the port can be lost (seen on macOS), so it is sent again until an answer comes.
+      for (const delay of [0, 600, 1200]) {
+        setTimeout(() => {
+          if (!identified()) link.identify();
+        }, delay);
+      }
       setTimeout(() => {
-        if (this.link === link && !this.midiDot.classList.contains("on")) {
-          this.midiView.setStatus("No answer", false, `“${port.name}” does not answer like a G-System.`);
-        }
-      }, 2000);
+        if (identified()) return;
+        this.readOffer = false;
+        void (midi.describe?.() ?? Promise.resolve("")).then((ports) => {
+          if (identified()) return;
+          const heard = received ? `${received} other message(s) received` : "nothing received";
+          this.midiView.setStatus("No answer", false,
+            `“${port.name}” does not answer like a G-System (${heard}${ports ? `; ${ports}` : ""}).`);
+        });
+      }, 2500);
     } catch (e) {
       this.midiView.setStatus("MIDI error", false, (e as Error).message);
     }
@@ -445,8 +516,9 @@ export class App {
       return;
     }
     const written = kind === "swap" ? [from, to] : [to];
-    if (written.some((b) => AVOIDED_BANKS.has(b))) {
-      alert("Banks 27 to 29 are excluded: writing to them locks up the G-System.");
+    const locked = written.filter((b) => this.bank.isProtectedBank(b));
+    if (locked.length) {
+      alert(`Bank ${locked.map(pad2).join(" and ")} is protected from writing (bank menu, “Allow writing”).`);
       return;
     }
     const changes = new Map<number, Preset | null>();
@@ -510,7 +582,7 @@ export class App {
 
   /** Write presets into the unit one at a time, each read back before the next. */
   private writeToUnit(changes: Map<number, Preset | null>): void {
-    const writable = [...changes].filter(([slot, preset]) => preset && !isAvoided(slot)).map(([slot]) => slot);
+    const writable = [...changes].filter(([slot, preset]) => preset && !this.bank.isProtected(slot)).map(([slot]) => slot);
     if (!this.link || !STORE_TO_UNIT) {
       this.bank.markPending(writable);
       this.notify(writable.length
@@ -527,7 +599,7 @@ export class App {
     const notes: string[] = [];
     const todo: { slot: number; preset: Preset }[] = [];
     for (const [slot, preset] of [...changes].sort((a, b) => a[0] - b[0])) {
-      if (isAvoided(slot)) notes.push(`${slotLabel(slot)}: excluded bank, not written to the G-System`);
+      if (this.bank.isProtected(slot)) notes.push(`${slotLabel(slot)}: protected bank, not written to the G-System`);
       else if (!preset) notes.push(`${slotLabel(slot)}: the G-System cannot empty a slot, it keeps its previous preset`);
       else todo.push({ slot, preset });
     }
