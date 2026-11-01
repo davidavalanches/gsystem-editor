@@ -49,12 +49,16 @@ npm run dist:linux    # AppImage
 npm run dist:win      # exécutable portable (nécessite wine depuis Linux)
 ```
 
+Le build macOS signe l'app en ad hoc (sans certificat Apple) avec
+[rcodesign](https://github.com/indygreg/apple-platform-rs), qui doit être dans le `PATH` (ou son chemin
+dans `RCODESIGN`). Sans cette signature, macOS dit l'app « endommagée » sur Apple Silicon.
+
 Installation sur macOS : décompresser le zip, glisser « G-System Editor » dans Applications. L'app
-n'est pas signée par Apple ; au premier lancement, dans le Terminal :
+n'est pas notarisée par Apple ; au premier lancement, dans le Terminal :
 
 ```sh
 xattr -cr "/Applications/G-System Editor.app"
-codesign --force --deep -s - "/Applications/G-System Editor.app"   # si macOS la dit « endommagée »
+codesign --force --deep -s - "/Applications/G-System Editor.app"   # si macOS la dit encore « endommagée »
 ```
 
 ## Fonctionnalités
