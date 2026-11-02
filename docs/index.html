@@ -351,7 +351,7 @@
   <section id="download" class="download">
     <div class="wrap">
       <div class="label"><span lang="en">Download</span><span lang="fr">Téléchargement</span></div>
-      <h2><span lang="en">Get G-System Editor</span><span lang="fr">Télécharger G-System Editor</span> <span class="mono" id="version">v0.4.0</span></h2>
+      <h2><span lang="en">Get G-System Editor</span><span lang="fr">Télécharger G-System Editor</span> <span class="mono" id="version" hidden></span></h2>
       <p class="intro"><span lang="en">Free, no sign-up. Pick your platform.</span><span lang="fr">Gratuit, sans inscription. Choisissez votre plateforme.</span></p>
 
       <div class="platforms">
@@ -362,8 +362,8 @@
           </div>
           <p class="meta"><span lang="en">macOS 11 or later</span><span lang="fr">macOS 11 ou plus récent</span></p>
           <div class="links">
-            <a class="dl" href="https://github.com/davidavalanches/gsystem-editor/releases/download/v0.4.0/G-System.Editor-0.4.0-arm64-mac.zip" data-asset="mac-arm64">Apple Silicon (M1–M4) <span>.zip</span></a>
-            <a class="dl" href="https://github.com/davidavalanches/gsystem-editor/releases/download/v0.4.0/G-System.Editor-0.4.0-mac.zip" data-asset="mac-x64">Intel <span>.zip</span></a>
+            <a class="dl" href="https://github.com/davidavalanches/gsystem-editor/releases/latest" data-asset="mac-arm64">Apple Silicon (M1–M4) <span>.zip</span></a>
+            <a class="dl" href="https://github.com/davidavalanches/gsystem-editor/releases/latest" data-asset="mac-x64">Intel <span>.zip</span></a>
           </div>
         </div>
 
@@ -374,7 +374,7 @@
           </div>
           <p class="meta"><span lang="en">x86_64 · any modern distro</span><span lang="fr">x86_64 · toute distribution récente</span></p>
           <div class="links">
-            <a class="dl" href="https://github.com/davidavalanches/gsystem-editor/releases/download/v0.4.0/G-System.Editor-0.4.0.AppImage" data-asset="linux">AppImage <span>.AppImage</span></a>
+            <a class="dl" href="https://github.com/davidavalanches/gsystem-editor/releases/latest" data-asset="linux">AppImage <span>.AppImage</span></a>
           </div>
         </div>
 
@@ -385,7 +385,7 @@
           </div>
           <p class="meta"><span lang="en">Phone or tablet + USB OTG cable</span><span lang="fr">Téléphone ou tablette + câble USB OTG</span></p>
           <div class="links">
-            <a class="dl" href="https://github.com/davidavalanches/gsystem-editor/releases/download/v0.4.0/gsystem-editor-0.4.0.apk" data-asset="android">APK <span>.apk</span></a>
+            <a class="dl" href="https://github.com/davidavalanches/gsystem-editor/releases/latest" data-asset="android">APK <span>.apk</span></a>
           </div>
         </div>
 
@@ -517,7 +517,7 @@
     });
     dlg.addEventListener("click", function () { dlg.close(); });
   })();
-  // Point download buttons at the latest GitHub release (static v0.4.0 links stay as fallback)
+  // Point download buttons at the latest release's files (fallback: the latest release page)
   (function () {
     var match = {
       "mac-arm64": function (n) { return /arm64-mac\.zip$/i.test(n); },
@@ -528,7 +528,8 @@
     fetch("https://api.github.com/repos/davidavalanches/gsystem-editor/releases/latest")
       .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
       .then(function (rel) {
-        document.getElementById("version").textContent = rel.tag_name;
+        var v = document.getElementById("version");
+        v.textContent = rel.tag_name; v.hidden = false;
         document.querySelectorAll("a[data-asset]").forEach(function (a) {
           var asset = rel.assets.find(function (x) { return match[a.dataset.asset](x.name); });
           if (!asset) return;
