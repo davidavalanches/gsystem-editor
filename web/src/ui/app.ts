@@ -162,7 +162,8 @@ export class App {
       { label: "Connect the G-System", detail: "Over USB MIDI: read its banks, edit and play Live",
         run: () => this.connectAndOfferRead() },
       { label: "Open a .sqs file", detail: "A Vyzor bank file (a .syx SysEx dump works too)", run: () => void this.open() },
-      used ? { label: "Continue with last session", detail: `“${this.bank.title}”, ${used} presets`, run: () => {} }
+      used ? { label: "Continue with last session",
+        detail: `${this.units.list.length > 1 ? `${this.units.current.name} · ` : ""}“${this.bank.title}”, ${used} presets`, run: () => {} }
         : { label: "Start with an empty bank", detail: "Presets can be read or opened later", run: () => {} },
     ]);
   }
