@@ -13,8 +13,7 @@ import {
 } from "../core/switches";
 import { el } from "./dom";
 
-/** The last values read from the unit, kept to show them while it is not connected. */
-const CACHE_KEY = "gsystem-globals";
+/** The last values read from the unit, kept to show them while it is not connected (one cache per unit). */
 
 interface Cache {
   at: string;
@@ -22,9 +21,9 @@ interface Cache {
   pending?: [string, number][];
 }
 
-function loadCache(): Cache | null {
+function loadCache(key: string): Cache | null {
   try {
-    const c = JSON.parse(localStorage.getItem(CACHE_KEY) ?? "null") as Cache | null;
+    const c = JSON.parse(localStorage.getItem(key) ?? "null") as Cache | null;
     return c && Array.isArray(c.raw) ? c : null;
   } catch {
     return null;
@@ -54,6 +53,7 @@ export class SettingsView {
   private connected = false;
   /** When the values shown were read, if they come from the cache. */
   private readAt: string | null = null;
+  private cacheKey: string | null = null;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   onRead: (() => void) | null = null;
   onConnect: (() => void) | null = null;
@@ -88,13 +88,28 @@ export class SettingsView {
     for (let n = 0; n < SWITCH_COUNT; n++) switches.append(this.switchRow(n));
     body.append(switches);
     this.el.append(header, body);
-    const cache = loadCache();
+    this.setConnected(false);
+  }
+
+  /** Show (and keep) the settings of another unit. */
+  useStorage(key: string): void {
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+      this.saveCache();
+    }
+    this.cacheKey = key;
+    this.raw.clear();
+    this.pending.clear();
+    this.readAt = null;
+    this.sent = null;
+    const cache = loadCache(key);
     if (cache) {
-      for (const [key, raw] of cache.raw) this.raw.set(key, raw);
-      for (const [key, raw] of cache.pending ?? []) this.pending.set(key, raw);
+      for (const [k, raw] of cache.raw) this.raw.set(k, raw);
+      for (const [k, raw] of cache.pending ?? []) this.pending.set(k, raw);
       this.readAt = cache.at;
     }
-    this.setConnected(false);
+    this.refresh();
   }
 
   private groupCard(group: GlobalGroup): HTMLElement {
@@ -202,13 +217,19 @@ export class SettingsView {
   private scheduleCache(): void {
     if (this.saveTimer) clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => {
-      try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify({ at: this.readAt ?? new Date().toISOString(), raw: [...this.raw],
-          pending: [...this.pending] }));
-      } catch {
-        // Storage unavailable: the values are simply not kept.
-      }
+      this.saveTimer = null;
+      this.saveCache();
     }, 500);
+  }
+
+  private saveCache(): void {
+    if (!this.cacheKey) return;
+    try {
+      localStorage.setItem(this.cacheKey, JSON.stringify({ at: this.readAt ?? new Date().toISOString(), raw: [...this.raw],
+        pending: [...this.pending] }));
+    } catch {
+      // Storage unavailable: the values are simply not kept.
+    }
   }
 
   private refresh(): void {

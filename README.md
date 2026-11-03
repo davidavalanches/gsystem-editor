@@ -111,6 +111,11 @@ codesign --force --deep -s - "/Applications/G-System Editor.app"   # si macOS la
   la pédale de volume ou les encodeurs A–C, avec Min / Mid / Max (en % de la plage du paramètre, valeur
   équivalente affichée). La liste suit les types d'effets choisis, comme sur le G-System ; les paramètres
   pilotés portent un badge EXP / VOL / ENC dans leur bloc. Enregistré avec le preset (Store), envoyé en Live.
+- **Plusieurs G-System** : chacun a son espace de travail (banque, liste Store, banques protégées, réglages lus),
+  reconnu à la connexion par son **SysEx ID**, qui doit donc être différent sur chaque G-System (menu MIDI du
+  G-System). Un nom est demandé à la première connexion ; menu ⋮ → « G-System: … » pour changer d'espace hors
+  connexion ou le renommer. Menu d'un preset ou d'une banque : « Copy to the other G-System… » le copie dans
+  l'espace de l'autre, où il attend dans sa liste Store. Les presets en attente d'un G-System ne partent jamais vers un autre.
 - **Vue MIDI** : connexion, lectures, SysEx ID, et les réglages du menu MIDI du G-System (canal, Program Change
   In/Out, SysEx ID, MIDI Clock, CC des encodeurs et du tap), modifiables comme dans les réglages.
 - **Live** : chaque modification part dans la mémoire de travail du G-System (rien n'est stocké),

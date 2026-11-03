@@ -135,3 +135,15 @@ describe("empty preset", async () => {
     expect(novaPreset(empty.data)).toBe(0);
   });
 });
+
+describe("slot labels", async () => {
+  const { parseSlotLabel } = await import("../src/ui/units");
+  it("reads front-panel locations", () => {
+    expect(parseSlotLabel("03-2", 40, 5)).toBe(16);
+    expect(parseSlotLabel(" 3-2 ", 40, 5)).toBe(16);
+    expect(parseSlotLabel("39-5", 40, 5)).toBe(199);
+    expect(parseSlotLabel("40-1", 40, 5)).toBeNull();
+    expect(parseSlotLabel("03-6", 40, 5)).toBeNull();
+    expect(parseSlotLabel("abc", 40, 5)).toBeNull();
+  });
+});

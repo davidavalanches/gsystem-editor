@@ -46,8 +46,6 @@ export async function saveFile(name: string, bytes: Uint8Array): Promise<string>
   return `Downloads/${name}`;
 }
 
-const SESSION_KEY = "gsystem-editor.session";
-
 export interface Session {
   title: string;
   syx: Uint8Array;
@@ -57,9 +55,9 @@ export interface Session {
 }
 
 /** Keep the current bank between launches (the app may be closed at any time on Android). */
-export function storeSession(session: Session): void {
+export function storeSession(session: Session, key: string): void {
   try {
-    localStorage.setItem(SESSION_KEY, JSON.stringify({
+    localStorage.setItem(key, JSON.stringify({
       title: session.title, syx: toBase64(session.syx), sqs: session.sqs ? toBase64(session.sqs) : null,
       pending: session.pending,
     }));
@@ -68,9 +66,9 @@ export function storeSession(session: Session): void {
   }
 }
 
-export function loadSession(): Session | null {
+export function loadSession(key: string): Session | null {
   try {
-    const raw = localStorage.getItem(SESSION_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     const s = JSON.parse(raw);
     return { title: s.title, syx: fromBase64(s.syx), sqs: s.sqs ? fromBase64(s.sqs) : null, pending: s.pending ?? [] };

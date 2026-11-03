@@ -204,8 +204,8 @@ export class GSystemLink {
   }
 
   /** Ask for parameter values; they arrive through onParam. */
-  requestParams(blockId: number, first: number, count: number): void {
-    this.transport.send(paramsRequest(blockId, first, count, this.sysexId));
+  requestParams(blockId: number, first: number, count: number, deviceId = this.sysexId): void {
+    this.transport.send(paramsRequest(blockId, first, count, deviceId));
   }
 
   /** Store a preset into a user slot of the unit; `done` runs once the unit has had time to write it. */

@@ -3,7 +3,7 @@
 import { emptyPreset } from "../core/empty";
 import { BANK_COUNT, BankStore, PRESETS_PER_BANK, slotLabel } from "../core/bank";
 import { GLOBAL_RANGES, MIDI_CHANNEL_PARAM, SYSTEM_BLOCK } from "../core/globals";
-import { DEFAULT_SYSEX_ID, GSystemLink } from "../core/protocol";
+import { GSystemLink } from "../core/protocol";
 import { SqsFile, USER_BANK_KIND, readSyx } from "../core/sqs";
 import { USER_PRESET_BASE, USER_SLOTS, sameBytes, type Preset } from "../core/sysex";
 import { midiAccess } from "../midi/transport";
@@ -16,12 +16,13 @@ import { PresetView } from "./preset";
 import { SettingsView } from "./settings";
 import { SKINS, chooseSkin, currentSkin } from "./skin";
 import { ICONS, type MenuItem } from "./widgets";
+import { GLOBALS_BASE, PROTECTED_BASE, SESSION_BASE, Units, defaultUnitName, parseSlotLabel, storageKey, type Unit } from "./units";
 
 type ReadMode = "all" | "bank" | "refresh" | "verify" | "revert";
-const SYSEX_ID_KEY = "gsystem-editor.sysex-id";
 /** Damaged slots used to be kept between sessions; they belong to one unit, so they are dropped. */
 const CORRUPT_KEY = "gsystem-editor.corrupt";
-const PROTECTED_KEY = "gsystem-editor.protected-banks";
+/** Block 5 parameter of the unit's SysEx ID, which tells units apart. */
+const SYSEX_ID_PARAM = 19;
 /** Write stored presets into the unit (Vyzor's Sync sequence, checked by reading back). */
 const STORE_TO_UNIT = true;
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -29,6 +30,7 @@ type ViewKey = "banks" | "preset" | "settings" | "midi";
 
 export class App {
   private readonly bank = new BankStore();
+  private readonly units = new Units();
   private readonly preset = new PresetView(this.bank);
   private readonly banks: BanksView;
   private readonly midiView = new MidiView();
@@ -39,6 +41,8 @@ export class App {
   private view: ViewKey = "banks";
   private link: GSystemLink | null = null;
   private readMode: ReadMode | null = null;
+  /** Links whose identity has answered (it is asked several times). */
+  private readonly answered = new WeakSet<GSystemLink>();
   /** Set by Connect: once the G-System answers, ask what to read. */
   private readOffer = false;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -55,6 +59,8 @@ export class App {
         this.show("preset");
       },
       menu: () => this.fileMenu(),
+      copyToUnit: (slots) => void this.copyToUnit(slots),
+      hasOtherUnit: () => this.units.others().length > 0,
       bankMenu: (b) => this.bankMenu(b),
       dropBank: (from, to) => showChoices(`Bank ${pad2(from)} onto bank ${pad2(to)}`, [
         { label: `Swap banks ${pad2(from)} and ${pad2(to)}`, detail: "Exchange their presets (undoable), then Store to write them",
@@ -117,11 +123,7 @@ export class App {
     this.midiView.sysexId.addEventListener("change", () => {
       const id = Number(this.midiView.sysexId.value);
       if (Number.isInteger(id) && id >= 0 && id <= 126) {
-        try {
-          localStorage.setItem(SYSEX_ID_KEY, String(id));
-        } catch {
-          // Not persisted; the value still applies to this session.
-        }
+        this.units.update(this.units.current, { sysexId: id });
         if (this.link) this.link.sysexId = id;
       } else {
         this.midiView.sysexId.value = String(this.sysexId);
@@ -216,6 +218,7 @@ export class App {
       { label: `Undo${this.bank.undo.undoText ? `: ${this.bank.undo.undoText}` : ""}`,
         action: () => this.bank.undoLast(), disabled: !this.bank.undo.canUndo },
       { label: "Redo", action: () => this.bank.redoLast(), disabled: !this.bank.undo.canRedo },
+      { label: `G-System: ${this.units.current.name}…`, action: () => this.chooseUnit() },
       { label: "Appearance…", action: () => this.chooseSkin() },
     ];
   }
@@ -239,6 +242,8 @@ export class App {
       { label: "Swap with bank…", action: on(() => void this.bankOperation("swap")) },
       { label: "Copy to bank…", action: on(() => void this.bankOperation("copy")) },
       { label: "Export bank (.syx)", action: on(() => void this.exportBankSyx(b)) },
+      ...(this.units.others().length ? [{ label: "Copy bank to the other G-System…",
+        action: on(() => void this.copyToUnit([...Array(PRESETS_PER_BANK).keys()].map((i) => b * PRESETS_PER_BANK + i))) }] : []),
       { label: "Clear bank", action: on(() => this.clearBank(b)),
         disabled: ![...Array(PRESETS_PER_BANK).keys()].some((i) => this.bank.preset(b * PRESETS_PER_BANK + i)) },
       this.bank.protectedBanks.has(b)
@@ -264,7 +269,7 @@ export class App {
     if (on) this.bank.protectedBanks.add(b);
     else this.bank.protectedBanks.delete(b);
     try {
-      localStorage.setItem(PROTECTED_KEY, JSON.stringify([...this.bank.protectedBanks]));
+      localStorage.setItem(storageKey(PROTECTED_BASE, this.units.current), JSON.stringify([...this.bank.protectedBanks]));
     } catch {
       // Kept for this session only.
     }
@@ -299,28 +304,147 @@ export class App {
 
   private restore(): void {
     try {
-      for (const b of JSON.parse(localStorage.getItem(PROTECTED_KEY) ?? "[]") as number[]) this.bank.protectedBanks.add(b);
-    } catch {
-      // No bank protected.
-    }
-    try {
       localStorage.removeItem(CORRUPT_KEY);
     } catch {
       // Nothing stored.
     }
-    const session = loadSession();
-    if (!session) return;
+    this.loadUnit(this.units.current);
+  }
+
+  /** Show a unit's workspace: its bank, Store list, protected banks and last settings read. */
+  private loadUnit(unit: Unit): void {
+    this.bank.protectedBanks.clear();
+    try {
+      for (const b of JSON.parse(localStorage.getItem(storageKey(PROTECTED_BASE, unit)) ?? "[]") as number[]) {
+        this.bank.protectedBanks.add(b);
+      }
+    } catch {
+      // No bank protected.
+    }
+    this.bank.corrupt.clear();
+    const session = loadSession(storageKey(SESSION_BASE, unit));
     const presets: (Preset | null)[] = new Array(USER_SLOTS).fill(null);
-    for (const p of readSyx(session.syx)) if (p.userSlot !== null) presets[p.userSlot] = p;
-    this.bank.load(presets, session.title, session.sqs ? new SqsFile(session.sqs) : null, session.pending);
+    if (session) for (const p of readSyx(session.syx)) if (p.userSlot !== null) presets[p.userSlot] = p;
+    this.bank.load(presets, session?.title ?? "Empty bank", session?.sqs ? new SqsFile(session.sqs) : null, session?.pending ?? []);
+    this.settings.useStorage(storageKey(GLOBALS_BASE, unit));
+    this.midiView.sysexId.value = String(unit.sysexId);
+    if (this.link) this.link.sysexId = unit.sysexId;
+    this.banks.unitName = this.units.list.length > 1 ? unit.name : "";
+    this.banks.refresh();
+  }
+
+  /** Save the shown workspace now, then show another unit's. */
+  private switchUnit(unit: Unit): void {
+    if (unit.key === this.units.current.key) return;
+    this.saveNow();
+    this.units.select(unit);
+    this.loadUnit(unit);
   }
 
   private scheduleSave(): void {
     if (this.saveTimer) clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => {
-      storeSession({ title: this.bank.title, syx: this.bank.exportSyx(), sqs: this.bank.sqs?.toBytes() ?? null,
-        pending: [...this.bank.pending] });
-    }, 500);
+    this.saveTimer = setTimeout(() => this.saveNow(), 500);
+  }
+
+  private saveNow(): void {
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = null;
+    storeSession({ title: this.bank.title, syx: this.bank.exportSyx(), sqs: this.bank.sqs?.toBytes() ?? null,
+      pending: [...this.bank.pending] }, storageKey(SESSION_BASE, this.units.current));
+  }
+
+  /** Offline: work on another G-System's workspace, to prepare changes before plugging it in. */
+  private chooseUnit(): void {
+    const current = this.units.current;
+    showChoices("G-System", [
+      ...this.units.list.map((u) => ({
+        label: u.name,
+        detail: `SysEx ID ${u.sysexId}${u.key === current.key ? " · shown now" : ""}`,
+        run: () => {
+          if (u.key === current.key) return;
+          if (this.link) {
+            this.notify("Disconnect first: the workspace shown is the connected G-System's", true);
+            return;
+          }
+          this.switchUnit(u);
+          this.notify(`Workspace of “${u.name}”`);
+        },
+      })),
+      { label: "Rename this G-System…", detail: `“${current.name}”`, run: () => void this.renameUnit(current) },
+    ]);
+  }
+
+  private async renameUnit(unit: Unit): Promise<void> {
+    const name = (await askText("Name of this G-System (e.g. Master, Slave)", unit.name, 24))?.trim();
+    if (!name) return;
+    this.units.update(unit, { name });
+    if (unit.key === this.units.current.key) {
+      this.banks.unitName = this.units.list.length > 1 ? name : "";
+      this.banks.refresh();
+    }
+  }
+
+  /** Copy presets to another G-System's workspace (same or another position); stored there with Store. */
+  private async copyToUnit(slots: number[]): Promise<void> {
+    const others = this.units.others();
+    if (!others.length) return;
+    const target = others.length === 1 ? others[0] : await new Promise<Unit | null>((resolve) => {
+      showChoices("Copy to which G-System?", [
+        ...others.map((u) => ({ label: u.name, detail: `SysEx ID ${u.sysexId}`, run: () => resolve(u) })),
+        { label: "Cancel", detail: "Copy nothing", run: () => resolve(null) },
+      ]);
+    });
+    if (!target) return;
+    const presets = slots.map((s) => this.bank.preset(s));
+    if (presets.every((p) => !p)) return;
+    let first: number | null;
+    if (slots.length === 1) {
+      const answer = await askText(`Copy “${presets[0]!.name}” into “${target.name}”, slot (e.g. 03-2):`, slotLabel(slots[0]), 5);
+      if (answer === null) return;
+      first = parseSlotLabel(answer, BANK_COUNT, PRESETS_PER_BANK);
+    } else {
+      const from = Math.floor(slots[0] / PRESETS_PER_BANK);
+      const answer = await askText(`Copy bank ${pad2(from)} into “${target.name}”, bank (00–39):`, pad2(from), 2);
+      if (answer === null) return;
+      const b = Number(answer);
+      first = answer.trim() !== "" && Number.isInteger(b) && b >= 0 && b < BANK_COUNT ? b * PRESETS_PER_BANK : null;
+    }
+    if (first === null) {
+      alert(slots.length === 1 ? "Enter a slot such as 03-2." : "Enter a bank number from 00 to 39.");
+      return;
+    }
+    // The other unit's workspace, as stored.
+    const other = new BankStore();
+    try {
+      for (const b of JSON.parse(localStorage.getItem(storageKey(PROTECTED_BASE, target)) ?? "[]") as number[]) {
+        other.protectedBanks.add(b);
+      }
+    } catch {
+      // No bank protected.
+    }
+    const session = loadSession(storageKey(SESSION_BASE, target));
+    const loaded: (Preset | null)[] = new Array(USER_SLOTS).fill(null);
+    if (session) for (const p of readSyx(session.syx)) if (p.userSlot !== null) loaded[p.userSlot] = p;
+    other.load(loaded, session?.title ?? "Empty bank", session?.sqs ? new SqsFile(session.sqs) : null, session?.pending ?? []);
+    const dest = presets.map((_, i) => first! + i);
+    if (dest.some((s) => other.isProtected(s))) {
+      alert(`That bank is protected from writing on “${target.name}”.`);
+      return;
+    }
+    const replaced = dest.filter((s, i) => presets[i] && other.preset(s)).map((s) => `${slotLabel(s)}  ${other.preset(s)!.name}`);
+    if (replaced.length && !confirm(`These presets of “${target.name}” will be replaced:\n\n${replaced.join("\n")}\n\n`
+      + "This cannot be undone in the editor.")) return;
+    const copied: number[] = [];
+    presets.forEach((p, i) => {
+      if (!p) return;
+      other.setDirect(dest[i], p.withNumber(USER_PRESET_BASE + dest[i]));
+      copied.push(dest[i]);
+    });
+    other.markPending(copied);
+    storeSession({ title: other.title, syx: other.exportSyx(), sqs: other.sqs?.toBytes() ?? null, pending: [...other.pending] },
+      storageKey(SESSION_BASE, target));
+    this.notify(`${copied.length} preset(s) copied into “${target.name}” (${copied.map(slotLabel).join(", ")}): `
+      + "connect it and tap Store to write them");
   }
 
   /** True when it is fine to replace the bank (no unsynchronised presets, or the user agrees to drop them). */
@@ -420,23 +544,7 @@ export class App {
       const link = new GSystemLink(transport);
       link.sysexId = this.sysexId;
       this.link = link;
-      link.onIdentity = (version) => {
-        // Damaged slots are a state of one unit's memory, and nothing tells units apart:
-        // whatever was found before belongs to the previous connection.
-        if (this.bank.corrupt.size) {
-          this.bank.corrupt.clear();
-          this.banks.refresh();
-        }
-        this.setConnected(true, `G-System ${version}`, port.name);
-        // Preset recalls need the unit's MIDI channel and Prg. Change In: read the settings now.
-        this.readSettings();
-        if (this.readOffer) {
-          this.readOffer = false;
-          this.offerRead();
-        }
-        const n = this.bank.pending.size;
-        if (n) this.notify(`${n} preset(s) modified offline: tap “Store” to write them to the G-System`);
-      };
+      link.onIdentity = (version) => this.identifyUnit(link, version, port.name);
       link.onParam = (b, p, v) => {
         this.settings.update(b, p, v);
         this.preset.applyFromUnit(b, p, v);
@@ -452,7 +560,7 @@ export class App {
       this.midiView.setStatus(`${port.name}…`, false, "Identifying…");
       let received = 0;
       link.onActivity = () => received++;
-      const identified = () => this.link !== link || this.midiDot.classList.contains("on");
+      const identified = () => this.link !== link || this.answered.has(link);
       // The unit answers the identity request at once. The first request right after opening
       // the port can be lost (seen on macOS), so it is sent again until an answer comes.
       for (const delay of [0, 600, 1200]) {
@@ -473,6 +581,71 @@ export class App {
     } catch (e) {
       this.midiView.setStatus("MIDI error", false, (e as Error).message);
     }
+  }
+
+  /** The identity answered: find out which unit this is (by its SysEx ID), show its workspace, then go on. */
+  private identifyUnit(link: GSystemLink, version: string, portName: string): void {
+    if (this.answered.has(link)) return; // the identity request is sent again until a first answer
+    this.answered.add(link);
+    const normal = link.onParam;
+    let done = false;
+    const finish = (id: number | null) => {
+      if (done) return;
+      done = true;
+      link.onParam = normal;
+      if (this.link === link) void this.unitConnected(id, version, portName);
+    };
+    // Until then, parameter answers belong to a unit not known yet: only its SysEx ID is taken.
+    link.onParam = (b, p, v) => {
+      if (b === SYSTEM_BLOCK && p === SYSEX_ID_PARAM) finish(v);
+    };
+    // Addressed to the ID expected, to 0 (as preset requests, which every unit answers) and to all IDs,
+    // since the unit's own is not known yet.
+    for (const id of new Set([this.sysexId, 0, 0x7f])) link.requestParams(SYSTEM_BLOCK, SYSEX_ID_PARAM, 1, id);
+    setTimeout(() => finish(null), 1500);
+  }
+
+  private async unitConnected(id: number | null, version: string, portName: string): Promise<void> {
+    // Unknown ID: ask rather than guess, so that one unit's presets never go to another.
+    if (id === null && this.units.list.length > 1) {
+      const picked = await new Promise<Unit | null>((resolve) => showChoices("Which G-System is connected?", [
+        ...this.units.list.map((u) => ({ label: u.name, detail: `SysEx ID ${u.sysexId}`, run: () => resolve(u) })),
+        { label: "Disconnect", detail: "Its SysEx ID could not be read", run: () => resolve(null) },
+      ]));
+      if (!picked) {
+        if (this.link) void this.toggleConnection();
+        return;
+      }
+      id = picked.sysexId;
+    }
+    let unit = id === null ? this.units.current : this.units.bySysexId(id);
+    let created = false;
+    if (!unit) {
+      unit = this.units.add(id!, defaultUnitName(id!));
+      created = true;
+    }
+    const switched = unit.key !== this.units.current.key;
+    this.switchUnit(unit);
+    if (this.link) this.link.sysexId = unit.sysexId;
+    // Damaged slots are a state of one unit's memory: whatever was found before belongs to the previous connection.
+    if (this.bank.corrupt.size) {
+      this.bank.corrupt.clear();
+      this.banks.refresh();
+    }
+    this.setConnected(true, `G-System ${version}`, portName);
+    if (switched) this.notify(`“${unit.name}” connected (SysEx ID ${id}): its workspace is shown`);
+    if (created) {
+      await this.renameUnit(unit);
+      if (!this.link) return;
+    }
+    // Preset recalls need the unit's MIDI channel: read the settings now.
+    this.readSettings();
+    if (this.readOffer || created) {
+      this.readOffer = false;
+      this.offerRead();
+    }
+    const n = this.bank.pending.size;
+    if (n) this.notify(`${n} preset(s) modified offline for “${unit.name}”: tap “Store” to write them`);
   }
 
   /** The G-System went away (unplugged, switched off): stop everything that needs it and say so. */
@@ -515,12 +688,7 @@ export class App {
   }
 
   private get sysexId(): number {
-    try {
-      const saved = Number(localStorage.getItem(SYSEX_ID_KEY));
-      return localStorage.getItem(SYSEX_ID_KEY) !== null && Number.isInteger(saved) ? saved : DEFAULT_SYSEX_ID;
-    } catch {
-      return DEFAULT_SYSEX_ID;
-    }
+    return this.units.current.sysexId;
   }
 
   /** Store into the editor's bank and, when connected, into the unit. */

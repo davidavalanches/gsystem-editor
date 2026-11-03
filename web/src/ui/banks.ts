@@ -27,6 +27,10 @@ export interface BanksActions {
   select(slot: number): void;
   /** Desktop: a bank was dragged onto another one (offer to swap them). */
   dropBank(from: number, to: number): void;
+  /** Copy slots to another G-System's workspace, if another one is known. */
+  copyToUnit(slots: number[]): void;
+  /** Whether another G-System is known (to copy to). */
+  hasOtherUnit(): boolean;
 }
 
 export class BanksView {
@@ -35,6 +39,8 @@ export class BanksView {
   /** The preset shown in the Preset view, highlighted here. */
   current = 0;
   private clipboard: Preset | null = null;
+  /** The G-System whose workspace is shown. */
+  unitName = "";
   private readonly title = el("div", "header-title");
   private readonly sub = el("div");
   private readonly readButton = el("button", "pill primary", "Connect");
@@ -332,7 +338,7 @@ export class BanksView {
       actions.append(open);
     }
     const more = el("div", "detail-more");
-    for (const item of this.slotMenu(slot).filter((m) => m.label !== "Open")) {
+    for (const item of this.slotMenu(slot).filter((m) => m.label !== "Open" && !m.label.startsWith("Copy to the other"))) {
       const button = el("button", "", item.label.replace(/…$/, ""));
       button.type = "button";
       button.disabled = !!item.disabled;
@@ -345,7 +351,7 @@ export class BanksView {
   }
 
   private renderHeader(): void {
-    this.title.textContent = this.bank.title + (this.bank.undo.isClean ? "" : " *");
+    this.title.textContent = (this.unitName ? `${this.unitName} · ` : "") + this.bank.title + (this.bank.undo.isClean ? "" : " *");
     const pending = this.bank.pending.size;
     this.syncButton.hidden = !pending;
     this.syncButton.textContent = `Store (${pending})`;
@@ -402,6 +408,8 @@ export class BanksView {
       { label: "Copy", action: () => { this.clipboard = p; this.refresh(); }, disabled: !p },
       { label: "Paste here", action: () => this.paste(slot), disabled: !this.clipboard },
       { label: "Clear slot", action: () => this.clear(slot), disabled: !p },
+      ...(this.actions.hasOtherUnit()
+        ? [{ label: "Copy to the other G-System…", action: () => this.actions.copyToUnit([slot]), disabled: !p }] : []),
     ];
   }
 
