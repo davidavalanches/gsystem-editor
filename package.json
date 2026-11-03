@@ -67,7 +67,14 @@
     },
     "win": {
       "target": [
-        "portable"
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
       ]
     },
     "afterPack": "scripts/adhoc-sign.cjs"

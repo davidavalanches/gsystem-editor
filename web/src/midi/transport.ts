@@ -59,6 +59,26 @@ class AndroidMidi implements MidiAccess {
   }
 }
 
+/**
+ * The key pairing an input with the output of the same device. Names usually match exactly, but
+ * Windows may write "MIDIIN2 (G-System)" / "MIDIOUT2 (G-System)", and some drivers add "In" / "Out".
+ */
+export function portKey(name: string): string {
+  return name
+    .trim()
+    .replace(/^midi(?:in|out)(\d*)\s*\((.*)\)$/i, "$2 $1")
+    .replace(/[\s_-]*\b(?:in|out|input|output)\b(?=\s*(?:\d*\s*)$)/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/** The input of the same device as this output: same name, else same {@link portKey}. */
+function inputFor(output: MIDIOutput, inputs: MIDIInput[]): MIDIInput | undefined {
+  const name = output.name ?? "";
+  return inputs.find((i) => i.name === name) ?? inputs.find((i) => portKey(i.name ?? "") === portKey(name));
+}
+
 class WebMidi implements MidiAccess {
   private access: MIDIAccess | null = null;
 
@@ -70,10 +90,10 @@ class WebMidi implements MidiAccess {
 
   async listPorts(): Promise<PortInfo[]> {
     const midi = await this.midi();
-    // Only outputs that have an input of the same name can carry a request and its answer.
-    const inputs = new Set([...midi.inputs.values()].map((i) => i.name));
+    // Only outputs that have an input of the same device can carry a request and its answer.
+    const inputs = [...midi.inputs.values()];
     return [...midi.outputs.values()]
-      .filter((o) => inputs.has(o.name))
+      .filter((o) => inputFor(o, inputs))
       .map((o) => ({ id: o.name ?? o.id, name: o.name ?? o.id }));
   }
 
@@ -87,7 +107,7 @@ class WebMidi implements MidiAccess {
   async open(id: string): Promise<Transport> {
     const midi = await this.midi();
     const output = [...midi.outputs.values()].find((o) => (o.name ?? o.id) === id);
-    const input = [...midi.inputs.values()].find((i) => i.name === output?.name);
+    const input = output && inputFor(output, [...midi.inputs.values()]);
     if (!output || !input) throw new Error(`MIDI port not found: ${id}`);
     await Promise.all([output.open(), input.open()]);
     // Unplugging the device disconnects its ports.

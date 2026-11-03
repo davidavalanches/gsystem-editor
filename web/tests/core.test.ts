@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { portKey } from "../src/midi/transport";
 import { BankStore, bankPosition, slotLabel } from "../src/core/bank";
 import { applyFavorite, captureFavorite, matchingFavorite } from "../src/core/favorites";
 import { GLOBAL_PARAMS, formatGlobal, globalValue } from "../src/core/globals";
@@ -370,5 +371,14 @@ describe("damaged slots", () => {
     transport.onMessage!(answer);
     expect(result).toEqual([0, [], [237]]);
     link.close();
+  });
+});
+
+describe("MIDI port pairing", () => {
+  it("pairs Windows and In/Out port names of one device", () => {
+    expect(portKey("MIDIIN2 (G-System)")).toBe(portKey("MIDIOUT2 (G-System)"));
+    expect(portKey("G-System In")).toBe(portKey("G-System Out"));
+    expect(portKey("G-System")).toBe("g-system");
+    expect(portKey("MIDIIN2 (G-System)")).not.toBe(portKey("G-System"));
   });
 });

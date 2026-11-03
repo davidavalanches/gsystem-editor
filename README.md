@@ -46,8 +46,11 @@ n'a besoin ni de Node, ni de Chrome, ni de serveur local.
 npm run desktop       # lancement direct depuis le projet
 npm run dist:mac      # release/G-System Editor-<version>-arm64-mac.zip (Apple Silicon) et -mac.zip (Intel)
 npm run dist:linux    # AppImage
-npm run dist:win      # exécutable portable (nécessite wine depuis Linux)
+npm run dist:win      # Windows 64 bits : exécutable portable .exe et .zip (nécessite wine depuis Linux)
 ```
+
+Sur Windows, l'app n'est pas signée : SmartScreen demande « Informations complémentaires » puis
+« Exécuter quand même » au premier lancement. Un port MIDI n'y est utilisable que par un programme à la fois.
 
 Le build macOS signe l'app en ad hoc (sans certificat Apple) avec
 [rcodesign](https://github.com/indygreg/apple-platform-rs), qui doit être dans le `PATH` (ou son chemin

@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>G-System Editor</title>
-<meta name="description" content="A free, modern editor for the TC Electronic G-System guitar multi-effects floorboard. macOS, Linux, Android — Windows coming soon.">
+<meta name="description" content="A free, modern editor for the TC Electronic G-System guitar multi-effects floorboard. macOS, Windows, Linux, Android.">
 <meta property="og:title" content="G-System Editor">
-<meta property="og:description" content="A free, modern editor for the TC Electronic G-System. macOS, Linux, Android — Windows coming soon.">
+<meta property="og:description" content="A free, modern editor for the TC Electronic G-System. macOS, Windows, Linux, Android.">
 <meta property="og:image" content="https://davidavalanches.github.io/gsystem-editor/screenshots/preset-editor.jpg">
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#16171a">
@@ -237,7 +237,7 @@
           <span lang="en">Support me on Ko-fi</span><span lang="fr">Me soutenir sur Ko-fi</span>
         </a>
       </div>
-      <small><span lang="en">macOS · Linux · Android — Windows coming soon</span><span lang="fr">macOS · Linux · Android — Windows bientôt</span></small>
+      <small><span lang="en">macOS · Windows · Linux · Android</span><span lang="fr">macOS · Windows · Linux · Android</span></small>
 
       <div class="shot-hero frame">
         <img src="screenshots/preset-editor.jpg" width="1920" height="1200" alt="G-System Editor — preset editor with the reverb block open">
@@ -257,7 +257,7 @@
       <div class="grid-3">
         <div class="card"><div class="knob"></div>
           <h3><span lang="en">Runs where you are</span><span lang="fr">Fonctionne partout</span></h3>
-          <p><span lang="en">Native builds for macOS (Apple Silicon &amp; Intel), Linux and Android. Windows is on the way.</span><span lang="fr">Versions natives pour macOS (Apple Silicon et Intel), Linux et Android. Windows arrive bientôt.</span></p>
+          <p><span lang="en">Native builds for macOS (Apple Silicon &amp; Intel), Windows, Linux and Android.</span><span lang="fr">Versions natives pour macOS (Apple Silicon et Intel), Windows, Linux et Android.</span></p>
         </div>
         <div class="card"><div class="knob"></div>
           <h3><span lang="en">Fast &amp; reliable</span><span lang="fr">Rapide et fiable</span></h3>
@@ -389,13 +389,16 @@
           </div>
         </div>
 
-        <div class="plat soon" data-os="windows">
+        <div class="plat" data-os="windows">
           <div class="head">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5 10.4 4.5v7H3zM11.4 4.3 21 3v8.5h-9.6zM3 12.5h7.4v7L3 18.5zM11.4 12.5H21V21l-9.6-1.3z"/></svg>
             <h3>Windows</h3>
           </div>
-          <p class="meta"><span lang="en">Windows 10 / 11</span><span lang="fr">Windows 10 / 11</span></p>
-          <span class="pill"><span lang="en">COMING SOON</span><span lang="fr">BIENTÔT</span></span>
+          <p class="meta"><span lang="en">Windows 10 / 11 · 64-bit</span><span lang="fr">Windows 10 / 11 · 64 bits</span></p>
+          <div class="links">
+            <a class="dl" href="https://github.com/davidavalanches/gsystem-editor/releases/latest" data-asset="win-exe">Portable <span>.exe</span></a>
+            <a class="dl" href="https://github.com/davidavalanches/gsystem-editor/releases/latest" data-asset="win-zip">Zip <span>.zip</span></a>
+          </div>
         </div>
       </div>
 
@@ -411,7 +414,7 @@
     <div class="wrap">
       <div class="label"><span lang="en">Installation</span><span lang="fr">Installation</span></div>
       <h2><span lang="en">First launch</span><span lang="fr">Premier lancement</span></h2>
-      <p class="intro"><span lang="en">The app isn't signed by Apple or Google (that costs money every year), so your system may ask for confirmation the first time.</span><span lang="fr">L'app n'est pas signée par Apple ou Google (c'est payant chaque année), votre système peut donc demander une confirmation au premier lancement.</span></p>
+      <p class="intro"><span lang="en">The app isn't signed by Apple, Microsoft or Google (that costs money every year), so your system may ask for confirmation the first time.</span><span lang="fr">L'app n'est pas signée par Apple, Microsoft ou Google (c'est payant chaque année), votre système peut donc demander une confirmation au premier lancement.</span></p>
 
       <details>
         <summary>macOS</summary>
@@ -419,6 +422,15 @@
           <p lang="en">Unzip, move <b>G-System Editor</b> to Applications and open it. When macOS says it can't verify the app, open <b>System Settings → Privacy &amp; Security</b> and click <b>Open Anyway</b> (once). If macOS still says the app is damaged, run this once in Terminal:</p>
           <p lang="fr">Décompressez, glissez <b>G-System Editor</b> dans Applications et ouvrez-la. Quand macOS indique ne pas pouvoir vérifier l'app, ouvrez <b>Réglages Système → Confidentialité et sécurité</b> et cliquez sur <b>Ouvrir quand même</b> (une seule fois). Si macOS indique encore que l'app est endommagée, lancez une fois dans le Terminal :</p>
           <pre>xattr -cr "/Applications/G-System Editor.app"</pre>
+        </div>
+      </details>
+      <details>
+        <summary>Windows</summary>
+        <div>
+          <p lang="en">The <b>.exe</b> runs without installing: double-click it. The <b>.zip</b> holds the same app (it starts a little faster): unzip it and run <b>G-System Editor.exe</b>. The first time, Windows SmartScreen may say <i>“Windows protected your PC”</i>: click <b>More info</b>, then <b>Run anyway</b>.</p>
+          <p lang="fr">Le <b>.exe</b> se lance sans installation : double-cliquez dessus. Le <b>.zip</b> contient la même app (elle démarre un peu plus vite) : décompressez-le et lancez <b>G-System Editor.exe</b>. La première fois, Windows SmartScreen peut afficher <i>« Windows a protégé votre ordinateur »</i> : cliquez sur <b>Informations complémentaires</b>, puis sur <b>Exécuter quand même</b>.</p>
+          <p lang="en">Windows lets only one program at a time use a MIDI port: close Vyzor, your DAW or Chrome before clicking <b>Connect</b>. Windows 10 and 11 normally recognise the G-System as a USB MIDI device without a driver. The Windows version is new and hasn't been tested on hardware yet: please <a href="https://github.com/davidavalanches/gsystem-editor/issues">report</a> any problem.</p>
+          <p lang="fr">Windows ne laisse qu'un seul programme à la fois utiliser un port MIDI : fermez Vyzor, votre logiciel audio ou Chrome avant de cliquer sur <b>Connect</b>. Windows 10 et 11 reconnaissent normalement le G-System comme périphérique MIDI USB sans pilote. La version Windows est nouvelle et n'a pas encore été testée sur le matériel : <a href="https://github.com/davidavalanches/gsystem-editor/issues">signalez</a> tout problème.</p>
         </div>
       </details>
       <details>
@@ -450,7 +462,7 @@
           <div class="label"><span lang="en">Support the project</span><span lang="fr">Soutenir le projet</span></div>
           <h2><span lang="en">Free for everyone. Tips welcome.</span><span lang="fr">Gratuit pour tous. Les dons sont bienvenus.</span></h2>
           <p><span lang="en">I build G-System Editor in my spare time so every G-System owner can keep using their board. If it saved your presets — or your evening — consider buying me a coffee.</span><span lang="fr">Je développe G-System Editor sur mon temps libre pour que chaque propriétaire de G-System puisse continuer à utiliser son pédalier. Si l'app a sauvé vos presets — ou votre soirée — offrez-moi un café.</span></p>
-          <p><span lang="en">Donations are completely optional and help cover testing hardware and future Windows support.</span><span lang="fr">Les dons sont entièrement facultatifs et aident à financer le matériel de test et la future version Windows.</span></p>
+          <p><span lang="en">Donations are completely optional and help cover testing hardware and future development.</span><span lang="fr">Les dons sont entièrement facultatifs et aident à financer le matériel de test et les développements à venir.</span></p>
         </div>
         <div class="actions">
           <a class="btn btn-kofi" href="https://ko-fi.com/davidavalanches" target="_blank" rel="noopener">
@@ -523,7 +535,9 @@
       "mac-arm64": function (n) { return /arm64-mac\.zip$/i.test(n); },
       "mac-x64":   function (n) { return /-mac\.zip$/i.test(n) && !/arm64/i.test(n); },
       "linux":     function (n) { return /\.AppImage$/i.test(n); },
-      "android":   function (n) { return /\.apk$/i.test(n); }
+      "android":   function (n) { return /\.apk$/i.test(n); },
+      "win-exe":   function (n) { return /\.exe$/i.test(n); },
+      "win-zip":   function (n) { return /-win\.zip$/i.test(n); }
     };
     fetch("https://api.github.com/repos/davidavalanches/gsystem-editor/releases/latest")
       .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
