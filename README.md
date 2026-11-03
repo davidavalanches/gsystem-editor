@@ -66,7 +66,8 @@ codesign --force --deep -s - "/Applications/G-System Editor.app"   # si macOS la
 - **Banques** : liste des 40 banques, les 5 presets de la banque avec le voyant de chacun des 8 effets,
   recherche par nom, appui long sur un preset pour renommer / copier / coller / vider, annulation (menu ⋮, Ctrl+Z).
   Sur ordinateur, glisser l'en-tête d'une banque sur une autre (ou un preset sur un autre) propose de les échanger
-  ou de copier. Menu d'une banque : lire, échanger, copier, exporter, vider (« Clear bank »), protéger en écriture.
+  ou de copier. Sur téléphone, un appui long sur une banque de la liste la soulève : la glisser sur une autre propose
+  l'échange (la liste défile au bord), la relâcher sans bouger ouvre le menu de la banque. Menu d'une banque : lire, échanger, copier, exporter, vider (« Clear bank »), protéger en écriture.
   Toute modification de la banque (renommer, coller, vider, échanger, copier) s'ajoute à la liste « Store (n) » pour
   être écrite dans le G-System ; vider un emplacement (ou une banque) y met un preset « Empty »
   (tous les effets, loops, insert, boost et modifiers coupés), car le G-System n'accepte que des presets complets.

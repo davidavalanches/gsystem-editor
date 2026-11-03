@@ -39,6 +39,8 @@ export class BanksView {
   /** The preset shown in the Preset view, highlighted here. */
   current = 0;
   private clipboard: Preset | null = null;
+  /** A bank is lifted by touch: the finger moves it, not the list. */
+  private touchLifted = false;
   /** The G-System whose workspace is shown. */
   unitName = "";
   private readonly title = el("div", "header-title");
@@ -67,6 +69,10 @@ export class BanksView {
     header.append(titles, iconButton(ICONS.search, "Search for a preset", () => void this.search()),
       this.syncButton, live, this.readButton, more);
 
+    // Registered before any touch starts, so the browser lets it stop the scroll once a bank is lifted.
+    this.list.addEventListener("touchmove", (e) => {
+      if (this.touchLifted && e.cancelable) e.preventDefault();
+    }, { passive: false });
     this.list.setAttribute("role", "listbox");
     this.list.setAttribute("aria-label", "Banks");
     for (let b = 0; b < BANK_COUNT; b++) {
@@ -74,6 +80,10 @@ export class BanksView {
       button.type = "button";
       button.setAttribute("role", "option");
       button.addEventListener("click", () => this.showBank(b));
+      button.addEventListener("pointerdown", (e) => {
+        if (e.pointerType === "touch") this.touchBank(e, b, button);
+      });
+      button.addEventListener("contextmenu", (e) => e.preventDefault());
       this.bankButtons.push(button);
       this.list.append(button);
     }
@@ -212,17 +222,26 @@ export class BanksView {
 
   /** Drag from a pressed pointer: past a few pixels a copy of the source follows the pointer, the item
    * under it is highlighted, and releasing there calls `drop`. Escape cancels. */
-  private drag(down: PointerEvent, o: {
+  private drag(down: { clientX: number; clientY: number }, o: {
     source: () => HTMLElement | null;
     targetOf: (node: Element) => number | null;
     element: (target: number) => HTMLElement | null;
     hint: (target: number) => string;
     drop: (target: number) => void;
+    /** Touch: the item is lifted at once (after a long press), not after moving a few pixels. */
+    lifted?: boolean;
+    /** Released without moving after a lift. */
+    still?: () => void;
+    /** Scrolled when the pointer nears its top or bottom edge. */
+    scroller?: HTMLElement;
   }): void {
     let ghost: HTMLElement | null = null;
     let source: HTMLElement | null = null;
     let target: number | null = null;
     let dx = 0, dy = 0;
+    let moved = false;
+    let last = { x: down.clientX, y: down.clientY };
+    let scrollTimer: ReturnType<typeof setInterval> | null = null;
     const setTarget = (t: number | null) => {
       if (t === target) return;
       if (target !== null) o.element(target)?.classList.remove("drop-target");
@@ -230,38 +249,70 @@ export class BanksView {
       if (target !== null) o.element(target)?.classList.add("drop-target");
       if (ghost) ghost.querySelector(".drag-hint")!.textContent = target !== null ? o.hint(target) : "";
     };
-    const move = (e: PointerEvent) => {
-      if (!ghost) {
-        if (Math.hypot(e.clientX - down.clientX, e.clientY - down.clientY) < 6) return;
-        source = o.source();
-        if (!source) return;
-        const box = source.getBoundingClientRect();
-        dx = down.clientX - box.left;
-        dy = down.clientY - box.top;
-        ghost = source.cloneNode(true) as HTMLElement;
-        ghost.classList.add("drag-ghost");
-        ghost.style.width = `${box.width}px`;
-        ghost.style.height = `${box.height}px`;
-        ghost.append(el("span", "drag-hint"));
-        document.body.append(ghost);
-        source.classList.add("dragging");
-        document.body.classList.add("dragging-item");
-      }
-      ghost.style.transform = `translate(${e.clientX - dx}px, ${e.clientY - dy}px)`;
-      const over = document.elementFromPoint(e.clientX, e.clientY);
+    const lift = () => {
+      source = o.source();
+      if (!source) return false;
+      const box = source.getBoundingClientRect();
+      dx = down.clientX - box.left;
+      dy = down.clientY - box.top;
+      // Under a finger, the copy goes beside it so the target stays visible.
+      if (o.lifted) dx -= box.width * 0.6;
+      ghost = source.cloneNode(true) as HTMLElement;
+      ghost.classList.add("drag-ghost");
+      ghost.style.width = `${box.width}px`;
+      ghost.style.height = `${box.height}px`;
+      ghost.style.transform = `translate(${box.left}px, ${box.top}px)`;
+      ghost.append(el("span", "drag-hint"));
+      document.body.append(ghost);
+      source.classList.add("dragging");
+      document.body.classList.add("dragging-item");
+      return true;
+    };
+    const track = () => {
+      if (!ghost) return;
+      ghost.style.transform = `translate(${last.x - dx}px, ${last.y - dy}px)`;
+      const over = document.elementFromPoint(last.x, last.y);
       setTarget(over ? o.targetOf(over) : null);
+    };
+    // Near an edge of the scroller, keep scrolling it (and re-aim) while the pointer stays there.
+    const autoScroll = () => {
+      const box = o.scroller?.getBoundingClientRect();
+      const step = !box ? 0 : last.y < box.top + 36 ? -8 : last.y > box.bottom - 36 ? 8 : 0;
+      if (step && !scrollTimer) {
+        scrollTimer = setInterval(() => {
+          const b = o.scroller!.getBoundingClientRect();
+          const s = last.y < b.top + 36 ? -8 : last.y > b.bottom - 36 ? 8 : 0;
+          if (!s) {
+            clearInterval(scrollTimer!);
+            scrollTimer = null;
+            return;
+          }
+          o.scroller!.scrollTop += s;
+          track();
+        }, 16);
+      }
+    };
+    const move = (e: PointerEvent) => {
+      last = { x: e.clientX, y: e.clientY };
+      if (Math.hypot(e.clientX - down.clientX, e.clientY - down.clientY) >= 6) moved = true;
+      if (!ghost && (!moved || !lift())) return;
+      track();
+      autoScroll();
     };
     const end = (drop: boolean) => {
       document.removeEventListener("pointermove", move);
       document.removeEventListener("pointerup", up);
       document.removeEventListener("pointercancel", cancel);
       document.removeEventListener("keydown", key);
+      this.touchLifted = false;
+      if (scrollTimer) clearInterval(scrollTimer);
       const to = target;
       setTarget(null);
       ghost?.remove();
       source?.classList.remove("dragging");
       document.body.classList.remove("dragging-item");
       if (drop && ghost && to !== null) o.drop(to);
+      else if (drop && o.lifted && !moved) o.still?.();
     };
     const up = () => end(true);
     const cancel = () => end(false);
@@ -272,6 +323,58 @@ export class BanksView {
     document.addEventListener("pointerup", up);
     document.addEventListener("pointercancel", cancel);
     document.addEventListener("keydown", key);
+    if (o.lifted) {
+      this.touchLifted = true;
+      if (!lift()) end(false);
+    }
+  }
+
+  /** Touch, bank list: a long press lifts the bank (it then follows the finger, onto another bank to swap
+   * them); released without moving, it opens the bank's menu. A quick tap still shows the bank. */
+  private touchBank(down: PointerEvent, b: number, button: HTMLElement): void {
+    const start = { clientX: down.clientX, clientY: down.clientY };
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const stop = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      button.removeEventListener("pointermove", early);
+      button.removeEventListener("pointerup", stop);
+      button.removeEventListener("pointercancel", stop);
+    };
+    // Moving first is a scroll of the list, not a lift.
+    const early = (e: PointerEvent) => {
+      if (Math.hypot(e.clientX - start.clientX, e.clientY - start.clientY) > 8) stop();
+    };
+    button.addEventListener("pointermove", early);
+    button.addEventListener("pointerup", stop);
+    button.addEventListener("pointercancel", stop);
+    timer = setTimeout(() => {
+      stop();
+      navigator.vibrate?.(15);
+      // The tap that ends the press must not also act as a click.
+      button.addEventListener("click", (e) => {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+      }, { capture: true, once: true });
+      if (this.bankIndex !== b) this.showBank(b);
+      const cell = (n: number) => this.bankButtons[n] ?? null;
+      this.drag(start, {
+        lifted: true,
+        scroller: this.list,
+        source: () => cell(b),
+        targetOf: (node) => {
+          const i = this.bankButtons.indexOf(node.closest<HTMLButtonElement>(".bank-list button")!);
+          return i < 0 || i === b ? null : i;
+        },
+        element: cell,
+        hint: (t) => `⇄ swap with ${String(t).padStart(2, "0")}`,
+        drop: (t) => this.actions.dropBank(b, t),
+        still: () => {
+          const box = button.getBoundingClientRect();
+          showMenu({ x: box.right, y: box.top }, this.actions.bankMenu(b));
+        },
+      });
+    }, 450);
   }
 
   /** A preset dropped onto another: swap them, or copy it there. */
