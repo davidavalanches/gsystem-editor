@@ -634,7 +634,8 @@ export class App {
     }
     this.setConnected(true, `G-System ${version}`, portName);
     if (switched) this.notify(`“${unit.name}” connected (SysEx ID ${id}): its workspace is shown`);
-    if (created) {
+    // A new unit, or one still under its default name (such as the workspace of earlier versions): name it.
+    if (created || unit.name === defaultUnitName(unit.sysexId)) {
       await this.renameUnit(unit);
       if (!this.link) return;
     }
