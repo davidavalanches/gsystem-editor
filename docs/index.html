@@ -425,6 +425,29 @@
         </div>
       </details>
       <details>
+        <summary><span lang="en">macOS: the G-System isn't detected</span><span lang="fr">macOS : le G-System n'est pas détecté</span></summary>
+        <div>
+          <p lang="en">The G-System is a standard USB MIDI device: macOS needs no driver. The app sees only what macOS shows in <b>Audio MIDI Setup → Window → Show MIDI Studio</b>. First check <b>Apple menu → About This Mac → More Info → System Report → USB</b>, with the G-System switched on and plugged in.</p>
+          <p lang="fr">Le G-System est un périphérique MIDI USB standard : macOS n'a besoin d'aucun pilote. L'app ne voit que ce que macOS affiche dans <b>Configuration audio et MIDI → Fenêtre → Afficher le studio MIDI</b>. Vérifiez d'abord <b>menu Pomme → À propos de ce Mac → Plus d'infos → Rapport système → USB</b>, G-System allumé et branché.</p>
+          <p lang="en"><b>Not in the USB list:</b> a cable or adapter problem. Switch the G-System on before plugging it in, try a direct USB-C to USB-B cable (no dock or hub), another cable and another port. Some USB-C docks handle old USB 1.1 devices like the G-System badly.</p>
+          <p lang="fr"><b>Absent de la liste USB :</b> problème de câble ou d'adaptateur. Allumez le G-System avant de le brancher, essayez un câble USB-C vers USB-B direct (sans dock ni hub), un autre câble et un autre port. Certains docks USB-C gèrent mal les anciens appareils USB 1.1 comme le G-System.</p>
+          <p lang="en"><b>In the USB list but greyed out in the MIDI Studio</b> (or missing):</p>
+          <p lang="fr"><b>Présent dans la liste USB mais grisé dans le studio MIDI</b> (ou absent) :</p>
+          <ol lang="en">
+            <li>Remove any old TC Electronic or G-System driver: in Finder, <b>Go → Go to Folder</b>, open <code>/Library/Audio/MIDI Drivers</code> and <code>~/Library/Audio/MIDI Drivers</code>, move any TC Electronic <code>.plugin</code> out of them, then restart the Mac. An old driver can take over the G-System without working on Apple Silicon.</li>
+            <li>Unplug the G-System, select its greyed icon in the MIDI Studio and press Delete, plug it back in (switched on, directly into the Mac), then click <b>Rescan MIDI</b>. If it is still greyed out, create a new configuration in the MIDI Studio and try again.</li>
+            <li>Try another USB path: another port, or a simple USB 2.0 hub between the Mac and the G-System.</li>
+          </ol>
+          <ol lang="fr">
+            <li>Retirez tout ancien pilote TC Electronic ou G-System : dans le Finder, <b>Aller → Aller au dossier</b>, ouvrez <code>/Library/Audio/MIDI Drivers</code> et <code>~/Library/Audio/MIDI Drivers</code>, déplacez-en tout <code>.plugin</code> TC Electronic, puis redémarrez le Mac. Un ancien pilote peut s'emparer du G-System sans fonctionner sur Apple Silicon.</li>
+            <li>Débranchez le G-System, sélectionnez son icône grisée dans le studio MIDI et appuyez sur Supprimer, rebranchez-le (allumé, directement sur le Mac), puis cliquez sur <b>Rechercher MIDI</b>. S'il reste grisé, créez une nouvelle configuration dans le studio MIDI et recommencez.</li>
+            <li>Essayez un autre chemin USB : un autre port, ou un hub USB 2.0 simple entre le Mac et le G-System.</li>
+          </ol>
+          <p lang="en"><b>Workaround that always works:</b> a class-compliant USB MIDI interface (Roland UM-ONE, iConnectivity…) on the G-System's 5-pin MIDI In and MIDI Out, both connected. Reading all banks is slower than over USB.</p>
+          <p lang="fr"><b>Contournement qui marche toujours :</b> une interface USB-MIDI sans pilote (Roland UM-ONE, iConnectivity…) sur les prises MIDI In et MIDI Out à 5 broches du G-System, les deux reliées. La lecture de toutes les banques est plus lente qu'en USB.</p>
+        </div>
+      </details>
+      <details>
         <summary>Windows</summary>
         <div>
           <p lang="en">The <b>.exe</b> runs without installing: double-click it. The <b>.zip</b> holds the same app (it starts a little faster): unzip it and run <b>G-System Editor.exe</b>. The first time, Windows SmartScreen may say <i>“Windows protected your PC”</i>: click <b>More info</b>, then <b>Run anyway</b>.</p>

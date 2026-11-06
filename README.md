@@ -64,6 +64,25 @@ xattr -cr "/Applications/G-System Editor.app"
 codesign --force --deep -s - "/Applications/G-System Editor.app"   # si macOS la dit encore « endommagée »
 ```
 
+#### Le G-System n'apparaît pas sur Mac
+
+Le G-System est un périphérique MIDI USB standard (USB `1220:0005`, sans pilote) : l'app ne voit que
+ce que macOS affiche dans Configuration audio et MIDI → Fenêtre → Afficher le studio MIDI. Vérifier
+d'abord menu Pomme → À propos de ce Mac → Plus d'infos → Rapport système → USB, G-System allumé et branché.
+
+- **Absent de la liste USB** : câble ou adaptateur. Allumer le G-System avant de le brancher, essayer
+  un câble USB-C vers USB-B direct (sans dock ni hub), un autre câble, un autre port. Certains docks
+  USB-C gèrent mal les anciens appareils USB 1.1.
+- **Présent en USB mais grisé (ou absent) dans le studio MIDI** :
+  1. Retirer tout ancien pilote TC Electronic de `/Library/Audio/MIDI Drivers` et
+     `~/Library/Audio/MIDI Drivers` (fichiers `.plugin`), puis redémarrer : un ancien pilote peut
+     s'emparer du G-System sans fonctionner sur Apple Silicon.
+  2. Débrancher, supprimer l'icône grisée du studio MIDI, rebrancher (allumé, directement sur le Mac),
+     « Rechercher MIDI ». S'il reste grisé : nouvelle configuration dans le studio MIDI.
+  3. Essayer un autre port, ou un hub USB 2.0 simple entre le Mac et le G-System.
+- **Contournement** : une interface USB-MIDI sans pilote (Roland UM-ONE…) sur les prises MIDI In et
+  MIDI Out à 5 broches du G-System, les deux reliées (lecture des banques plus lente).
+
 ## Fonctionnalités
 
 - **Banques** : liste des 40 banques, les 5 presets de la banque avec le voyant de chacun des 8 effets,
