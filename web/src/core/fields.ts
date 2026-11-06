@@ -17,7 +17,9 @@ export function describeField(data: Uint8Array, index: number): FieldInfo {
   if (blk) {
     if (index === blk.countField) return { group: blk.label, name: "Number of parameters", param: null };
     const param = blk.fields(data).find(([f]) => f === index)?.[1] ?? null;
-    return { group: blk.label, name: param?.name ?? "(not used by this type)", param };
+    const used = blk.shownFields(data).some(([f]) => f === index);
+    const name = !param ? "(not used by this type)" : used ? param.name : `${param.name} (not used by this type)`;
+    return { group: blk.label, name, param };
   }
   if (index >= MODIFIER_FIELD && index < MODIFIER_FIELD + MODIFIER_SLOTS) {
     const slot = index - MODIFIER_FIELD;

@@ -94,9 +94,12 @@ function fitCodes(root: HTMLElement): void {
     const range = document.createRange();
     range.selectNodeContents(code);
     const text = () => range.getBoundingClientRect().width;
-    let size = parseFloat(getComputedStyle(code).fontSize);
+    // Whole pixels only: at a fractional size (9.7px, or the 0.75vw of the desktop layout) the capitals of this
+    // small display font land on different pixel rows, some letters looking taller than others.
+    let size = Math.floor(parseFloat(getComputedStyle(code).fontSize));
+    code.style.fontSize = `${size}px`;
     for (let i = 0; i < 8 && text() > room - 0.5 && size > 6; i++) {
-      size = Math.max(6, Math.min(size - 0.2, Math.floor((size * (room - 1)) / text() * 10) / 10));
+      size = Math.max(6, Math.min(size - 1, Math.floor((size * (room - 1)) / text())));
       code.style.fontSize = `${size}px`;
     }
   }
@@ -906,7 +909,7 @@ export class PresetView {
         this.render();
       });
       rows.push(head);
-      for (const [index, p] of blk.fields(preset.data)) {
+      for (const [index, p] of blk.shownFields(preset.data)) {
         if ((blk.hasType && index === blk.firstField) || p.name === blk.enableName) continue;
         const row = this.paramRow(index, p, readField(preset.data, index), () => this.openSheet(index), (v) => this.setField(index, v));
         // The list mixes blocks on and off: each row lights its indicators from its own block.
@@ -1070,7 +1073,7 @@ export class PresetView {
     // Mix and output level read out at the far right, in sight without scrolling; they are set in the list.
     this.paramsHead.append(el("div", "grow"));
     const readouts = HEAD_READOUTS.flatMap(([name, label]) => {
-      const found = blk.fields(preset.data).find(([, p]) => p.name === name);
+      const found = blk.shownFields(preset.data).find(([, p]) => p.name === name);
       return found ? [[label, found[1].format(readField(preset.data, found[0]))]] : [];
     });
     if (readouts.length) {
@@ -1085,7 +1088,7 @@ export class PresetView {
     }
     this.paramsList.classList.toggle("on-block", on);
     // Type and on/off are in the block header.
-    const rows = blk.fields(preset.data)
+    const rows = blk.shownFields(preset.data)
       .filter(([index, p]) => !(blk.hasType && index === blk.firstField) && p.name !== blk.enableName);
     const pedals = new Map(this.assignedModifiers(preset.data).map((t) => [t.paramField, t.modifier.source]));
     this.paramsList.classList.toggle("slider-list", SLIDER_BLOCKS.has(blk.key) && !DESKTOP.matches);

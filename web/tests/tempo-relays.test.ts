@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { LEVELS_FIELD, levelOn, presetLevels, presetRelays, relayText, writeLevel, writeRelay } from "../src/core/levels";
-import { block, lfo, readField, writeField } from "../src/core/params";
+import { BLOCKS, block, lfo, readField, writeField } from "../src/core/params";
 import { presetSelectMessages } from "../src/core/protocol";
 import { PRESET_DATA_LEN } from "../src/core/sysex";
 import { NOVA_FIELD, NOVA_HEADER_FIELD, novaPreset, novaWord, writeNovaPreset } from "../src/core/novadrive";
@@ -145,5 +145,37 @@ describe("slot labels", async () => {
     expect(parseSlotLabel("40-1", 40, 5)).toBeNull();
     expect(parseSlotLabel("03-6", 40, 5)).toBeNull();
     expect(parseSlotLabel("abc", 40, 5)).toBeNull();
+  });
+});
+
+describe("parameters shown per effect type (G-System manual)", () => {
+  const withType = (key: string, typeName: string) => {
+    const blk = block(key);
+    const type = blk.types.findIndex((t) => t.name === typeName);
+    return writeField(new Uint8Array(PRESET_DATA_LEN), blk.firstField, type);
+  };
+  const names = (key: string, typeName: string) =>
+    block(key).shownFields(withType(key, typeName)).slice(1).map(([, p]) => p.name);
+
+  it("lists only the parameters of the selected type", () => {
+    expect(names("mod", "Classic Chorus")).toEqual(["Enable", "Speed", "Tap", "Tempo", "Depth", "HiCut", "Mix", "OutLev"]);
+    expect(names("mod", "Advanced Chorus")).toContain("Cho Dly");
+    expect(names("mod", "Advanced Flanger")).toContain("Fla Dly");
+    expect(names("mod", "Vibrato")).not.toContain("Mix");
+    expect(names("pitch", "Octaver")).toEqual(["Enable", "Dir", "Range", "Mix", "OutLev"]);
+    expect(names("pitch", "Detune")).toEqual(["Enable", "Voice1", "Voice2", "Delay1", "Delay2", "Mix", "OutLev"]);
+    expect(names("comp", "Sustaining")).toEqual(["Comp", "Drive", "Resp", "Gain"]);
+    expect(names("delay", "Single Delay")).not.toContain("Drive");
+    expect(names("delay", "Tape Delay")).toContain("Drive");
+  });
+
+  it("gives Reverse its own delay time slot", () => {
+    const data = withType("delay", "Reverse");
+    const delay = block("delay").shownFields(data).find(([, p]) => p.name === "Delay")!;
+    expect([delay[1].lo, delay[1].hi]).toEqual([50, 800]);
+  });
+
+  it("keeps every type's slots in the stored layout", () => {
+    for (const blk of BLOCKS) for (const t of blk.types) expect(t.params.length).toBeLessThanOrEqual(blk.size);
   });
 });

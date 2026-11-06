@@ -76,8 +76,13 @@ codesign --force --deep -s - "/Applications/G-System Editor.app"   # si macOS la
   (tous les effets, loops, insert, boost et modifiers coupés), car le G-System n'accepte que des presets complets.
 - **Interface** : thème sombre en paysage, conçue pour un téléphone 5" (740×360 dp), polices IBM Plex et Doto
   embarquées (OFL).
+- **Import** (menu ⋮ → « Import banks from a file… ») : prendre des banques d'une sauvegarde `.sqs` / `.syx`, venant de
+  n'importe quel G-System (le SysEx ID n'intervient pas), dans les mêmes banques ou dans la banque affichée, sans
+  remplacer le reste ; les presets importés attendent dans la liste « Store (n) ». « Send to the G-System » (menu d'un
+  preset) et « Send bank to the G-System » (menu d'une banque) écrivent dans le G-System les presets de l'éditeur
+  même non modifiés, pour écraser ceux de l'appareil.
 - **Fichiers** : ouverture des banques Vyzor `.sqs` et des `.syx` ; export `.syx` (téléchargement
-  sur ordinateur, `Documents/G-System/` sur Android). La banque en cours est conservée d'une
+  sur ordinateur ; sur Android, l'écran « Enregistrer sous » du système : dossier au choix, Drive…, sans permission de stockage). La banque en cours est conservée d'une
   session à l'autre.
 - **Lecture du G-System** : « Connect » propose, une fois le G-System identifié, de lire toutes les banques ou la banque affichée. Toutes les banques (READ ALL BANKS, ~2 min 30, la liste se remplit au fur et à mesure)
   ou seulement la banque affichée (menu ⋮ ou vue MIDI, 0,8 s par preset).

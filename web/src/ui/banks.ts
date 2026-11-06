@@ -29,6 +29,8 @@ export interface BanksActions {
   dropBank(from: number, to: number): void;
   /** Copy slots to another G-System's workspace, if another one is known. */
   copyToUnit(slots: number[]): void;
+  /** Write presets to the G-System as they are, modified or not. */
+  sendToUnit(slots: number[]): void;
   /** Whether another G-System is known (to copy to). */
   hasOtherUnit(): boolean;
 }
@@ -511,6 +513,7 @@ export class BanksView {
       { label: "Copy", action: () => { this.clipboard = p; this.refresh(); }, disabled: !p },
       { label: "Paste here", action: () => this.paste(slot), disabled: !this.clipboard },
       { label: "Clear slot", action: () => this.clear(slot), disabled: !p },
+      { label: "Send to the G-System", action: () => this.actions.sendToUnit([slot]), disabled: !p || this.bank.isProtected(slot) },
       ...(this.actions.hasOtherUnit()
         ? [{ label: "Copy to the other G-System…", action: () => this.actions.copyToUnit([slot]), disabled: !p }] : []),
     ];

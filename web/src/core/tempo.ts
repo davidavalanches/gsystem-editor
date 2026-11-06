@@ -45,7 +45,7 @@ const SYNCED: [string, string][] = [["Tempo", "Delay"], ["Tempo1", "Delay1"], ["
 
 /** Delay times and speeds of a block set from its tap time (else the preset tempo) and its Tempo note values. */
 export function syncToTempo(data: Uint8Array, key: string): Uint8Array {
-  const fields = block(key).fields(data);
+  const fields = block(key).shownFields(data);
   const find = (name: string) => fields.find(([, p]) => p.name === name);
   const tap = fields.find(([, p]) => /^Tap/.test(p.name));
   const tapMs = tap ? readField(data, tap[0]) : presetTempoMs(data);

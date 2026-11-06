@@ -14,6 +14,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(GSystemMidiPlugin.class);
+        registerPlugin(GSystemFilesPlugin.class);
         super.onCreate(savedInstanceState);
         // On stage the screen must not go to sleep.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);

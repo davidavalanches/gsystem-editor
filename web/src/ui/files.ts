@@ -1,7 +1,6 @@
 /** Opening and saving files on each platform, and session persistence. */
 
-import { Capacitor } from "@capacitor/core";
-import { Directory, Filesystem } from "@capacitor/filesystem";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 
 export function pickFile(accept: string): Promise<{ name: string; bytes: Uint8Array } | null> {
   return new Promise((resolve) => {
@@ -30,12 +29,20 @@ function fromBase64(text: string): Uint8Array {
   return out;
 }
 
-/** Save a file; returns where it went. On Android: Documents/G-System; elsewhere: a download. */
-export async function saveFile(name: string, bytes: Uint8Array): Promise<string> {
+interface GSystemFilesPlugin {
+  saveAs(options: { name: string; data: string; mime?: string }): Promise<{ cancelled: boolean; name?: string }>;
+}
+
+const NativeFiles = registerPlugin<GSystemFilesPlugin>("GSystemFiles");
+
+/**
+ * Save a file; returns where it went, or null when the user cancelled. On Android, the system's
+ * "Save as" screen (any folder, Drive…, no storage permission needed); elsewhere, a download.
+ */
+export async function saveFile(name: string, bytes: Uint8Array): Promise<string | null> {
   if (Capacitor.isNativePlatform()) {
-    const path = `G-System/${name}`;
-    await Filesystem.writeFile({ path, data: toBase64(bytes), directory: Directory.Documents, recursive: true });
-    return `Documents/${path}`;
+    const result = await NativeFiles.saveAs({ name, data: toBase64(bytes) });
+    return result.cancelled ? null : (result.name ?? name);
   }
   const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/octet-stream" }));
   const a = document.createElement("a");

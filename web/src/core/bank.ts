@@ -18,6 +18,27 @@ export function slotLabel(slot: number): string {
 }
 
 export type Slots = (Preset | null)[];
+
+/** The 200 user slots of a .sqs or .syx file, whichever G-System it was saved from. Loose dumps
+ * without a user number fill the first free slots. */
+export function readBankFile(name: string, bytes: Uint8Array): { slots: Slots; sqs: SqsFile | null } {
+  if (!name.toLowerCase().endsWith(".syx")) {
+    const sqs = new SqsFile(bytes);
+    return { slots: sqs.userPresets(), sqs };
+  }
+  const slots: Slots = new Array(USER_SLOTS).fill(null);
+  const loose: Preset[] = [];
+  for (const p of readSyx(bytes)) {
+    if (p.userSlot !== null && !slots[p.userSlot]) slots[p.userSlot] = p;
+    else loose.push(p);
+  }
+  for (const p of loose) {
+    const free = slots.indexOf(null);
+    if (free < 0) break;
+    slots[free] = p;
+  }
+  return { slots, sqs: null };
+}
 type Changes = Map<number, Preset | null>;
 
 interface Command {
@@ -130,23 +151,8 @@ export class BankStore {
 
   /** Load a .sqs or .syx file. Loose dumps without a user number fill the first free slots. */
   loadFile(name: string, bytes: Uint8Array): void {
-    if (name.toLowerCase().endsWith(".syx")) {
-      const slots: Slots = new Array(USER_SLOTS).fill(null);
-      const loose: Preset[] = [];
-      for (const p of readSyx(bytes)) {
-        if (p.userSlot !== null && !slots[p.userSlot]) slots[p.userSlot] = p;
-        else loose.push(p);
-      }
-      for (const p of loose) {
-        const free = slots.indexOf(null);
-        if (free < 0) break;
-        slots[free] = p;
-      }
-      this.load(slots, name);
-    } else {
-      const sqs = new SqsFile(bytes);
-      this.load(sqs.userPresets(), name, sqs);
-    }
+    const { slots, sqs } = readBankFile(name, bytes);
+    this.load(slots, name, sqs);
   }
 
   markPending(slots: Iterable<number>): void {

@@ -1,11 +1,13 @@
 /** Application shell: navigation rail, views, file actions, MIDI connection and Live wiring. */
 
 import { emptyPreset } from "../core/empty";
-import { BANK_COUNT, BankStore, PRESETS_PER_BANK, slotLabel } from "../core/bank";
+import { describeField, formatField } from "../core/fields";
+import { diffFields } from "../core/params";
+import { BANK_COUNT, BankStore, PRESETS_PER_BANK, readBankFile, slotLabel } from "../core/bank";
 import { GLOBAL_RANGES, MIDI_CHANNEL_PARAM, SYSTEM_BLOCK } from "../core/globals";
 import { GSystemLink } from "../core/protocol";
 import { SqsFile, USER_BANK_KIND, readSyx } from "../core/sqs";
-import { USER_PRESET_BASE, USER_SLOTS, sameBytes, type Preset } from "../core/sysex";
+import { NAME_LEN, USER_PRESET_BASE, USER_SLOTS, sameBytes, type Preset } from "../core/sysex";
 import { midiAccess } from "../midi/transport";
 import { BanksView } from "./banks";
 import { askText, showChecklist, showChoices } from "./dialog";
@@ -19,6 +21,15 @@ import { ICONS, type MenuItem } from "./widgets";
 import { GLOBALS_BASE, PROTECTED_BASE, SESSION_BASE, Units, defaultUnitName, parseSlotLabel, storageKey, type Unit } from "./units";
 
 type ReadMode = "all" | "bank" | "refresh" | "verify" | "revert";
+/** A preset to write into the unit, and how many times it was written. */
+interface WriteItem {
+  slot: number;
+  preset: Preset;
+  tries: number;
+}
+/** Writes of one preset before giving up, and the pause before writing it again. */
+const WRITE_TRIES = 2;
+const RETRY_DELAY_MS = 1000;
 /** Damaged slots used to be kept between sessions; they belong to one unit, so they are dropped. */
 const CORRUPT_KEY = "gsystem-editor.corrupt";
 /** Block 5 parameter of the unit's SysEx ID, which tells units apart. */
@@ -60,6 +71,7 @@ export class App {
       },
       menu: () => this.fileMenu(),
       copyToUnit: (slots) => void this.copyToUnit(slots),
+      sendToUnit: (slots) => this.sendToUnit(slots),
       hasOtherUnit: () => this.units.others().length > 0,
       bankMenu: (b) => this.bankMenu(b),
       dropBank: (from, to) => showChoices(`Bank ${pad2(from)} onto bank ${pad2(to)}`, [
@@ -211,6 +223,7 @@ export class App {
   private fileMenu(): MenuItem[] {
     return [
       { label: "Open a file (.sqs, .syx)…", action: () => void this.open() },
+      { label: "Import banks from a file…", action: () => void this.importFromFile() },
       { label: "Export all banks (.syx)", action: () => void this.exportSyx() },
       { label: "Export all banks (.sqs)…", action: () => void this.exportSqs() },
       { label: "Read this bank from the G-System", action: () => this.startRead("bank"), disabled: !this.link },
@@ -243,6 +256,8 @@ export class App {
       { label: "Swap with bank…", action: on(() => void this.bankOperation("swap")) },
       { label: "Copy to bank…", action: on(() => void this.bankOperation("copy")) },
       { label: "Export bank (.syx)", action: on(() => void this.exportBankSyx(b)) },
+      { label: "Send bank to the G-System", action: on(() => this.sendToUnit(this.bankSlots(b))),
+        disabled: !this.bankSlots(b).some((s) => this.bank.preset(s)) },
       ...(this.units.others().length ? [{ label: "Copy bank to the other G-System…",
         action: on(() => void this.copyToUnit([...Array(PRESETS_PER_BANK).keys()].map((i) => b * PRESETS_PER_BANK + i))) }] : []),
       { label: "Clear bank", action: on(() => this.clearBank(b)),
@@ -251,6 +266,93 @@ export class App {
         ? { label: "Allow writing", action: on(() => this.protectBank(b, false)) }
         : { label: "Protect from writing", action: on(() => this.protectBank(b, true)) },
     ];
+  }
+
+  private bankSlots(b: number): number[] {
+    return [...Array(PRESETS_PER_BANK).keys()].map((i) => b * PRESETS_PER_BANK + i);
+  }
+
+  /**
+   * Writes presets to the G-System as they are in the editor, modified or not (e.g. just imported
+   * from a backup, to overwrite the unit's). Without a G-System connected they join the Store list.
+   */
+  private sendToUnit(slots: number[]): void {
+    const changes = new Map<number, Preset | null>();
+    for (const s of slots) {
+      const p = this.bank.preset(s);
+      if (p && !this.bank.isProtected(s)) changes.set(s, p);
+    }
+    const skipped = slots.filter((s) => this.bank.preset(s) && this.bank.isProtected(s));
+    if (!changes.size) {
+      alert(skipped.length ? "This bank is protected from writing: nothing is sent." : "Nothing to send: the slots are empty.");
+      return;
+    }
+    const list = [...changes].map(([s, p]) => `${slotLabel(s)}  ${p!.name}`);
+    if (this.link && !confirm(`Write ${changes.size === 1 ? "this preset" : "these presets"} into “${this.units.current.name}”, `
+      + `replacing what it holds there?\n\n${list.join("\n")}`)) return;
+    this.writeToUnit(changes);
+  }
+
+  /**
+   * Takes banks from a .sqs or .syx file into the G-System shown, at the same banks or into the bank
+   * shown. The file may come from any G-System (the SysEx ID does not matter). The presets replace
+   * the editor's (undoable) and join the Store list.
+   */
+  private async importFromFile(): Promise<void> {
+    const file = await pickFile(".sqs,.SQS,.syx,.SYX");
+    if (!file) return;
+    let slots: (Preset | null)[];
+    try {
+      slots = readBankFile(file.name, file.bytes).slots;
+    } catch (e) {
+      alert(`Cannot open file: ${(e as Error).message}`);
+      return;
+    }
+    const banks = [...Array(BANK_COUNT).keys()].filter((b) => this.bankSlots(b).some((s) => slots[s]));
+    if (!banks.length) {
+      alert(`${file.name} holds no user preset.`);
+      return;
+    }
+    const shown = this.banks.bankIndex;
+    const apply = (picked: number[], into: number | null) => {
+      const changes = new Map<number, Preset | null>();
+      for (const b of picked) {
+        const to = into ?? b;
+        this.bankSlots(b).forEach((s, i) => {
+          const p = slots[s];
+          const dest = to * PRESETS_PER_BANK + i;
+          if (p) changes.set(dest, p.withNumber(USER_PRESET_BASE + dest));
+        });
+      }
+      for (const [s, p] of [...changes]) if (sameBytes(this.bank.preset(s)?.data, p?.data)) changes.delete(s);
+      const protectedSlots = [...changes.keys()].filter((s) => this.bank.isProtected(s));
+      const replaced = [...changes.keys()].filter((s) => this.bank.preset(s)).map((s) => `${slotLabel(s)}  ${this.bank.preset(s)!.name}`);
+      if (!changes.size) {
+        this.notify("The editor already holds these presets: use “Send bank to the G-System” to write them.");
+        return;
+      }
+      if (replaced.length && !confirm(`${replaced.length} preset(s) of “${this.units.current.name}” will be replaced in the editor `
+        + `(undoable), then wait in the Store list:\n\n${replaced.slice(0, 15).join("\n")}`
+        + (replaced.length > 15 ? `\n… and ${replaced.length - 15} more` : ""))) return;
+      this.bank.setSlots(changes, `Import from ${file.name}`);
+      this.bank.markPending([...changes.keys()].filter((s) => !this.bank.isProtected(s)));
+      this.banks.showBank(into ?? picked[0]);
+      this.notify(`${changes.size} preset(s) imported from ${file.name}: tap “Store (n)” to write them to the G-System`
+        + (protectedSlots.length ? ` (${protectedSlots.length} in protected banks stay in the editor only)` : ""), protectedSlots.length > 0);
+    };
+    showChecklist(`Import from ${file.name}`,
+      `Choose the banks to take into “${this.units.current.name}”. The file may come from another G-System.`,
+      banks.map((b) => ({
+        id: b,
+        label: `${pad2(b)}  ${this.bankSlots(b).map((s) => slots[s]?.name ?? "—").join(" · ")}`,
+      })),
+      [
+        { label: `Into bank ${pad2(shown)}`, run: (ids) => {
+          if (ids.length !== 1) alert(`Check a single bank to import it into bank ${pad2(shown)}.`);
+          else apply(ids, shown);
+        } },
+        { label: "Into the same banks", primary: true, run: (ids) => apply(ids, null) },
+      ]);
   }
 
   /** Empties the bank's slots in the editor (undoable); they join the list to store. */
@@ -285,9 +387,10 @@ export class App {
     const slots = [...Array(PRESETS_PER_BANK).keys()].map((i) => b * PRESETS_PER_BANK + i);
     try {
       const where = await saveFile(this.exportName("syx", `-bank-${pad2(b)}`), this.bank.exportSyx(slots));
+      if (!where) return;
       this.notify(`Bank ${pad2(b)} exported: ${where}`);
     } catch (e) {
-      alert(`Export impossible : ${(e as Error).message}`);
+      alert(`Export failed: ${(e as Error).message}`);
     }
   }
 
@@ -477,10 +580,11 @@ export class App {
   private async exportSyx(): Promise<void> {
     try {
       const where = await saveFile(this.exportName("syx"), this.bank.exportSyx());
+      if (!where) return;
       this.bank.undo.setClean();
       this.notify(`Bank exported: ${where}`);
     } catch (e) {
-      alert(`Export impossible : ${(e as Error).message}`);
+      alert(`Export failed: ${(e as Error).message}`);
     }
   }
 
@@ -505,11 +609,12 @@ export class App {
     }
     try {
       const where = await saveFile(this.exportName("sqs"), this.bank.exportSqs()!);
+      if (!where) return;
       this.bank.undo.setClean();
       this.notify(`Banks exported: ${where}`);
       this.scheduleSave();
     } catch (e) {
-      alert(`Export impossible : ${(e as Error).message}`);
+      alert(`Export failed: ${(e as Error).message}`);
     }
   }
 
@@ -781,9 +886,9 @@ export class App {
     this.link.selectPreset(slot, channel !== undefined && channel >= 1 && channel <= 16 ? channel : 1);
   }
 
-  private writeQueue: { slot: number; preset: Preset }[] = [];
+  private writeQueue: WriteItem[] = [];
   private writeTotal = 0;
-  private verifying: { slot: number; preset: Preset } | null = null;
+  private verifying: WriteItem | null = null;
 
   /** Write presets into the unit one at a time, each read back before the next. */
   private writeToUnit(changes: Map<number, Preset | null>): void {
@@ -802,11 +907,11 @@ export class App {
       return;
     }
     const notes: string[] = [];
-    const todo: { slot: number; preset: Preset }[] = [];
+    const todo: WriteItem[] = [];
     for (const [slot, preset] of [...changes].sort((a, b) => a[0] - b[0])) {
       if (this.bank.isProtected(slot)) notes.push(`${slotLabel(slot)}: protected bank, not written to the G-System`);
       else if (!preset) notes.push(`${slotLabel(slot)}: the G-System cannot empty a slot, it keeps its previous preset`);
-      else todo.push({ slot, preset });
+      else todo.push({ slot, preset, tries: 0 });
     }
     // Nothing can be written for an emptied slot: it leaves the list.
     this.bank.dropPending([...changes].filter(([, preset]) => !preset).map(([slot]) => slot));
@@ -823,7 +928,62 @@ export class App {
     this.notify(`Writing “${item.preset.name}” to the G-System (${slotLabel(item.slot)})`
       + (this.writeTotal > 1 ? ` — ${done + 1}/${this.writeTotal}` : "") + "…");
     this.verifying = item;
+    item.tries++;
     this.link!.store(item.slot, item.preset, () => this.startRead("verify"));
+  }
+
+  /** The preset was read back as written: next one, or the end of the writes. */
+  private writeDone(item: WriteItem): void {
+    this.writeQueue.shift();
+    this.bank.clearPending(item.slot);
+    if (this.writeQueue.length) {
+      this.nextWrite();
+      return;
+    }
+    this.link?.editorModeOff();
+    this.notify(this.writeTotal > 1 ? `${this.writeTotal} presets written to the G-System (verified)`
+      : `“${item.preset.name}” stored in the G-System (${slotLabel(item.slot)}, verified)`);
+  }
+
+  /** Still different after the retries: say what differs, and let the G-System's version be kept. */
+  private writeFailed(item: WriteItem, got: Preset | undefined, damaged: boolean): void {
+    const left = this.writeQueue.length - 1;
+    const where = `“${item.preset.name}” in ${slotLabel(item.slot)}`;
+    const tail = (left ? `\n${left} other write(s) cancelled.` : "") + "\nThe presets stay stored in the editor and in the Store list.";
+    if (!got) {
+      this.writeQueue = [];
+      this.link?.editorModeOff();
+      alert(`The G-System did not confirm storing ${where}`
+        + (damaged ? ": the G-System reports the slot's memory as damaged."
+          : ": the slot does not answer (G-System locked up? Switch it off and on again).") + tail);
+      return;
+    }
+    const fields = diffFields(item.preset.data, got.data);
+    const nameFlags = item.preset.data.slice(0, NAME_LEN).some((b, i) => b !== got.data[i]);
+    let detail: string;
+    if (got.name !== item.preset.name && fields.length > 20) {
+      // Nothing of the new preset arrived: the unit ignored the write.
+      detail = `the slot still holds “${got.name}”: the G-System ignored the write. Check that the SysEx ID in the MIDI view `
+        + "matches the G-System's (MIDI menu) and that no other program is using its MIDI port, then try again.";
+    } else {
+      const lines = fields.slice(0, 8).map(([f]) => {
+        const info = describeField(got.data, f);
+        return `• ${info.group} · ${info.name}: ${formatField(item.preset.data, f)} → ${formatField(got.data, f)}`;
+      });
+      if (fields.length > 8) lines.push(`• … and ${fields.length - 8} more`);
+      if (nameFlags) lines.unshift(got.name === item.preset.name ? "• Name: internal flags" : `• Name: “${item.preset.name}” → “${got.name}”`);
+      detail = `the G-System changed ${lines.length === 1 ? "this value" : "these values"} while storing it:\n${lines.join("\n")}`;
+    }
+    const keep = confirm(`The preset read back from ${where} is different from the one sent, after ${item.tries} tries: ${detail}`
+      + "\n\nOK keeps the G-System's version in the editor (undoable) and goes on; Cancel stops here."
+      + tail.replace("\nThe presets", "\nOtherwise the presets"));
+    if (!keep) {
+      this.writeQueue = [];
+      this.link?.editorModeOff();
+      return;
+    }
+    this.bank.setSlots(new Map([[item.slot, got]]), "Keep the G-System's version");
+    this.writeDone(item);
   }
 
   private startRead(mode: ReadMode): void {
@@ -858,25 +1018,14 @@ export class App {
       this.verifying = null;
       const got = presets[0];
       if (got && sameBytes(got.data, expected.preset.data)) {
-        this.writeQueue.shift();
-        this.bank.clearPending(expected.slot);
-        if (this.writeQueue.length) {
-          this.nextWrite();
-        } else {
-          this.link?.editorModeOff();
-          this.notify(this.writeTotal > 1 ? `${this.writeTotal} presets written to the G-System (verified)`
-            : `“${expected.preset.name}” stored in the G-System (${slotLabel(expected.slot)}, verified)`);
-        }
+        this.writeDone(expected);
+      } else if (got && expected.tries < WRITE_TRIES && this.link) {
+        // A write may be missed (unit busy, MIDI port shared): write it once more. Never for a slot
+        // that does not answer or is reported damaged: writing there again may lock the unit up.
+        this.notify(`“${expected.preset.name}” (${slotLabel(expected.slot)}) read back different, writing it again…`);
+        setTimeout(() => this.link && this.nextWrite(), RETRY_DELAY_MS);
       } else {
-        const left = this.writeQueue.length - 1;
-        this.writeQueue = [];
-        this.link?.editorModeOff();
-        alert(`The G-System did not confirm storing “${expected.preset.name}” in ${slotLabel(expected.slot)}`
-          + (got ? ": the preset read back is different."
-            : corrupt.length ? ": the G-System reports the slot's memory as damaged."
-              : ": the slot does not answer (G-System locked up? Switch it off and on again).")
-          + (left ? `\n${left} other write(s) cancelled.` : "")
-          + "\nThe presets stay stored in the editor and in the Store list.");
+        this.writeFailed(expected, got, corrupt.length > 0);
       }
       return;
     }

@@ -175,11 +175,39 @@ const EQ = [P("Gain1", -12, 12, DB), P("Freq1", 0, 60, freq), P("Width1", 0, 39,
 
 export interface EffectType {
   name: string;
-  /** Parameters 1.. (parameter 0 is the type itself). */
+  /** Parameters 1.. (parameter 0 is the type itself), as stored: the slots of the whole family. */
   params: readonly Param[];
+  /** Indices into `params` of the ones this type uses, in display order (all when absent). */
+  shown?: readonly number[];
 }
 
 const family = (names: string[], params: readonly Param[]): EffectType[] => names.map((name) => ({ name, params }));
+
+/**
+ * A type that uses only some of its family's slots, as listed in the G-System manual and checked
+ * against ~800 presets (unit dumps and Vyzor banks: a slot a type uses takes varied values, an unused
+ * one keeps its default). Where the two disagree the presets win: Touch/Auto Res have no Hicut, Auto Res
+ * no Style, Touch/Auto Formant no Sweep, and the Pitch Shifter has Level1/2. A name may
+ * appear twice in a family ("Delay"): "Delay#2" is the second one. "Name=Label" shows the slot
+ * under the manual's name for this type.
+ */
+function typed(name: string, params: readonly Param[], names: string[]): EffectType {
+  const shown: number[] = [];
+  const labelled = params.slice();
+  for (const spec of names) {
+    const [ref, label] = spec.split("=");
+    const [pname, nth] = ref.split("#");
+    const matches = params.flatMap((p, i) => (p.name === pname ? [i] : []));
+    const index = matches[(Number(nth) || 1) - 1];
+    if (index === undefined) throw new Error(`${name}: no parameter ${ref}`);
+    if (label) {
+      const p = params[index];
+      labelled[index] = new Param(label, p.lo, p.hi, p.choices, p.fmt, p.choicesBase);
+    }
+    shown.push(index);
+  }
+  return { name, params: labelled, shown };
+}
 
 export class Block {
   constructor(
@@ -214,8 +242,17 @@ export class Block {
     return [typeParam, ...(this.effectType(data)?.params ?? [])];
   }
 
+  /** Every stored slot of the current type's family, in slot order. */
   fields(data: Uint8Array): [number, Param][] {
     return this.paramList(data).map((p, i) => [this.firstField + i, p]);
+  }
+
+  /** The type and the parameters the current type uses, as the unit shows them. */
+  shownFields(data: Uint8Array): [number, Param][] {
+    const all = this.fields(data);
+    const shown = this.effectType(data)?.shown;
+    if (!shown) return all;
+    return [all[0], ...shown.map((i) => all[i + 1])];
   }
 
   enableField(data: Uint8Array): number | null {
@@ -230,28 +267,67 @@ export class Block {
   }
 }
 
+/** The delay parameters every type has (manual: "Common parameters"), then the type's own. Reverse
+ * uses its own delay time slot (50-800 ms). */
+function delayParams(extra: string[] = [], delay = "Delay"): string[] {
+  return ["Enable", delay, "TapTime", "Tempo", "Fb", "Fbhcut", "Fblcut", ...extra, "Mix", "OutLev"];
+}
+
 export const BLOCKS: readonly Block[] = [
-  new Block("comp", "Compressor", 3, 9, family(["Advanced", "Sustaining", "Percussive"], COMP), [], "Comp"),
+  new Block("comp", "Compressor", 3, 9, [
+    typed("Advanced", COMP, ["Comp", "Thres", "Ratio", "Attack", "Releas", "Gain"]),
+    typed("Sustaining", COMP, ["Comp", "Drive", "Resp", "Gain"]),
+    typed("Percussive", COMP, ["Comp", "Drive", "Resp", "Gain"]),
+  ], [], "Comp"),
   new Block("filter", "Filter", 13, 15, [
-    ...family(["Resonance Filter", "Touch Res Filter", "Auto Res Filter"], FILTER_RES),
-    ...family(["Wah wah", "Touch Wah", "Auto Wah"], FILTER_WAH),
-    ...family(["Formant", "Touch Formant", "Auto Formant"], FILTER_FORMANT),
+    typed("Resonance Filter", FILTER_RES, ["Enable", "Style", "Hicut", "Resnce", "OutLev"]),
+    typed("Touch Res Filter", FILTER_RES, ["Enable", "Style", "Resnce", "Sense", "Resp", "Fmax", "OutLev"]),
+    typed("Auto Res Filter", FILTER_RES, ["Enable", "Resnce", "Speed", "Tap", "Tempo", "Shape", "Fmax", "OutLev"]),
+    typed("Wah wah", FILTER_WAH, ["Enable", "Sweep", "Range", "AutoOn", "OutLev"]),
+    typed("Touch Wah", FILTER_WAH, ["Enable", "Sense", "Resp", "Range", "OutLev"]),
+    typed("Auto Wah", FILTER_WAH, ["Enable", "Speed", "Tap", "Tempo", "Shape", "Range", "OutLev"]),
+    typed("Formant", FILTER_FORMANT, ["Enable", "Low", "Mid", "High", "Sweep", "Bright", "Resnce", "OutLev"]),
+    typed("Touch Formant", FILTER_FORMANT,
+      ["Enable", "Low", "Mid", "High", "Bright", "Resnce", "Sense", "Resp", "OutLev"]),
+    typed("Auto Formant", FILTER_FORMANT,
+      ["Enable", "Low", "Mid", "High", "Bright", "Resnce", "Speed", "Tap", "Tempo", "Shape", "OutLev"]),
   ]),
   new Block("mod", "Mod", 29, 14, [
-    ...family(["Classic Chorus", "Advanced Chorus", "Classic Flanger", "Advanced Flanger", "Vibrato"], MOD_CHORUS),
+    typed("Classic Chorus", MOD_CHORUS, ["Enable", "Speed", "Tap", "Tempo", "Depth", "HiCut", "Mix", "OutLev"]),
+    typed("Advanced Chorus", MOD_CHORUS,
+      ["Enable", "Speed", "Tap", "Tempo", "Depth", "HiCut", "Cho Dly", "Ratio", "PhaRev", "Mix", "OutLev"]),
+    typed("Classic Flanger", MOD_CHORUS,
+      ["Enable", "Speed", "Tap", "Tempo", "Depth", "HiCut", "FeedB", "FB Cut", "Mix", "OutLev"]),
+    typed("Advanced Flanger", MOD_CHORUS, ["Enable", "Speed", "Tap", "Tempo", "Depth", "HiCut", "FeedB", "FB Cut",
+      "Cho Dly=Fla Dly", "PhaRev", "Ratio", "Mix", "OutLev"]),
+    typed("Vibrato", MOD_CHORUS, ["Enable", "Speed", "Tap", "Tempo", "Depth", "HiCut", "OutLev"]),
     ...family(["Vintage Phaser", "Smooth Phaser"], MOD_PHASER),
-    ...family(["Tremolo", "Panner"], MOD_TREMOLO),
+    typed("Tremolo", MOD_TREMOLO, ["Enable", "Speed", "Tap", "Tempo", "Depth", "Type", "Width", "Hi Cut", "OutLev"]),
+    typed("Panner", MOD_TREMOLO, ["Enable", "Speed", "Tap", "Tempo", "Depth", "OutLev"]),
     ...family(["Vintage Univibe", "Modern Univibe"], MOD_UNIVIBE),
   ]),
   new Block("pitch", "Pitch", 44, 19, [
-    ...family(["Pitch Shifter", "Octaver", "Whammy", "Detune"], PITCH_SHIFTER),
-    ...family(["Intelligent"], PITCH_INTELLIGENT),
+    typed("Pitch Shifter", PITCH_SHIFTER,
+      ["Enable", "Voice1", "Voice2", "Pan1", "Pan2", "Delay1", "Delay2", "Fb1", "Fb2", "Level1", "Level2", "Mix", "OutLev"]),
+    typed("Octaver", PITCH_SHIFTER, ["Enable", "Dir", "Range", "Mix", "OutLev"]),
+    typed("Whammy", PITCH_SHIFTER, ["Enable", "Pitch", "Dir", "Range", "OutLev"]),
+    typed("Detune", PITCH_SHIFTER, ["Enable", "VoiceL=Voice1", "VoiceR=Voice2", "Delay1", "Delay2", "Mix", "OutLev"]),
+    typed("Intelligent", PITCH_INTELLIGENT, ["Enable", "Key", "Scale", "Voice1", "Voice2", "Level1", "Level2",
+      "Pan1", "Pan2", "Delay1", "Delay2", "Mode", "Mix", "OutLev"]),
     ...family(["Doubler"], PITCH_DOUBLER),
   ]),
   new Block("reverb", "Reverb", 64, 15, family(["Spring", "Hall", "Room", "Plate"], REVERB)),
   new Block("gate", "Noise gate", 80, 5, [], GATE, "NG"),
-  new Block("delay", "Delay", 86, 27, family(
-    ["Single Delay", "Tape Delay", "Reverse", "Lo-Fi", "Ping Pong", "Dynamic Delay", "Dual Delay"], DELAY)),
+  new Block("delay", "Delay", 86, 27, [
+    typed("Single Delay", DELAY, delayParams()),
+    typed("Tape Delay", DELAY, delayParams(["Drive"])),
+    typed("Reverse", DELAY, delayParams([], "Delay#2")),
+    typed("Lo-Fi", DELAY, delayParams(["Drive"])),
+    typed("Ping Pong", DELAY, delayParams(["Width"])),
+    typed("Dynamic Delay", DELAY, delayParams(["Offset", "Sense", "Damp", "Rel"])),
+    typed("Dual Delay", DELAY, ["Enable", "Delay1", "Delay2", "TapTime", "Tempo1", "Tempo2", "Fb1", "Fb2",
+      "Fbhcut", "Fblcut", "Pan1", "Pan2", "Mix", "OutLev"]),
+  ]),
   new Block("eq", "EQ", 114, 10, [], EQ, "EQ"),
 ];
 
