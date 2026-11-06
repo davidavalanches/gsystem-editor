@@ -26,6 +26,7 @@ export const DEFAULT_SYSEX_ID = 1;
 export const SESSION_BASE = "gsystem-editor.session";
 export const PROTECTED_BASE = "gsystem-editor.protected-banks";
 export const GLOBALS_BASE = "gsystem-globals";
+export const FAVORITES_BASE = "gsystem-favorites";
 
 export const storageKey = (base: string, unit: Unit) => `${base}.${unit.key}`;
 export const defaultUnitName = (sysexId: number) => `G-System (ID ${sysexId})`;
@@ -35,6 +36,21 @@ export class Units {
 
   constructor() {
     this.registry = Units.load();
+    this.shareLegacyFavorites();
+  }
+
+  /** Favorites kept for all units before each had its own: every known unit gets a copy. */
+  private shareLegacyFavorites(): void {
+    try {
+      const shared = localStorage.getItem(FAVORITES_BASE);
+      if (shared === null) return;
+      for (const unit of this.registry.units) {
+        if (localStorage.getItem(storageKey(FAVORITES_BASE, unit)) === null) localStorage.setItem(storageKey(FAVORITES_BASE, unit), shared);
+      }
+      localStorage.removeItem(FAVORITES_BASE);
+    } catch {
+      // Left where they are, tried again next time.
+    }
   }
 
   get list(): readonly Unit[] {

@@ -5,7 +5,7 @@ import { BLOCKS, block, lfo, readField, writeField } from "../src/core/params";
 import { presetSelectMessages } from "../src/core/protocol";
 import { PRESET_DATA_LEN } from "../src/core/sysex";
 import { NOVA_FIELD, NOVA_HEADER_FIELD, novaPreset, novaWord, writeNovaPreset } from "../src/core/novadrive";
-import { noteQuarters, syncToTempo, writeTempoMs } from "../src/core/tempo";
+import { noteQuarters, presetTempoMs, syncToTempo, writeTempoMs } from "../src/core/tempo";
 
 const BLANK = new Uint8Array(PRESET_DATA_LEN);
 const signed24 = (raw: number) => (raw << 8) >> 8;
@@ -81,6 +81,11 @@ describe("tempo sync", () => {
     let data = writeField(BLANK, field(BLANK, "delay", "Tempo"), note(BLANK, "delay", "Tempo", "1/4"));
     data = writeTempoMs(data, 600);
     expect(readField(data, field(data, "delay", "Delay"))).toBe(600);
+  });
+
+  it("stops the preset tempo at 300 BPM (200 ms), as the unit does", () => {
+    const data = writeTempoMs(BLANK, 120);
+    expect(presetTempoMs(data)).toBe(200);
   });
 });
 

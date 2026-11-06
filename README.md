@@ -146,6 +146,10 @@ d'abord menu Pomme → À propos de ce Mac → Plus d'infos → Rapport système
   l'espace de l'autre, où il attend dans sa liste Store. Les presets en attente d'un G-System ne partent jamais vers un autre.
 - **Vue MIDI** : connexion, lectures, SysEx ID, et les réglages du menu MIDI du G-System (canal, Program Change
   In/Out, SysEx ID, MIDI Clock, CC des encodeurs et du tap), modifiables comme dans les réglages.
+- **Réglages globaux du G-System** : vue **Settings** (niveaux, utilitaires, pédales, accordeur), vue **MIDI**
+  (réglages MIDI) et vue **Switches** (le pédalier dessiné comme sur le G-System, 3 rangées de 6 switches avec
+  leur fonction ; toucher un switch pour la changer). Lus à l'ouverture de la vue, modifiables hors connexion,
+  écrits par « Send » puis relus pour vérifier. Les favoris d'effets (8 par bloc) sont propres à chaque G-System.
 - **Live** : chaque modification part dans la mémoire de travail du G-System (rien n'est stocké),
   les switches du pédalier sont reflétés dans l'éditeur, et changer de preset au pied fait suivre
   l'éditeur (avec relecture du preset).

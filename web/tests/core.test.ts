@@ -382,3 +382,18 @@ describe("MIDI port pairing", () => {
     expect(portKey("MIDIIN2 (G-System)")).not.toBe(portKey("G-System"));
   });
 });
+
+describe("preset recall channel", () => {
+  it("learns the unit's MIDI channel from its own preset change", () => {
+    const transport: Transport = { onMessage: null, onLost: null, send: () => {}, close: () => {} };
+    const link = new GSystemLink(transport);
+    let slot = -1;
+    link.onPresetSelected = (s) => (slot = s);
+    expect(link.unitChannel).toBeNull();
+    transport.onMessage!(new Uint8Array([0xb2, 0x00, 0x02]));
+    transport.onMessage!(new Uint8Array([0xc2, 0x05]));
+    expect(slot).toBe(105);
+    expect(link.unitChannel).toBe(3);
+    link.close();
+  });
+});

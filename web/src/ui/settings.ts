@@ -1,5 +1,6 @@
 /**
- * Settings view: the unit's global settings (levels, utility, pedals, MIDI, tuner).
+ * Settings view: the unit's global settings (levels, utility, pedals, tuner). The MIDI ones are shown
+ * in the MIDI view, the footswitches in their own view (a drawing of the pedalboard).
  *
  * Changes are not sent one by one: they wait, marked as modified, until "Envoyer"
  * writes them to the G-System, which is then read again to check each one. They can
@@ -9,7 +10,7 @@
 import { GLOBAL_GROUPS, GLOBAL_PARAMS, formatGlobal, globalKey, globalRaw, globalValue, type GlobalGroup, type GlobalParam } from "../core/globals";
 import {
   FIXED_SWITCHES, FUNCTIONS, STYLES, SWITCH_BANKS, SWITCH_BLOCK, SWITCH_COUNT, SWITCH_FIRST, decodeSwitch, encodeSwitch, switchKind,
-  withFunction, type SwitchSetting,
+  switchFace, withFunction, type SwitchSetting,
 } from "../core/switches";
 import { el } from "./dom";
 
@@ -30,26 +31,42 @@ function loadCache(key: string): Cache | null {
   }
 }
 
+/** The footswitches as on the unit (manual, "Switch Numbers"): three rows of six, the display under the first. */
+const PEDALBOARD_ROWS = [[0, 1, 2, 3, 4, 5], [6, 7, 8, 9, 10, 11], [12, 13, 14, 15, 16, 17]];
+
+/** A view of global settings: its own header (Cancel, Re-read, Send), note and body. */
+interface Page {
+  el: HTMLElement;
+  body: HTMLElement;
+  note: HTMLElement;
+  read: HTMLButtonElement;
+  buttons: HTMLButtonElement[];
+  /** What the note calls these settings. */
+  what: string;
+}
+
+const SEND_TITLE = "Write the modified settings to the G-System, then read them back to check";
+const CANCEL_TITLE = "Discard the changes and go back to the G-System's values";
+
 export class SettingsView {
-  readonly el = el("section", "view");
+  /** The settings view and the footswitches' view, by view key. */
+  readonly views = new Map<string, HTMLElement>();
+  private readonly pages: Page[] = [];
   /** Raw values read from the unit, by globalKey. */
   private readonly raw = new Map<string, number>();
   /** Changes not yet sent to the unit, by globalKey. */
   private readonly pending = new Map<string, number>();
   /** Changes sent and awaiting the read-back that confirms them. */
   private sent: Map<string, number> | null = null;
-  private readonly sendButton = el("button", "pill primary");
-  private readonly cancelButton = el("button", "pill", "Cancel");
-  /** Send and Cancel buttons of the cards shown in other views (the MIDI view's). */
-  private readonly sendButtons: HTMLButtonElement[] = [this.sendButton];
-  private readonly cancelButtons: HTMLButtonElement[] = [this.cancelButton];
+  /** Send and Cancel buttons of every view, and of the cards shown in other views (the MIDI view's). */
+  private readonly sendButtons: HTMLButtonElement[] = [];
+  private readonly cancelButtons: HTMLButtonElement[] = [];
   /** How to redraw each setting, in every card that shows it. */
   private readonly rows = new Map<string, (() => void)[]>();
-  private readonly readButton = el("button", "pill", "Re-read");
-  private readonly note = el("p", "settings-note");
-  private readonly body = el("div", "settings-body");
-  /** Shown instead of the cards until the settings have been read once. */
-  private readonly empty = el("div", "settings-empty");
+  private selectedSwitch = 0;
+  private readonly switchRows: HTMLElement[] = [];
+  private readonly switchTiles: HTMLButtonElement[] = [];
+  private readonly switchLcd = el("div", "pedalboard-lcd");
   private connected = false;
   /** When the values shown were read, if they come from the cache. */
   private readAt: string | null = null;
@@ -62,33 +79,111 @@ export class SettingsView {
   onNotice: ((text: string) => void) | null = null;
 
   constructor() {
-    this.readButton.type = "button";
-    this.readButton.addEventListener("click", () => this.onRead?.());
-    this.sendButton.type = "button";
-    this.sendButton.title = "Write the modified settings to the G-System, then read them back to check";
-    this.sendButton.addEventListener("click", () => this.send());
-    this.cancelButton.type = "button";
-    this.cancelButton.title = "Discard the changes and go back to the G-System's values";
-    this.cancelButton.addEventListener("click", () => this.cancel());
+    // The MIDI settings are in the MIDI view (externalCard).
+    this.views.set("settings", this.page("G-System settings", "The global settings of the G-System",
+      GLOBAL_GROUPS.filter((g) => g.title !== "MIDI").map((g) => this.groupCard(g)), "settings-body"));
+    this.views.set("switches", this.buildSwitchesView());
+    this.setConnected(false);
+  }
+
+  /** A view with its header, its note, the content, and what shows until the settings are read. */
+  private page(title: string, what: string, content: HTMLElement[], bodyClass = "settings-body single-body"): HTMLElement {
+    const button = (label: string, cls: string, tip: string, action: () => void) => {
+      const b = el("button", cls, label);
+      b.type = "button";
+      b.title = tip;
+      b.addEventListener("click", action);
+      return b;
+    };
+    const cancel = button("Cancel", "pill", CANCEL_TITLE, () => this.cancel());
+    const read = button("Re-read", "pill", "Read the G-System's settings again", () => this.onRead?.());
+    const send = button("Send", "pill primary", SEND_TITLE, () => this.send());
+    this.cancelButtons.push(cancel);
+    this.sendButtons.push(send);
     const header = el("header", "header");
-    header.append(el("div", "grow header-title", "G-System settings"), this.cancelButton, this.readButton, this.sendButton);
+    header.append(el("div", "grow header-title", title), cancel, read, send);
+    const empty = el("div", "settings-empty");
+    empty.append(...this.emptyContent(`${title} not read yet`, `${what} are read from the G‑System.`));
+    const note = el("p", "settings-note");
+    const body = el("div", bodyClass);
+    body.append(note, empty, ...content);
+    const view = el("section", "view");
+    view.append(header, body);
+    this.pages.push({ el: view, body, note, read, buttons: [cancel, read, send], what });
+    return view;
+  }
+
+  private emptyContent(title: string, text: string): HTMLElement[] {
     const connect = el("button", "pill primary", "Connect the G-System");
     connect.type = "button";
     connect.addEventListener("click", () => this.onConnect?.());
-    this.empty.append(el("h2", "", "Settings not read yet"),
-      el("p", "", "The global settings (levels, pedals, MIDI, switches) are read from the G‑System. "
-        + "Once read, they stay shown offline and you can prepare changes to them."),
-      connect);
-    const body = this.body;
-    body.append(this.note, this.empty);
-    for (const group of GLOBAL_GROUPS) body.append(this.groupCard(group));
-    const switches = el("div", "card settings-card switches-card");
-    switches.append(el("h2", "", "Switches"),
-      el("p", "", "Function of each footswitch on the unit. EDIT, UP and DOWN are fixed."));
-    for (let n = 0; n < SWITCH_COUNT; n++) switches.append(this.switchRow(n));
-    body.append(switches);
-    this.el.append(header, body);
-    this.setConnected(false);
+    return [el("h2", "", title), el("p", "", `${text} Once read, they stay shown offline and you can prepare changes to them.`), connect];
+  }
+
+  /** Footswitches: the pedalboard as on the unit; the switch picked on it is edited below. */
+  private buildSwitchesView(): HTMLElement {
+    const board = el("div", "pedalboard");
+    board.setAttribute("role", "radiogroup");
+    board.setAttribute("aria-label", "Footswitches, as on the G-System");
+    PEDALBOARD_ROWS.forEach((row, r) => {
+      const line = el("div", "pedalboard-row");
+      for (const n of row) line.append(this.switchTile(n));
+      board.append(line);
+      if (r === 0) board.append(this.switchLcd);
+    });
+    const editor = el("div", "card settings-card switch-editor");
+    for (let n = 0; n < SWITCH_COUNT; n++) {
+      const row = this.switchRow(n);
+      this.switchRows.push(row);
+      editor.append(row);
+    }
+    editor.append(el("p", "", "Pick a switch on the pedalboard. EDIT, UP and DOWN cannot be reassigned."));
+    const view = this.page("Switches", "The footswitch functions of the G-System", [board, editor]);
+    this.selectSwitch(this.selectedSwitch);
+    return view;
+  }
+
+  /** One footswitch of the drawing: its function above, the switch with its number, the details below. */
+  private switchTile(n: number): HTMLButtonElement {
+    const key = globalKey(SWITCH_BLOCK, SWITCH_FIRST + n);
+    const fixed = FIXED_SWITCHES.get(n);
+    const tile = el("button", fixed ? "pedal fixed" : "pedal");
+    tile.type = "button";
+    tile.setAttribute("role", "radio");
+    const name = el("span", "pedal-name");
+    const detail = el("span", "pedal-detail");
+    const knob = el("span", "footswitch");
+    knob.append(el("span", "pedal-number", String(n + 1)));
+    tile.append(name, knob, detail);
+    tile.addEventListener("click", () => this.selectSwitch(n));
+    this.switchTiles.push(tile);
+    const draw = () => {
+      const raw = this.value(key);
+      const face = fixed ? { name: fixed, detail: "fixed" } : raw === undefined ? { name: "?", detail: "" } : switchFace(decodeSwitch(raw));
+      name.textContent = face.name;
+      detail.textContent = face.detail;
+      tile.classList.toggle("modified", this.pending.has(key));
+      tile.setAttribute("aria-label", `Switch #${n + 1}: ${face.name}${face.detail ? ` (${face.detail})` : ""}`);
+      if (n === this.selectedSwitch) this.drawLcd();
+    };
+    this.register(key, draw);
+    return tile;
+  }
+
+  private selectSwitch(n: number): void {
+    this.selectedSwitch = n;
+    this.switchTiles.forEach((t, i) => t.setAttribute("aria-checked", String(i === n)));
+    this.switchRows.forEach((r, i) => (r.hidden = i !== n));
+    this.drawLcd();
+  }
+
+  /** The display shows the picked switch, as the unit's Switches menu does. */
+  private drawLcd(): void {
+    const n = this.selectedSwitch;
+    const fixed = FIXED_SWITCHES.get(n);
+    const raw = this.value(globalKey(SWITCH_BLOCK, SWITCH_FIRST + n));
+    const face = fixed ? { name: fixed, detail: "fixed function" } : raw === undefined ? { name: "not read", detail: "" } : switchFace(decodeSwitch(raw));
+    this.switchLcd.replaceChildren(el("span", "", `SWITCH: #${n + 1}`), el("span", "", `${face.name}  ${face.detail}`.trim()));
   }
 
   /** Show (and keep) the settings of another unit. */
@@ -126,11 +221,11 @@ export class SettingsView {
     const card = this.groupCard(group);
     const send = el("button", "pill primary");
     send.type = "button";
-    send.title = this.sendButton.title;
+    send.title = SEND_TITLE;
     send.addEventListener("click", () => this.send());
     const cancel = el("button", "pill", "Cancel");
     cancel.type = "button";
-    cancel.title = this.cancelButton.title;
+    cancel.title = CANCEL_TITLE;
     cancel.addEventListener("click", () => this.cancel());
     this.sendButtons.push(send);
     this.cancelButtons.push(cancel);
@@ -148,7 +243,6 @@ export class SettingsView {
 
   setConnected(on: boolean): void {
     this.connected = on;
-    this.readButton.disabled = !on;
     if (!on) this.sent = null;
     this.refresh();
   }
@@ -245,18 +339,21 @@ export class SettingsView {
     }
     for (const b of this.cancelButtons) b.disabled = !n || !!this.sent;
     const unread = !this.connected && !this.raw.size;
-    this.body.classList.toggle("unread", unread);
-    for (const b of [this.cancelButton, this.readButton, this.sendButton]) b.hidden = unread;
     const at = this.readAt ? new Date(this.readAt).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" }) : "";
     const changes = n ? ` ${n} change(s) pending${this.connected ? ": Send to write them to the G-System."
       : ", sent with Send at the next connection."}` : "";
-    this.note.textContent = !this.connected
-      ? this.raw.size
-        ? `G-System not connected: last values read${at ? ` (${at})` : ""}.${changes}`
-          + (n ? "" : " You can prepare changes; they will be sent once connected.")
-        : "Connect the G-System (MIDI view): its global settings will be read and can then be edited here."
-      : this.raw.size ? `G-System global settings (not a preset's).${changes || " No changes pending."}`
-        : "Reading settings…";
+    for (const page of this.pages) {
+      page.body.classList.toggle("unread", unread);
+      for (const b of page.buttons) b.hidden = unread;
+      page.read.disabled = !this.connected;
+      page.note.textContent = !this.connected
+        ? this.raw.size
+          ? `G-System not connected: last values read${at ? ` (${at})` : ""}.${changes}`
+            + (n ? "" : " You can prepare changes; they will be sent once connected.")
+          : "Connect the G-System (MIDI view): its global settings will be read and can then be edited here."
+        : this.raw.size ? `${page.what} (for all presets).${changes || " No changes pending."}`
+          : "Reading settings…";
+    }
   }
 
   /** One footswitch: its function, then the style, the preset to recall or the CC to send. */
@@ -267,7 +364,7 @@ export class SettingsView {
     row.append(el("span", "switch-number", `#${n + 1}`));
     const fixed = FIXED_SWITCHES.get(n);
     if (fixed) {
-      row.append(el("span", "setting-help", `${fixed} — fixed function`));
+      row.append(el("span", "setting-help", `${fixed}: fixed function, it cannot be reassigned`));
       return row;
     }
     const control = el("div", "setting-control");

@@ -4,7 +4,8 @@ import { emptyPreset } from "../core/empty";
 import { describeField, formatField } from "../core/fields";
 import { diffFields } from "../core/params";
 import { BANK_COUNT, BankStore, PRESETS_PER_BANK, readBankFile, slotLabel } from "../core/bank";
-import { GLOBAL_RANGES, MIDI_CHANNEL_PARAM, SYSTEM_BLOCK } from "../core/globals";
+import { GLOBAL_PARAMS, GLOBAL_RANGES, MIDI_CHANNEL_PARAM, PRG_CHANGE_IN_PARAM, SYSTEM_BLOCK, globalKey, globalRaw,
+  globalValue } from "../core/globals";
 import { GSystemLink } from "../core/protocol";
 import { SqsFile, USER_BANK_KIND, readSyx } from "../core/sqs";
 import { NAME_LEN, USER_PRESET_BASE, USER_SLOTS, sameBytes, type Preset } from "../core/sysex";
@@ -18,7 +19,7 @@ import { PresetView } from "./preset";
 import { SettingsView } from "./settings";
 import { SKINS, chooseSkin, currentSkin } from "./skin";
 import { ICONS, type MenuItem } from "./widgets";
-import { GLOBALS_BASE, PROTECTED_BASE, SESSION_BASE, Units, defaultUnitName, parseSlotLabel, storageKey, type Unit } from "./units";
+import { FAVORITES_BASE, GLOBALS_BASE, PROTECTED_BASE, SESSION_BASE, Units, defaultUnitName, parseSlotLabel, storageKey, type Unit } from "./units";
 
 type ReadMode = "all" | "bank" | "refresh" | "verify" | "revert";
 /** A preset to write into the unit, and how many times it was written. */
@@ -37,7 +38,9 @@ const SYSEX_ID_PARAM = 19;
 /** Write stored presets into the unit (Vyzor's Sync sequence, checked by reading back). */
 const STORE_TO_UNIT = true;
 const pad2 = (n: number) => String(n).padStart(2, "0");
-type ViewKey = "banks" | "preset" | "settings" | "midi";
+type ViewKey = "banks" | "preset" | "settings" | "switches" | "midi";
+/** Views of the G-System's global settings: shown, they are read again. */
+const GLOBAL_VIEWS = new Set<ViewKey>(["settings", "switches", "midi"]);
 
 export class App {
   private readonly bank = new BankStore();
@@ -48,9 +51,12 @@ export class App {
   private readonly settings = new SettingsView();
   private readonly toast = el("div", "toast hidden");
   private readonly railButtons = new Map<ViewKey, HTMLButtonElement>();
+  private readonly viewEls = new Map<ViewKey, HTMLElement>();
   private readonly midiDot = el("span", "midi-dot");
   private view: ViewKey = "banks";
   private link: GSystemLink | null = null;
+  /** The offer to switch Prg. Change In on was declined for this link: not asked again. */
+  private prgChangeDeclined: GSystemLink | null = null;
   private readMode: ReadMode | null = null;
   /** Links whose identity has answered (it is asked several times). */
   private readonly answered = new WeakSet<GSystemLink>();
@@ -65,11 +71,11 @@ export class App {
 
   constructor(root: HTMLElement) {
     this.banks = new BanksView(this.bank, {
+      menu: () => this.fileMenu(),
       open: (slot) => {
         this.preset.openSlot(slot);
         this.show("preset");
       },
-      menu: () => this.fileMenu(),
       copyToUnit: (slots) => void this.copyToUnit(slots),
       sendToUnit: (slots) => this.sendToUnit(slots),
       hasOtherUnit: () => this.units.others().length > 0,
@@ -96,7 +102,7 @@ export class App {
     const rail = el("nav", "rail");
     rail.setAttribute("aria-label", "Navigation");
     for (const [key, label, icon] of [["banks", "Banks", ICONS.banks], ["preset", "Preset", ICONS.preset],
-      ["settings", "Settings", ICONS.settings], ["midi", "MIDI", ICONS.midi]] as [ViewKey, string, string][]) {
+      ["settings", "Settings", ICONS.settings], ["switches", "Switches", ICONS.switches], ["midi", "MIDI", ICONS.midi]] as [ViewKey, string, string][]) {
       const b = el("button");
       b.type = "button";
       if (key === "midi") {
@@ -112,7 +118,11 @@ export class App {
       this.railButtons.set(key, b);
       rail.append(b);
     }
-    root.append(rail, this.banks.el, this.preset.el, this.settings.el, this.midiView.el, this.toast);
+    this.viewEls.set("banks", this.banks.el);
+    this.viewEls.set("preset", this.preset.el);
+    for (const [key, view] of this.settings.views) this.viewEls.set(key as ViewKey, view);
+    this.viewEls.set("midi", this.midiView.el);
+    root.append(rail, ...this.viewEls.values(), this.toast);
     this.settings.onRead = () => this.readSettings();
     this.settings.onConnect = () => void this.toggleConnection().then(() => this.link || this.show("midi"));
     this.settings.onSend = (changes) => {
@@ -209,11 +219,8 @@ export class App {
 
   private show(view: ViewKey): void {
     this.view = view;
-    this.banks.el.hidden = view !== "banks";
-    this.preset.el.hidden = view !== "preset";
-    this.settings.el.hidden = view !== "settings";
-    this.midiView.el.hidden = view !== "midi";
-    if (view === "settings" || view === "midi") this.readSettings();
+    for (const [key, v] of this.viewEls) v.hidden = key !== view;
+    if (GLOBAL_VIEWS.has(view)) this.readSettings();
     for (const [key, b] of this.railButtons) {
       if (key === view) b.setAttribute("aria-current", "page");
       else b.removeAttribute("aria-current");
@@ -431,6 +438,7 @@ export class App {
     if (session) for (const p of readSyx(session.syx)) if (p.userSlot !== null) presets[p.userSlot] = p;
     this.bank.load(presets, session?.title ?? "Empty bank", session?.sqs ? new SqsFile(session.sqs) : null, session?.pending ?? []);
     this.settings.useStorage(storageKey(GLOBALS_BASE, unit));
+    this.preset.useFavorites(storageKey(FAVORITES_BASE, unit));
     this.midiView.sysexId.value = String(unit.sysexId);
     if (this.link) this.link.sysexId = unit.sysexId;
     this.banks.unitName = this.units.list.length > 1 ? unit.name : "";
@@ -878,12 +886,47 @@ export class App {
       this.notify("The G-System is busy reading or writing: preset not recalled on it", true);
       return;
     }
-    const channel = this.settings.rawValue(SYSTEM_BLOCK, MIDI_CHANNEL_PARAM);
+    // The channel the unit itself sends its recalls on, seen as soon as a preset is changed on it;
+    // until then the MIDI Channel setting read at connection.
+    const channel = this.link.unitChannel ?? this.settings.rawValue(SYSTEM_BLOCK, MIDI_CHANNEL_PARAM);
+    // With Prg. Change In Off the unit ignores the recall (seen on the user's G-System, over USB too).
+    if (this.prgChangeInOff()) {
+      if (this.prgChangeDeclined === this.link) {
+        this.notify("Prg. Change In is Off on the G-System: it did not change preset (MIDI view)", true);
+        return;
+      }
+      if (!confirm("“Prg. Change In” is Off on the G-System, so it ignores the presets picked in the editor.\n\n"
+        + "OK: switch it On (MIDI view) and recall the preset. Cancel: leave it Off.")) {
+        this.prgChangeDeclined = this.link;
+        return;
+      }
+      this.switchPrgChangeInOn();
+      // Recalled once the unit has taken the setting.
+      setTimeout(() => this.link && this.preset.slot === slot && this.recallOnUnit(slot), 400);
+      return;
+    }
     this.recalled = { slot, at: Date.now() };
-    // The unit's channel as read; Off, Omni (17) and an unknown channel: channel 1. Over USB the unit
-    // follows these messages even with Prg. Change In Off (seen on the user's G-System), so that
-    // setting is not checked.
+    // Off, Omni (17) and an unknown channel: channel 1.
     this.link.selectPreset(slot, channel !== undefined && channel >= 1 && channel <= 16 ? channel : 1);
+  }
+
+  /** Whether the unit's Prg. Change In, as read, is Off (unknown: assumed on). */
+  private prgChangeInOff(): boolean {
+    const g = GLOBAL_PARAMS.get(globalKey(SYSTEM_BLOCK, PRG_CHANGE_IN_PARAM));
+    const raw = this.settings.rawValue(SYSTEM_BLOCK, PRG_CHANGE_IN_PARAM);
+    return !!g && raw !== undefined && globalValue(g, raw) === 0;
+  }
+
+  /** Write Prg. Change In = On, as the Settings view does, then read the settings back. */
+  private switchPrgChangeInOn(): void {
+    const g = GLOBAL_PARAMS.get(globalKey(SYSTEM_BLOCK, PRG_CHANGE_IN_PARAM))!;
+    const raw = this.settings.rawValue(SYSTEM_BLOCK, PRG_CHANGE_IN_PARAM) ?? 0;
+    const on = globalRaw(g, raw, 1);
+    this.link?.sendParam(SYSTEM_BLOCK, PRG_CHANGE_IN_PARAM, on);
+    // Shown at once: the read-back confirms it.
+    this.settings.update(SYSTEM_BLOCK, PRG_CHANGE_IN_PARAM, on);
+    setTimeout(() => this.readSettings(), 300);
+    this.notify("Prg. Change In switched On on the G-System");
   }
 
   private writeQueue: WriteItem[] = [];

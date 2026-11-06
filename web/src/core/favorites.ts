@@ -1,12 +1,12 @@
 /**
- * Effect favorites: up to four saved settings per effect block (type and every
- * parameter), recalled into any preset. The block's on/off state is the preset's
+ * Effect favorites: up to eight saved settings per effect block (type and every
+ * parameter), recalled into any preset. Each G-System has its own (by SysEx ID, see units). The block's on/off state is the preset's
  * own and is kept when a favorite is loaded.
  */
 
 import { block, readField, writeField } from "./params";
 
-export const FAVORITE_COUNT = 4;
+export const FAVORITE_COUNT = 8;
 
 export interface Favorite {
   /** Effect type when saved, to tell the favorites apart. */

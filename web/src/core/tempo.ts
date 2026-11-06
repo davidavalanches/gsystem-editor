@@ -14,6 +14,9 @@ import { block, lfo, readField, writeField } from "./params";
 
 export const TAP_MIN_MS = 100;
 export const TAP_MAX_MS = 3000;
+/** The unit's tempo stops at 300 BPM (a 200 ms tap), though a block's tap time goes down to 100 ms. */
+export const TEMPO_MAX_BPM = 300;
+const TEMPO_MIN_MS = 60000 / TEMPO_MAX_BPM;
 /** Blocks with a tap time, Delay first. */
 export const TEMPO_BLOCKS = ["delay", "filter", "mod"];
 
@@ -28,7 +31,7 @@ export function presetTempoMs(data: Uint8Array): number | null {
 }
 
 export function writeTempoMs(data: Uint8Array, ms: number): Uint8Array {
-  const value = Math.max(TAP_MIN_MS, Math.min(TAP_MAX_MS, Math.round(ms)));
+  const value = Math.max(TEMPO_MIN_MS, Math.min(TAP_MAX_MS, Math.round(ms)));
   return syncAllToTempo(tapFields(data).reduce((d, f) => writeField(d, f, value), data));
 }
 

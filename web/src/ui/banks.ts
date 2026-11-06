@@ -57,6 +57,8 @@ export class BanksView {
   private readonly detail = el("aside", "bank-detail");
   private bankButtons: HTMLButtonElement[] = [];
   private reading: [number, number] | null = null;
+  /** Phone: bumped by each full redraw, so pages drawn before it are redrawn when they come near. */
+  private renderGeneration = 0;
 
   constructor(private bank: BankStore, private actions: BanksActions, live: HTMLButtonElement) {
     this.readButton.type = "button";
@@ -93,6 +95,20 @@ export class BanksView {
     this.grid.setAttribute("aria-label", "All banks");
     this.detail.setAttribute("aria-label", "Selected preset");
     body.append(this.list, this.slots, this.grid, this.detail);
+    // Phone: the banks follow one another in one scroll, a bank per screen; the list follows the scroll.
+    this.slots.setAttribute("aria-label", "Presets");
+    this.slots.addEventListener("scroll", () => {
+      const h = this.slots.clientHeight;
+      if (!h || DESKTOP.matches) return;
+      const b = Math.min(BANK_COUNT - 1, Math.max(0, Math.round(this.slots.scrollTop / h)));
+      if (b !== this.bankIndex) {
+        this.bankIndex = b;
+        this.markBank(true);
+        this.fillPages();
+      }
+    }, { passive: true });
+    // Shown again, rotated or resized: back to the selected bank.
+    new ResizeObserver(() => this.scrollToBank()).observe(this.slots);
     this.el.append(header, body);
     DESKTOP.addEventListener("change", () => this.refresh());
     this.refresh();
@@ -115,14 +131,58 @@ export class BanksView {
   showBank(index: number, focus = false): void {
     this.bankIndex = index;
     this.refresh();
+    this.scrollToBank();
     if (focus) this.bankButtons[index].scrollIntoView({ block: "nearest" });
+  }
+
+  /**
+   * Phone: one page per bank, but only the bank in view and its neighbours hold their rows (200 rows
+   * redrawn on each change are too slow on a phone). Pages drawn for an older state are redrawn.
+   */
+  private fillPages(): void {
+    if (this.slots.children.length !== BANK_COUNT) {
+      this.slots.replaceChildren(...[...Array(BANK_COUNT).keys()].map((b) => {
+        const page = el("div", "bank-page");
+        page.setAttribute("role", "group");
+        page.setAttribute("aria-label", `Bank ${String(b).padStart(2, "0")}`);
+        return page;
+      }));
+    }
+    [...this.slots.children].forEach((page, b) => {
+      const pg = page as HTMLElement;
+      const near = Math.abs(b - this.bankIndex) <= 1;
+      const drawn = pg.dataset.generation === String(this.renderGeneration);
+      if (near && !drawn) {
+        pg.replaceChildren(...[...Array(PRESETS_PER_BANK).keys()].map((i) => this.slotRow(b * PRESETS_PER_BANK + i)));
+        pg.dataset.generation = String(this.renderGeneration);
+      } else if (!near && pg.dataset.generation) {
+        pg.replaceChildren();
+        delete pg.dataset.generation;
+      }
+    });
+  }
+
+  /** Phone: the presets scroll to the selected bank. */
+  private scrollToBank(): void {
+    const h = this.slots.clientHeight;
+    if (h && !DESKTOP.matches) this.slots.scrollTop = this.bankIndex * h;
+  }
+
+  /** Highlights the selected bank in the list (and brings it into view while the presets scroll). */
+  private markBank(reveal = false): void {
+    this.bankButtons.forEach((button, b) => button.setAttribute("aria-selected", String(b === this.bankIndex)));
+    if (reveal) {
+      const button = this.bankButtons[this.bankIndex];
+      const box = this.list.getBoundingClientRect(), r = button.getBoundingClientRect();
+      if (r.top < box.top) this.list.scrollTop -= box.top - r.top;
+      else if (r.bottom > box.bottom) this.list.scrollTop += r.bottom - box.bottom;
+    }
   }
 
   refresh(): void {
     this.renderHeader();
+    this.markBank();
     this.bankButtons.forEach((button, b) => {
-      const selected = b === this.bankIndex;
-      button.setAttribute("aria-selected", String(selected));
       const locked = this.bank.isProtectedBank(b);
       button.classList.toggle("avoided", locked);
       button.classList.toggle("has-pending",
@@ -135,10 +195,13 @@ export class BanksView {
       button.replaceChildren(num, dots);
       button.setAttribute("aria-label", `Bank ${String(b).padStart(2, "0")}, ${used.filter(Boolean).length} presets`);
     });
-    this.slots.replaceChildren(...[...Array(PRESETS_PER_BANK).keys()].map((i) => this.slotRow(this.bankIndex * PRESETS_PER_BANK + i)));
     if (DESKTOP.matches) {
+      this.slots.replaceChildren();
       this.renderGrid();
       this.renderDetail();
+    } else {
+      this.renderGeneration++;
+      this.fillPages();
     }
   }
 
@@ -486,6 +549,7 @@ export class BanksView {
       this.bank.pending.has(slot) ? "pending" : "", damaged ? "corrupt" : ""];
     const row = el("button", classes.filter(Boolean).join(" "));
     row.type = "button";
+    row.dataset.slot = String(slot);
     row.setAttribute("aria-label", `${slotLabel(slot)} ${p ? p.name : "empty"}${damaged ? ", damaged on the G-System" : ""}`);
     if (damaged) row.title = DAMAGED;
     const lv = p ? presetLevels(p.data) : null;
@@ -558,7 +622,7 @@ export class BanksView {
       const slot = (start + i) % this.bank.presets.length;
       if (this.bank.preset(slot)?.name.toLowerCase().includes(text)) {
         this.showBank(Math.floor(slot / PRESETS_PER_BANK), true);
-        this.slots.children[slot % PRESETS_PER_BANK]?.animate?.(
+        this.slots.querySelector(`[data-slot="${slot}"]`)?.animate?.(
           [{ outline: "2px solid #FFB224" }, { outline: "2px solid transparent" }], { duration: 1200 });
         return;
       }

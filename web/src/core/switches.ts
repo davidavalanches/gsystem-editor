@@ -55,6 +55,21 @@ export function withFunction(s: SwitchSetting, fn: number): SwitchSetting {
   return fn === s.fn ? s : { fn, p1: 0, p2: 0 };
 }
 
+/** Short names, as printed above the unit's switches. */
+const SHORT: Record<string, string> = { "Tap Tempo": "TAP", "Tuner Mute": "TUNER", "Insert": "INSERT" };
+
+/** What a switch shows on the pedalboard drawing: its function, and below it the style, preset or CC. */
+export function switchFace(s: SwitchSetting): { name: string; detail: string } {
+  const name = FUNCTIONS[s.fn] ?? `Fn ${s.fn}`;
+  switch (switchKind(s.fn)) {
+    case "style": return { name: (SHORT[name] ?? name).toUpperCase(), detail: STYLES[s.p1] ?? String(s.p1) };
+    case "preset": return { name: s.p1 ? `${SWITCH_BANKS[s.p1] ?? s.p1}-${s.p2 + 1}` : `P${s.p2 + 1}`,
+      detail: s.p1 ? "preset" : "this bank" };
+    case "cc": return { name: `CC ${s.p1}`, detail: "MIDI" };
+    default: return { name: s.fn === 0 ? "—" : (SHORT[name] ?? name).toUpperCase(), detail: "" };
+  }
+}
+
 export function describeSwitch(s: SwitchSetting): string {
   const name = FUNCTIONS[s.fn] ?? `Function ${s.fn}`;
   switch (switchKind(s.fn)) {

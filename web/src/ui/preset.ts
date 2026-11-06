@@ -15,7 +15,7 @@ import { FAVORITE_COUNT, FAVORITE_NAME_LEN, applyFavorite, captureFavorite, favo
 import { BLOCKS, Param, block, diffFields, owner, readField, writeField, type Block } from "../core/params";
 import { BLOCK_IDS, LEVELS_BLOCK_ID, LEVEL_SWITCHES } from "../core/protocol";
 import { NOVA_BLOCK_ID, NOVA_FIELD, NOVA_HEADER_FIELD, NOVA_PRESETS, novaPreset, novaWord, writeNovaPreset, writeNovaWord } from "../core/novadrive";
-import { TAP_MAX_MS, TAP_MIN_MS, TEMPO_BLOCKS, bpmToMs, msToBpm, presetTempoMs, syncToTempo, writeTempoMs } from "../core/tempo";
+import { TAP_MAX_MS, TEMPO_BLOCKS, TEMPO_MAX_BPM, bpmToMs, msToBpm, presetTempoMs, syncToTempo, writeTempoMs } from "../core/tempo";
 import { NAME_LEN, Preset, SysexError, USER_SLOTS } from "../core/sysex";
 import { askText } from "./dialog";
 import { DESKTOP, el } from "./dom";
@@ -35,7 +35,7 @@ const ROUTING = "routing";
 const OUTPUTS = [0, 1].map((side) =>
   new Param(side ? "Output R" : "Output L", OUTPUT_MIN, 0, [], (v) => `${v} dB`));
 /** Preset tempo in BPM, over the tap times' range. */
-const TEMPO = new Param("Tempo", msToBpm(TAP_MAX_MS), msToBpm(TAP_MIN_MS), [], (v) => `${v} BPM`);
+const TEMPO = new Param("Tempo", msToBpm(TAP_MAX_MS), TEMPO_MAX_BPM, [], (v) => `${v} BPM`);
 /** Selection keys of the output and tempo rows (field indexes are below 165). */
 const OUTPUT_ROW = 1000;
 /** Desktop views of the parameters panel. */
@@ -61,11 +61,9 @@ const SLIDER_BLOCKS = new Set(["reverb", "delay", "pitch"]);
 /** Read out in the block header as well as listed: [parameter name, label]. */
 const HEAD_READOUTS: [string, string][] = [["Mix", "Mix"], ["OutLev", "Output"]];
 
-const FAVORITES_KEY = "gsystem-favorites";
-
-function loadFavorites(): Favorites {
+function loadFavorites(key: string): Favorites {
   try {
-    return JSON.parse(localStorage.getItem(FAVORITES_KEY) ?? "{}") as Favorites;
+    return JSON.parse(localStorage.getItem(key) ?? "{}") as Favorites;
   } catch {
     return {};
   }
@@ -165,7 +163,9 @@ export class PresetView {
   private readonly levelBar = el("div", "levels");
   private readonly boostBlock = el("div", "boost-block");
   private readonly favoriteBar = el("div", "favorites");
-  private favorites: Favorites = loadFavorites();
+  /** The favorites of the G-System whose workspace is shown, and where they are kept. */
+  private favorites: Favorites = {};
+  private favoritesKey: string | null = null;
   private tab: DeskTab = "block";
   private compareSlot = STORED;
   private readonly paramsHead = el("div", "params-head");
@@ -771,7 +771,14 @@ export class PresetView {
       el("p", "params-note", "Level added when the boost is on. The G-System caps it at the Boost Max global setting."));
   }
 
-  /** The four favorites of the shown effect: tap to load (or to save into an empty one), long-press for more. */
+  /** Shows the favorites of another G-System's workspace. */
+  useFavorites(key: string): void {
+    this.favoritesKey = key;
+    this.favorites = loadFavorites(key);
+    this.renderFavorites();
+  }
+
+  /** The eight favorites of the shown effect: tap to load (or to save into an empty one), long-press for more. */
   private renderFavorites(): void {
     const key = this.blockKey;
     const isEffect = key !== MODIFIERS && key !== ROUTING && key !== BOOST && (this.tab === "block" || !DESKTOP.matches);
@@ -830,7 +837,7 @@ export class PresetView {
     slots[index] = fav;
     this.favorites = { ...this.favorites, [key]: slots };
     try {
-      localStorage.setItem(FAVORITES_KEY, JSON.stringify(this.favorites));
+      if (this.favoritesKey) localStorage.setItem(this.favoritesKey, JSON.stringify(this.favorites));
     } catch {
       alert("Cannot save favorites on this device.");
     }
@@ -1134,12 +1141,13 @@ export class PresetView {
           (next) => this.setOutput(side, next)), (next) => this.setOutput(side, next)))];
     const ms = presetTempoMs(preset.data);
     if (ms !== null) rows.push(this.paramRow(TEMPO_ROW, TEMPO, msToBpm(ms), () => this.openTempoSheet(), (bpm) => this.setTempo(bpm)));
-    const nova = novaPreset(preset.data);
-    rows.push(this.paramRow(NOVA_ROW, NOVA, nova, () => this.openValueSheet("Routing · NovaDrive", "NDR-1 pedal preset", NOVA, nova,
-      (next) => this.setNovaPreset(next)), (next) => this.setNovaPreset(next)));
     // Relay settings A and B: which contacts of the Relay jacks close (amp channels…), toggled by the Relay switch.
     const inUse = levelOn(preset.data, "relay") ? 0 : 1;
     rows.push(...presetRelays(preset.data).map((value, which) => this.relayRow(which, value, which === inUse)));
+    // The NovaDrive pedal's preset last: an external pedal, after the unit's own settings.
+    const nova = novaPreset(preset.data);
+    rows.push(this.paramRow(NOVA_ROW, NOVA, nova, () => this.openValueSheet("Routing · NovaDrive", "NDR-1 pedal preset", NOVA, nova,
+      (next) => this.setNovaPreset(next)), (next) => this.setNovaPreset(next)));
     this.paramsList.replaceChildren(...rows);
   }
 

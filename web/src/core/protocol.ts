@@ -19,8 +19,9 @@
  *   which the app never writes; elsewhere stores are read back to verify them.
  * - Bank Select + Program Change: sent by the unit when a preset is recalled.
  *   The editor sends the same pair to recall a preset (Prg.Chng.In on, on the
- *   unit's MIDI channel). A first test over USB saw it ignored, so in Live mode
- *   the editor also writes the preset's parameters into the edit buffer.
+ *   unit's MIDI channel). With Prg. Change In Off the unit ignores it, USB too, so the
+ *   editor offers to switch it on; in Live mode it also writes the preset's parameters
+ *   into the edit buffer.
  */
 
 import { MODEL_G_SYSTEM, Preset, TC_MANUFACTURER, USER_PRESET_BASE, USER_SLOTS, isPresetDump, userNumber } from "./sysex";
@@ -146,6 +147,8 @@ export class GSystemLink {
   onIdentity: Listener<[string]> | null = null;
   onParam: Listener<[number, number, number]> | null = null;
   onPresetSelected: Listener<[number]> | null = null;
+  /** MIDI channel (1-16) of the unit's own Bank Select / Program Change: the one it listens on for recalls. */
+  unitChannel: number | null = null;
   onPresetRead: Listener<[Preset]> | null = null;
   onProgress: Listener<[number, number]> | null = null;
   /** Presets read, numbers that did not answer (empty), numbers reported damaged. */
@@ -278,9 +281,11 @@ export class GSystemLink {
     const status = msg[0] & 0xf0;
     if (status === 0xb0 && msg.length === 3 && msg[1] === 0) {
       this.bank = msg[2];
+      this.unitChannel = (msg[0] & 0x0f) + 1;
       return;
     }
     if (status === 0xc0 && msg.length === 2) {
+      this.unitChannel = (msg[0] & 0x0f) + 1;
       if (this.bank === 1 || this.bank === 2) {
         const slot = (this.bank - 1) * USER_BANK_SIZE + msg[1];
         if (slot < USER_SLOTS) this.onPresetSelected?.(slot);
