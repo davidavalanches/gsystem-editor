@@ -468,14 +468,10 @@ button:disabled { opacity: 0.4; cursor: default; }
 
 /* Loops, insert and boost: live-only switches. */
 /* Favorites of the shown effect, under the loops strip. */
-/* Eight favorites: two rows of four on a phone, one row on a wide screen. */
+/* Four favorites in one row. */
 .favorites { display: grid; grid-template-columns: auto repeat(4, minmax(0, 1fr)); align-items: center; gap: 4px; flex-shrink: 0; padding: 4px 8px; border-bottom: 1px solid var(--bg); }
 .favorites[hidden] { display: none; }
-.favorites-title { grid-row: span 2; padding-right: 4px; font-family: var(--display); font-size: 9px; letter-spacing: 0.05em; color: var(--dim); }
-@media (min-width: 900px) {
-  .favorites { grid-template-columns: auto repeat(8, minmax(0, 1fr)); }
-  .favorites-title { grid-row: auto; }
-}
+.favorites-title { padding-right: 4px; font-family: var(--display); font-size: 9px; letter-spacing: 0.05em; color: var(--dim); }
 .favorite { flex: 1; min-width: 0; height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); color: var(--ink); font-size: 11.5px; font-weight: 600; }
 .favorite-num { flex-shrink: 0; font-family: var(--mono); color: var(--accent); }
 .favorite-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

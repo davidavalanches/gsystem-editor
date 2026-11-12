@@ -163,15 +163,34 @@ describe("parameters shown per effect type (G-System manual)", () => {
     block(key).shownFields(withType(key, typeName)).slice(1).map(([, p]) => p.name);
 
   it("lists only the parameters of the selected type", () => {
-    expect(names("mod", "Classic Chorus")).toEqual(["Enable", "Speed", "Tap", "Tempo", "Depth", "HiCut", "Mix", "OutLev"]);
+    expect(names("mod", "Classic Chorus")).toEqual(["Enable", "Speed", "Tempo", "Depth", "HiCut", "Mix", "OutLev"]);
+    expect(names("filter", "Resonance Filter")).toEqual(["Enable", "Style", "Hicut", "Resnce", "OutLev"]);
+    expect(names("mod", "Vintage Phaser")).toEqual(["Enable", "Speed", "Tempo", "Depth", "Fb", "Range", "Rev", "Mix", "OutLev"]);
+    expect(names("delay", "Dual Delay")).not.toContain("TapTime");
     expect(names("mod", "Advanced Chorus")).toContain("Cho Dly");
     expect(names("mod", "Advanced Flanger")).toContain("Fla Dly");
     expect(names("mod", "Vibrato")).not.toContain("Mix");
     expect(names("pitch", "Octaver")).toEqual(["Enable", "Dir", "Range", "Mix", "OutLev"]);
     expect(names("pitch", "Detune")).toEqual(["Enable", "Voice1", "Voice2", "Delay1", "Delay2", "Mix", "OutLev"]);
+    expect(names("pitch", "Doubler")).toEqual(["Enable", "Delay", "Pitch", "Side", "OutLev"]);
     expect(names("comp", "Sustaining")).toEqual(["Comp", "Drive", "Resp", "Gain"]);
     expect(names("delay", "Single Delay")).not.toContain("Drive");
     expect(names("delay", "Tape Delay")).toContain("Drive");
+  });
+
+  it("shows the Univibe's selected speed", () => {
+    expect(names("mod", "Vintage Univibe")).toEqual(["Enable", "Select", "Speed", "Tempo", "Depth", "Attack", "Releas",
+      "BpMode", "PhaRev", "Mix", "OutLev"]);
+    expect(names("mod", "Modern Univibe")).toEqual(names("mod", "Vintage Univibe"));
+    const blk = block("mod");
+    let data = withType("mod", "Vintage Univibe");
+    const at = (name: string) => blk.fields(data).find(([, p]) => p.name === name)![0];
+    const speed = () => blk.shownFields(data).find(([, p]) => p.name === "Speed")![0];
+    const speed1 = at("Speed");
+    data = writeField(data, at("Select"), 1);
+    expect(speed()).toBe(speed1 + 1);
+    data = writeField(data, at("Select"), 0);
+    expect(speed()).toBe(speed1);
   });
 
   it("gives Reverse its own delay time slot", () => {

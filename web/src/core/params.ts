@@ -118,7 +118,7 @@ const MOD_CHORUS = [ENABLE, TAP, E("Tempo", TEMPO), P("Speed", 0, 208, lfo), P("
   E("PhaRev", ONOFF), P("FeedB", -100, 100, PCT), P("FB Cut", 0, 60, freq)];
 const MOD_PHASER = [ENABLE, TAP, E("Tempo", TEMPO), P("Speed", 0, 208, lfo), P("Depth", 0, 100, PCT),
   P("Fb", -100, 100, PCT), E("Range", ["Low", "High"]), E("Rev", ONOFF), MIX, OUTLEV];
-const MOD_UNIVIBE = [ENABLE, E("BpMode", ["Delay", "Direct"]), E("Tempo1", TEMPO), E("Tempo2", TEMPO),
+const MOD_UNIVIBE = [ENABLE, E("BpMode", ["Delayed", "Direct"]), E("Tempo1", TEMPO), E("Tempo2", TEMPO),
   P("Depth", 0, 100, PCT), P("Speed1", 38, 184, lfo), P("Speed2", 38, 184, lfo), P("Attack", 50, 5000, MS),
   P("Releas", 50, 5000, MS), E("Select", ["Speed1", "Speed2"]), E("PhaRev", ONOFF), MIX, OUTLEV];
 const MOD_TREMOLO = [ENABLE, TAP, E("Tempo", TEMPO), P("Speed", 0, 368), P("Depth", 0, 100, PCT),
@@ -179,6 +179,8 @@ export interface EffectType {
   params: readonly Param[];
   /** Indices into `params` of the ones this type uses, in display order (all when absent). */
   shown?: readonly number[];
+  /** Slots shown in place of others while a selector parameter is at 1 (Univibe: Speed2 for Speed1). */
+  alternates?: { select: number; swaps: readonly [number, number][] };
 }
 
 const family = (names: string[], params: readonly Param[]): EffectType[] => names.map((name) => ({ name, params }));
@@ -187,26 +189,42 @@ const family = (names: string[], params: readonly Param[]): EffectType[] => name
  * A type that uses only some of its family's slots, as listed in the G-System manual and checked
  * against ~800 presets (unit dumps and Vyzor banks: a slot a type uses takes varied values, an unused
  * one keeps its default). Where the two disagree the presets win: Touch/Auto Res have no Hicut, Auto Res
- * no Style, Touch/Auto Formant no Sweep, and the Pitch Shifter has Level1/2. A name may
+ * no Style, Touch/Auto Formant no Sweep, and the Pitch Shifter has Level1/2. The tap times (Tap,
+ * TapTime) are not shown: the manual lists none, and the preset's Tempo row sets them. A name may
  * appear twice in a family ("Delay"): "Delay#2" is the second one. "Name=Label" shows the slot
- * under the manual's name for this type.
+ * under the manual's name for this type. "A|B=Label" shows B instead of A while `select` is at 1.
  */
-function typed(name: string, params: readonly Param[], names: string[]): EffectType {
+function typed(name: string, params: readonly Param[], names: string[], select?: string): EffectType {
   const shown: number[] = [];
+  const swaps: [number, number][] = [];
   const labelled = params.slice();
-  for (const spec of names) {
-    const [ref, label] = spec.split("=");
+  const find = (ref: string) => {
     const [pname, nth] = ref.split("#");
     const matches = params.flatMap((p, i) => (p.name === pname ? [i] : []));
     const index = matches[(Number(nth) || 1) - 1];
     if (index === undefined) throw new Error(`${name}: no parameter ${ref}`);
-    if (label) {
-      const p = params[index];
-      labelled[index] = new Param(label, p.lo, p.hi, p.choices, p.fmt, p.choicesBase);
+    return index;
+  };
+  const relabel = (index: number, label: string | undefined) => {
+    if (!label) return;
+    const p = params[index];
+    labelled[index] = new Param(label, p.lo, p.hi, p.choices, p.fmt, p.choicesBase);
+  };
+  for (const spec of names) {
+    const [refs, label] = spec.split("=");
+    const [ref, alt] = refs.split("|");
+    const index = find(ref);
+    relabel(index, label);
+    if (alt) {
+      const other = find(alt);
+      relabel(other, label);
+      swaps.push([index, other]);
     }
     shown.push(index);
   }
-  return { name, params: labelled, shown };
+  if (swaps.length && !select) throw new Error(`${name}: alternates need a selector`);
+  const alternates = select ? { select: find(select), swaps } : undefined;
+  return { name, params: labelled, shown, ...(alternates ? { alternates } : {}) };
 }
 
 export class Block {
@@ -250,9 +268,11 @@ export class Block {
   /** The type and the parameters the current type uses, as the unit shows them. */
   shownFields(data: Uint8Array): [number, Param][] {
     const all = this.fields(data);
-    const shown = this.effectType(data)?.shown;
-    if (!shown) return all;
-    return [all[0], ...shown.map((i) => all[i + 1])];
+    const type = this.effectType(data);
+    if (!type?.shown) return all;
+    const alt = type.alternates;
+    const swapped = alt && readField(data, all[alt.select + 1][0]) === 1 ? new Map(alt.swaps) : null;
+    return [all[0], ...type.shown.map((i) => all[(swapped?.get(i) ?? i) + 1])];
   }
 
   enableField(data: Uint8Array): number | null {
@@ -270,7 +290,7 @@ export class Block {
 /** The delay parameters every type has (manual: "Common parameters"), then the type's own. Reverse
  * uses its own delay time slot (50-800 ms). */
 function delayParams(extra: string[] = [], delay = "Delay"): string[] {
-  return ["Enable", delay, "TapTime", "Tempo", "Fb", "Fbhcut", "Fblcut", ...extra, "Mix", "OutLev"];
+  return ["Enable", delay, "Tempo", "Fb", "Fbhcut", "Fblcut", ...extra, "Mix", "OutLev"];
 }
 
 export const BLOCKS: readonly Block[] = [
@@ -282,29 +302,33 @@ export const BLOCKS: readonly Block[] = [
   new Block("filter", "Filter", 13, 15, [
     typed("Resonance Filter", FILTER_RES, ["Enable", "Style", "Hicut", "Resnce", "OutLev"]),
     typed("Touch Res Filter", FILTER_RES, ["Enable", "Style", "Resnce", "Sense", "Resp", "Fmax", "OutLev"]),
-    typed("Auto Res Filter", FILTER_RES, ["Enable", "Resnce", "Speed", "Tap", "Tempo", "Shape", "Fmax", "OutLev"]),
+    typed("Auto Res Filter", FILTER_RES, ["Enable", "Resnce", "Speed", "Tempo", "Shape", "Fmax", "OutLev"]),
     typed("Wah wah", FILTER_WAH, ["Enable", "Sweep", "Range", "AutoOn", "OutLev"]),
     typed("Touch Wah", FILTER_WAH, ["Enable", "Sense", "Resp", "Range", "OutLev"]),
-    typed("Auto Wah", FILTER_WAH, ["Enable", "Speed", "Tap", "Tempo", "Shape", "Range", "OutLev"]),
+    typed("Auto Wah", FILTER_WAH, ["Enable", "Speed", "Tempo", "Shape", "Range", "OutLev"]),
     typed("Formant", FILTER_FORMANT, ["Enable", "Low", "Mid", "High", "Sweep", "Bright", "Resnce", "OutLev"]),
     typed("Touch Formant", FILTER_FORMANT,
       ["Enable", "Low", "Mid", "High", "Bright", "Resnce", "Sense", "Resp", "OutLev"]),
     typed("Auto Formant", FILTER_FORMANT,
-      ["Enable", "Low", "Mid", "High", "Bright", "Resnce", "Speed", "Tap", "Tempo", "Shape", "OutLev"]),
+      ["Enable", "Low", "Mid", "High", "Bright", "Resnce", "Speed", "Tempo", "Shape", "OutLev"]),
   ]),
   new Block("mod", "Mod", 29, 14, [
-    typed("Classic Chorus", MOD_CHORUS, ["Enable", "Speed", "Tap", "Tempo", "Depth", "HiCut", "Mix", "OutLev"]),
+    typed("Classic Chorus", MOD_CHORUS, ["Enable", "Speed", "Tempo", "Depth", "HiCut", "Mix", "OutLev"]),
     typed("Advanced Chorus", MOD_CHORUS,
-      ["Enable", "Speed", "Tap", "Tempo", "Depth", "HiCut", "Cho Dly", "Ratio", "PhaRev", "Mix", "OutLev"]),
+      ["Enable", "Speed", "Tempo", "Depth", "HiCut", "Cho Dly", "Ratio", "PhaRev", "Mix", "OutLev"]),
     typed("Classic Flanger", MOD_CHORUS,
-      ["Enable", "Speed", "Tap", "Tempo", "Depth", "HiCut", "FeedB", "FB Cut", "Mix", "OutLev"]),
-    typed("Advanced Flanger", MOD_CHORUS, ["Enable", "Speed", "Tap", "Tempo", "Depth", "HiCut", "FeedB", "FB Cut",
+      ["Enable", "Speed", "Tempo", "Depth", "HiCut", "FeedB", "FB Cut", "Mix", "OutLev"]),
+    typed("Advanced Flanger", MOD_CHORUS, ["Enable", "Speed", "Tempo", "Depth", "HiCut", "FeedB", "FB Cut",
       "Cho Dly=Fla Dly", "PhaRev", "Ratio", "Mix", "OutLev"]),
-    typed("Vibrato", MOD_CHORUS, ["Enable", "Speed", "Tap", "Tempo", "Depth", "HiCut", "OutLev"]),
-    ...family(["Vintage Phaser", "Smooth Phaser"], MOD_PHASER),
-    typed("Tremolo", MOD_TREMOLO, ["Enable", "Speed", "Tap", "Tempo", "Depth", "Type", "Width", "Hi Cut", "OutLev"]),
-    typed("Panner", MOD_TREMOLO, ["Enable", "Speed", "Tap", "Tempo", "Depth", "OutLev"]),
-    ...family(["Vintage Univibe", "Modern Univibe"], MOD_UNIVIBE),
+    typed("Vibrato", MOD_CHORUS, ["Enable", "Speed", "Tempo", "Depth", "HiCut", "OutLev"]),
+    ...["Vintage Phaser", "Smooth Phaser"].map((n) => typed(n, MOD_PHASER,
+      ["Enable", "Speed", "Tempo", "Depth", "Fb", "Range", "Rev", "Mix", "OutLev"])),
+    typed("Tremolo", MOD_TREMOLO, ["Enable", "Speed", "Tempo", "Depth", "Type", "Width", "Hi Cut", "OutLev"]),
+    typed("Panner", MOD_TREMOLO, ["Enable", "Speed", "Tempo", "Depth", "OutLev"]),
+    // The unit shows one Speed and one Tempo: those of the speed Select picks.
+    ...["Vintage Univibe", "Modern Univibe"].map((n) => typed(n, MOD_UNIVIBE, ["Enable", "Select",
+      "Speed1|Speed2=Speed", "Tempo1|Tempo2=Tempo", "Depth", "Attack", "Releas", "BpMode", "PhaRev", "Mix", "OutLev"],
+      "Select")),
   ]),
   new Block("pitch", "Pitch", 44, 19, [
     typed("Pitch Shifter", PITCH_SHIFTER,
@@ -314,7 +338,7 @@ export const BLOCKS: readonly Block[] = [
     typed("Detune", PITCH_SHIFTER, ["Enable", "VoiceL=Voice1", "VoiceR=Voice2", "Delay1", "Delay2", "Mix", "OutLev"]),
     typed("Intelligent", PITCH_INTELLIGENT, ["Enable", "Key", "Scale", "Voice1", "Voice2", "Level1", "Level2",
       "Pan1", "Pan2", "Delay1", "Delay2", "Mode", "Mix", "OutLev"]),
-    ...family(["Doubler"], PITCH_DOUBLER),
+    typed("Doubler", PITCH_DOUBLER, ["Enable", "Delay", "Pitch", "Side", "OutLev"]),
   ]),
   new Block("reverb", "Reverb", 64, 15, family(["Spring", "Hall", "Room", "Plate"], REVERB)),
   new Block("gate", "Noise gate", 80, 5, [], GATE, "NG"),
@@ -325,7 +349,7 @@ export const BLOCKS: readonly Block[] = [
     typed("Lo-Fi", DELAY, delayParams(["Drive"])),
     typed("Ping Pong", DELAY, delayParams(["Width"])),
     typed("Dynamic Delay", DELAY, delayParams(["Offset", "Sense", "Damp", "Rel"])),
-    typed("Dual Delay", DELAY, ["Enable", "Delay1", "Delay2", "TapTime", "Tempo1", "Tempo2", "Fb1", "Fb2",
+    typed("Dual Delay", DELAY, ["Enable", "Delay1", "Delay2", "Tempo1", "Tempo2", "Fb1", "Fb2",
       "Fbhcut", "Fblcut", "Pan1", "Pan2", "Mix", "OutLev"]),
   ]),
   new Block("eq", "EQ", 114, 10, [], EQ, "EQ"),

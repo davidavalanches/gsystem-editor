@@ -53,7 +53,6 @@ const LEVEL_LABELS: [string, string][] = [
 ];
 /** Pseudo block: the preset's boost, its own footswitch on the unit, with a level per preset. */
 const BOOST = "boost";
-const BOOST_PARAM = new Param("Level", 0, BOOST_LEVEL_MAX, [], (v) => `${v} dB`);
 const BOOST_ROW = 1003;
 
 /** Blocks with many parameters (13 to 25): on a phone their knobs would scroll, so they keep sliders. */
@@ -146,6 +145,8 @@ export class PresetView {
   onSlotChange: ((slot: number) => void) | null = null;
   /** A preset was picked in the editor in Live mode (not followed from the unit): recall it on the G-System. */
   onSelect: ((slot: number) => void) | null = null;
+  /** The Boost Max global setting of the G-System, when known: the boost level cannot go above it. */
+  boostMax: () => number | null = () => null;
 
   private readonly number = el("div", "dot-number");
   private readonly nameButton = el("button", "preset-name");
@@ -764,11 +765,23 @@ export class PresetView {
     sw.addEventListener("click", () => this.setLevel("boost", !lv.boost));
     this.paramsHead.append(sw);
     this.paramsList.classList.toggle("on-block", lv.boost);
+    const max = this.boostMax();
+    const param = new Param("Level", 0, Math.min(BOOST_LEVEL_MAX, max ?? BOOST_LEVEL_MAX), [], (v) => `${v} dB`);
+    const note = max === null
+      ? "Level added when the boost is on. The G-System caps it at the Boost Max global setting (Gbl Levels), not read yet."
+      : lv.boostLevel > max
+        ? `Stored at ${lv.boostLevel} dB, above the Boost Max global setting (${max} dB): the G-System plays ${max} dB.`
+        : `Level added when the boost is on, up to the Boost Max global setting (${max} dB, Gbl Levels).`;
     this.paramsList.replaceChildren(
-      this.paramRow(BOOST_ROW, BOOST_PARAM, lv.boostLevel, () =>
-        this.openValueSheet("Boost · Level", `field #${LEVELS_FIELD}`, BOOST_PARAM, lv.boostLevel, (v) => this.setBoostLevel(v)),
+      this.paramRow(BOOST_ROW, param, lv.boostLevel, () =>
+        this.openValueSheet("Boost · Level", `field #${LEVELS_FIELD}`, param, lv.boostLevel, (v) => this.setBoostLevel(v)),
         (v) => this.setBoostLevel(v)),
-      el("p", "params-note", "Level added when the boost is on. The G-System caps it at the Boost Max global setting."));
+      el("p", "params-note", note));
+  }
+
+  /** The Boost Max global setting changed: redraw the boost if it is shown. */
+  boostMaxChanged(): void {
+    if (this.blockKey === BOOST) this.render();
   }
 
   /** Shows the favorites of another G-System's workspace. */
@@ -778,13 +791,13 @@ export class PresetView {
     this.renderFavorites();
   }
 
-  /** The eight favorites of the shown effect: tap to load (or to save into an empty one), long-press for more. */
+  /** The four favorites of the shown effect: tap to load (or to save into an empty one), long-press for more. */
   private renderFavorites(): void {
     const key = this.blockKey;
     const isEffect = key !== MODIFIERS && key !== ROUTING && key !== BOOST && (this.tab === "block" || !DESKTOP.matches);
     this.favoriteBar.hidden = !isEffect || !this.buffer;
     if (this.favoriteBar.hidden) return;
-    const slots = this.favorites[key] ?? [];
+    const slots = (this.favorites[key] ?? []).slice(0, FAVORITE_COUNT);
     const match = matchingFavorite(this.buffer!.data, key, slots);
     this.favoriteBar.replaceChildren(el("span", "favorites-title", "FAV"), ...Array.from({ length: FAVORITE_COUNT }, (_, i) => {
       const fav = slots[i] ?? null;

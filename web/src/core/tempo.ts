@@ -50,7 +50,8 @@ const SYNCED: [string, string][] = [["Tempo", "Delay"], ["Tempo1", "Delay1"], ["
 export function syncToTempo(data: Uint8Array, key: string): Uint8Array {
   const fields = block(key).shownFields(data);
   const find = (name: string) => fields.find(([, p]) => p.name === name);
-  const tap = fields.find(([, p]) => /^Tap/.test(p.name));
+  // The tap time is stored but not shown: look for it among all the block's slots.
+  const tap = block(key).fields(data).find(([, p]) => /^Tap/.test(p.name));
   const tapMs = tap ? readField(data, tap[0]) : presetTempoMs(data);
   if (!tapMs || tapMs <= 0) return data;
   let out = data;

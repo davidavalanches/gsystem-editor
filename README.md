@@ -114,13 +114,18 @@ d'abord menu Pomme → À propos de ce Mac → Plus d'infos → Rapport système
   Sur ordinateur, pas de panneau latéral : les potentiomètres se tournent directement à la souris (glisser
   vers le haut ou le bas, Maj pour un réglage fin, double-clic pour le réglage fin) ou au clavier
   (flèches, Page préc./suiv., Début/Fin), les listes sont des menus déroulants.
-- **Tempo des effets** : changer le Tap / TapTime ou la valeur de note (Tempo) d'un bloc recalcule son Delay
-  ou sa Speed (tap × valeur de note, comme le fait le G-System) ; changer le tempo du preset fait de même
+- **Paramètres des effets** : chaque type d'effet ne montre que les paramètres du manuel du G-System, comme sur
+  l'appareil (ex. Resonance Filter : Style, Hicut, Resnce, OutLev). Les Univibe n'affichent que la Speed et le
+  Tempo de la vitesse choisie par Select.
+- **Tempo des effets** : changer la valeur de note (Tempo) d'un bloc recalcule son Delay ou sa Speed (tempo du
+  preset × valeur de note, comme le fait le G-System) ; changer le tempo du preset (300 BPM au plus) fait de même
   pour Delay, Filter et Mod.
+- **Boost** : niveau par preset, limité au réglage global Boost Max (Gbl Levels) une fois celui-ci lu.
 - **Routing et relais** (tuile ROUTING) : routing, niveaux de sortie, tempo, et les réglages de relais A et B
   (4 contacts chacun, ouvert / fermé, basculés par le switch Relay du pédalier).
 - **Sélection de preset** : choisir un preset dans l'éditeur, G-System connecté, envoie Bank Select +
-  Program Change sur le canal MIDI du G-System pour qu'il le rappelle (en USB, même avec Prg.Chng.In sur Off).
+  Program Change sur le canal MIDI du G-System pour qu'il le rappelle. Il faut Prg. Change In sur On (vue MIDI) :
+  sinon le G-System ignore le rappel, et l'éditeur propose de l'activer.
   En Live, le preset est aussi écrit dans la mémoire de travail.
 - **Store** : enregistre dans la banque de l'éditeur et, si le G-System est connecté, l'écrit dans le pédalier
   (séquence de Vyzor, adressée au SysEx ID du G-System, réglable dans la vue MIDI), puis le relit pour vérifier.
@@ -149,7 +154,7 @@ d'abord menu Pomme → À propos de ce Mac → Plus d'infos → Rapport système
 - **Réglages globaux du G-System** : vue **Settings** (niveaux, utilitaires, pédales, accordeur), vue **MIDI**
   (réglages MIDI) et vue **Switches** (le pédalier dessiné comme sur le G-System, 3 rangées de 6 switches avec
   leur fonction ; toucher un switch pour la changer). Lus à l'ouverture de la vue, modifiables hors connexion,
-  écrits par « Send » puis relus pour vérifier. Les favoris d'effets (8 par bloc) sont propres à chaque G-System.
+  écrits par « Send » puis relus pour vérifier. Les favoris d'effets (4 par bloc) sont propres à chaque G-System.
 - **Live** : chaque modification part dans la mémoire de travail du G-System (rien n'est stocké),
   les switches du pédalier sont reflétés dans l'éditeur, et changer de preset au pied fait suivre
   l'éditeur (avec relecture du preset).
@@ -162,7 +167,7 @@ d'abord menu Pomme → À propos de ce Mac → Plus d'infos → Rapport système
 | `F0 00 20 1F 00 55 45 01 <n° hi> <n° lo> F7` | Demande d'un preset stocké (réponse en 0,77 s ; une requête à la fois) |
 | `F0 00 20 1F <dev> 55 20 01 <n°> <1032 quartets> <somme> F7` | Dump de preset (1044 octets) |
 | `F0 00 20 1F 7F 55 22 <bloc> <param:2> <valeur:6 quartets> F7` | Écriture d'un paramètre de la mémoire de travail ; envoyé aussi par le G-System |
-| `B0 00 <1\|2>` + `C0 <n>` | Changement de preset envoyé par le G-System ; l'éditeur envoie le même pour rappeler un preset (suivi en USB même avec Prg.Chng.In sur Off) |
+| `B0 00 <1\|2>` + `C0 <n>` | Changement de preset envoyé par le G-System ; l'éditeur envoie le même pour rappeler un preset (ignoré si Prg. Change In est sur Off) |
 
 Blocs : 1 = niveaux (loops 19–22, insert 23, boost 10, relais A 17 et B 18), 2 = EQ, 4 = Mod, 7 = Filter, 8 = Pitch,
 9 = Delay, 10 = Comp, 11 = Reverb, 12 = Noise gate, 13 = modifiers (paramètres 20–57).

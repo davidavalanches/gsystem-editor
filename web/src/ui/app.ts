@@ -4,7 +4,7 @@ import { emptyPreset } from "../core/empty";
 import { describeField, formatField } from "../core/fields";
 import { diffFields } from "../core/params";
 import { BANK_COUNT, BankStore, PRESETS_PER_BANK, readBankFile, slotLabel } from "../core/bank";
-import { GLOBAL_PARAMS, GLOBAL_RANGES, MIDI_CHANNEL_PARAM, PRG_CHANGE_IN_PARAM, SYSTEM_BLOCK, globalKey, globalRaw,
+import { BOOST_MAX_PARAM, GLOBAL_PARAMS, GLOBAL_RANGES, LEVELS_BLOCK, MIDI_CHANNEL_PARAM, PRG_CHANGE_IN_PARAM, SYSTEM_BLOCK, globalKey, globalRaw,
   globalValue } from "../core/globals";
 import { GSystemLink } from "../core/protocol";
 import { SqsFile, USER_BANK_KIND, readSyx } from "../core/sqs";
@@ -153,6 +153,11 @@ export class App {
     });
     this.preset.onNotice = (text) => this.notify(text);
     this.preset.onSelect = (slot) => this.recallOnUnit(slot);
+    this.preset.boostMax = () => {
+      const g = GLOBAL_PARAMS.get(globalKey(LEVELS_BLOCK, BOOST_MAX_PARAM));
+      const raw = this.settings.rawValue(LEVELS_BLOCK, BOOST_MAX_PARAM);
+      return g && raw !== undefined ? globalValue(g, raw) : null;
+    };
     this.preset.onSlotChange = (slot) => {
       this.banks.current = slot;
       this.banks.showBank(Math.floor(slot / PRESETS_PER_BANK));
@@ -438,6 +443,7 @@ export class App {
     if (session) for (const p of readSyx(session.syx)) if (p.userSlot !== null) presets[p.userSlot] = p;
     this.bank.load(presets, session?.title ?? "Empty bank", session?.sqs ? new SqsFile(session.sqs) : null, session?.pending ?? []);
     this.settings.useStorage(storageKey(GLOBALS_BASE, unit));
+    this.preset.boostMaxChanged();
     this.preset.useFavorites(storageKey(FAVORITES_BASE, unit));
     this.midiView.sysexId.value = String(unit.sysexId);
     if (this.link) this.link.sysexId = unit.sysexId;
@@ -662,6 +668,7 @@ export class App {
       link.onParam = (b, p, v) => {
         this.settings.update(b, p, v);
         this.preset.applyFromUnit(b, p, v);
+        if (b === LEVELS_BLOCK && p === BOOST_MAX_PARAM) this.preset.boostMaxChanged();
       };
       link.onPresetSelected = (slot) => this.unitPreset(slot);
       link.onPresetRead = (p) => {

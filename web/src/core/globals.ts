@@ -22,6 +22,8 @@ export const SYSTEM_BLOCK = 5;
 export const MIDI_CHANNEL_PARAM = 15;
 /** Block 5 parameter "Prg. Change In": Off, the unit ignores the editor's preset recalls. */
 export const PRG_CHANGE_IN_PARAM = 16;
+/** Gbl Levels "Boost Max" (block 1): the highest boost level a preset may use. */
+export const BOOST_MAX_PARAM = 12;
 /** Ranges read in one 55 47 request each: [block, first parameter, count]. */
 export const GLOBAL_RANGES: [number, number, number][] = [[LEVELS_BLOCK, 0, 30], [SYSTEM_BLOCK, 3, 23], [0x0d, 58, 1],
   [SWITCH_BLOCK, SWITCH_FIRST, SWITCH_COUNT]];
@@ -64,7 +66,7 @@ export const GLOBAL_GROUPS: GlobalGroup[] = [
     p(1, 6, "Volume", -100, 0, { format: db() }),
     e(1, 7, "Volume Pos.", ["Input", "Output"], "Volume before (Input) or after (Output) the effects"),
     p(1, 8, "Output Level", -100, 0, { format: db() }),
-    p(1, 12, "Boost Max", 0, 10, { format: db(), help: "Maximum boost allowed per preset" }),
+    p(LEVELS_BLOCK, BOOST_MAX_PARAM, "Boost Max", 0, 10, { format: db(), help: "Maximum boost allowed per preset" }),
     e(1, 2, "Input Select", ["Rear", "Front"], "Guitar input used on the GFX01"),
   ] },
   { title: "Utility", params: [
