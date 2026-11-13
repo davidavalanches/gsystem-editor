@@ -19,6 +19,7 @@ import { PresetView } from "./preset";
 import { SettingsView } from "./settings";
 import { SKINS, chooseSkin, currentSkin } from "./skin";
 import { ICONS, type MenuItem } from "./widgets";
+import { LOOP_NAMES_BASE } from "./loopnames";
 import { FAVORITES_BASE, GLOBALS_BASE, PROTECTED_BASE, SESSION_BASE, Units, defaultUnitName, parseSlotLabel, storageKey, type Unit } from "./units";
 
 type ReadMode = "all" | "bank" | "refresh" | "verify" | "revert";
@@ -82,6 +83,7 @@ export class App {
       sendToUnit: (slots) => this.sendToUnit(slots),
       hasOtherUnit: () => this.units.others().length > 0,
       bankMenu: (b) => this.bankMenu(b),
+      loopLabel: (i) => this.preset.loopNames.label(i),
       dropBank: (from, to) => showChoices(`Bank ${pad2(from)} onto bank ${pad2(to)}`, [
         { label: `Swap banks ${pad2(from)} and ${pad2(to)}`, detail: "Exchange their presets (undoable), then Store to write them",
           run: () => void this.bankOperation("swap", from, to) },
@@ -155,6 +157,10 @@ export class App {
     });
     this.preset.onNotice = (text) => this.notify(text);
     this.preset.onSelect = (slot) => this.recallOnUnit(slot);
+    this.preset.loopNames.onChange = () => {
+      this.preset.loopNamesChanged();
+      this.banks.refresh();
+    };
     this.preset.boostMax = () => {
       const g = GLOBAL_PARAMS.get(globalKey(LEVELS_BLOCK, BOOST_MAX_PARAM));
       const raw = this.settings.rawValue(LEVELS_BLOCK, BOOST_MAX_PARAM);
@@ -451,6 +457,7 @@ export class App {
     this.settings.useStorage(storageKey(GLOBALS_BASE, unit));
     this.preset.boostMaxChanged();
     this.preset.useFavorites(storageKey(FAVORITES_BASE, unit));
+    this.preset.loopNames.use(storageKey(LOOP_NAMES_BASE, unit));
     this.midiView.sysexId.value = String(unit.sysexId);
     if (this.link) this.link.sysexId = unit.sysexId;
     this.banks.unitName = this.units.list.length > 1 ? unit.name : "";

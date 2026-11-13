@@ -19,6 +19,8 @@ const DAMAGED = "The G-System reports this slot's memory as damaged (it answers 
 export interface BanksActions {
   open(slot: number): void;
   menu(): MenuItem[];
+  /** "Loop 2" or the name given to it on this G-System. */
+  loopLabel(index: number): string;
   /** Actions on a whole bank (read, swap, copy, export). */
   bankMenu(bank: number): MenuItem[];
   readUnit(): void;
@@ -488,7 +490,7 @@ export class BanksView {
       const ms = presetTempoMs(p.data);
       const facts = el("dl", "detail-facts");
       const fact = (term: string, value: string) => facts.append(el("dt", "", term), el("dd", "", value));
-      fact("Loops", [...lv.loops.flatMap((on, i) => (on ? [`Loop ${i + 1}`] : [])), ...(lv.insert ? ["Insert"] : [])].join(", ") || "none");
+      fact("Loops", [...lv.loops.flatMap((on, i) => (on ? [this.actions.loopLabel(i)] : [])), ...(lv.insert ? ["Insert"] : [])].join(", ") || "none");
       fact("Boost", lv.boost ? `On · ${lv.boostLevel} dB` : `Off · ${lv.boostLevel} dB`);
       fact("Routing", ROUTINGS[lv.routing] ?? String(lv.routing));
       const [left, right] = presetOutputs(p.data);

@@ -93,6 +93,8 @@ d'abord menu Pomme → À propos de ce Mac → Plus d'infos → Rapport système
   Toute modification de la banque (renommer, coller, vider, échanger, copier) s'ajoute à la liste « Store (n) » pour
   être écrite dans le G-System ; vider un emplacement (ou une banque) y met un preset « Empty »
   (tous les effets, loops, insert, boost et modifiers coupés), car le G-System n'accepte que des presets complets.
+- **Noms des loops** : appui long (clic droit sur ordinateur) sur Loop 1 à 4 pour y noter la pédale branchée.
+  Les noms sont propres à chaque G-System (SysEx ID), gardés sur l'appareil, et repris dans le détail de la vue Banks.
 - **Interface** : thème sombre en paysage, conçue pour un téléphone 5" (740×360 dp), polices IBM Plex et Doto
   embarquées (OFL).
 - **Import** (menu ⋮ → « Import banks from a file… ») : prendre des banques d'une sauvegarde `.sqs` / `.syx`, venant de

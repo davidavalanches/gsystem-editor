@@ -438,10 +438,11 @@ button:disabled { opacity: 0.4; cursor: default; }
   mask: radial-gradient(circle closest-side at 48% 52%, transparent 74%, #000 76%, #000 82%, transparent 86%);
 }
 .footswitch > * { position: relative; z-index: 1; }
-/* Lit base: red light through the plastic, a glow around it; the bezel catches some red. */
+/* Lit base: red light through the plastic, a soft glow around it (kept low: restful to look at); the
+   bezel catches some red. */
 .footswitch.on {
   background: radial-gradient(circle closest-side, #ff7a60 0 70%, #ff3f24 84%, #d8240f 94%, #8a1205 100%);
-  box-shadow: inset 0 0 0 0.5px rgba(90, 10, 0, 0.6), 0 0 8px rgba(255, 60, 30, 0.75), 0 0 18px rgba(255, 60, 30, 0.35);
+  box-shadow: inset 0 0 0 0.5px rgba(90, 10, 0, 0.6), 0 0 4px rgba(255, 60, 30, 0.4), 0 0 9px rgba(255, 60, 30, 0.15);
 }
 .footswitch.on::before {
   background:
@@ -515,20 +516,15 @@ button:disabled { opacity: 0.4; cursor: default; }
 .preset-strip { display: flex; align-items: center; gap: 8px; flex-shrink: 0; padding: 5px 8px; background: var(--panel) var(--scanlines); border-bottom: 1px solid var(--edge); }
 .levels { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; }
 /* Boost: a small footswitch block at the end of the loops, like BOOST at the end of the unit's bottom row. */
-.boost-block { flex-shrink: 0; display: flex; align-items: stretch; height: 32px; border: 1px solid var(--groove); border-radius: 6px; background: transparent; box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.35); }
+.boost-block { flex-shrink: 0; display: flex; align-items: stretch; height: 32px; border: 1px solid var(--groove); border-radius: 6px; background: var(--well); }
 /* Selected like an effect tile: a lighter ground and the red bar along the bottom. */
 .boost-block.selected { background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 -3px 0 var(--accent); }
 .boost-switch { width: 30px; padding: 0; border: 0; border-right: 1px solid var(--groove); border-radius: 6px 0 0 6px; background: transparent; display: grid; place-items: center; }
 .boost-switch::before { content: ""; width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--line-3); }
-.boost-block.on .boost-switch::before { border: 0; background: radial-gradient(circle at 40% 35%, #fff, #ffd2c8 60%, #ff9a85); box-shadow: 0 0 5px rgba(255, 255, 255, 0.8); }
+.boost-block.on .boost-switch::before { border: 0; background: radial-gradient(circle at 40% 35%, #ffb09e, #f03a22 55%, #a51a0c); box-shadow: 0 0 6px rgba(255, 64, 32, 0.8); }
 .boost-pick { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; padding: 0 9px 0 7px; border: 0; border-radius: 0 6px 6px 0; background: transparent; text-align: left; }
 .boost-name { font-family: var(--display); -webkit-text-stroke: var(--display-stroke); font-size: 8.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
-.boost-block.on .boost-name { color: #fff; }
-/* On: filled red, like the loops. */
-.boost-block.on { border-color: transparent; background: linear-gradient(to bottom, #f0533e, #c42f1c); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); }
-.boost-block.on .boost-switch { border-right-color: rgba(0, 0, 0, 0.2); }
-.boost-block.on .boost-level { color: #fff; }
-.boost-block.on.selected { box-shadow: inset 0 -3px 0 #fff, 0 1px 2px rgba(0, 0, 0, 0.3); }
+.boost-block.on .boost-name { color: var(--ink); }
 .boost-level { font-family: var(--mono); font-size: 11px; font-weight: 600; line-height: 1; color: var(--soft); white-space: nowrap; }
 .params-note { grid-column: 1 / -1; margin: 6px 10px; font-size: 12px; color: var(--dim); }
 .level {
@@ -537,9 +533,7 @@ button:disabled { opacity: 0.4; cursor: default; }
   padding: 0;
   border-radius: 6px;
   border: 1px solid var(--groove);
-  /* Off: hollow, pressed into the panel; on: filled (below). */
-  background: transparent;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.35);
+  background: var(--well);
   font-family: var(--display); -webkit-text-stroke: var(--display-stroke);
   font-size: 8.5px;
   letter-spacing: 0.01em;
@@ -550,20 +544,12 @@ button:disabled { opacity: 0.4; cursor: default; }
   gap: 4px;
   white-space: nowrap;
 }
-.level::before { content: ""; flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--line-3); }
-/* Lit: the whole button turns red, its label white. */
-.level.on {
-  color: #fff;
-  font-weight: 700;
-  border-color: transparent;
-  background: linear-gradient(to bottom, #f0533e, #c42f1c);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
-}
+.level::before { content: ""; flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--line-3); }
+.level.on { color: var(--ink); }
 .level.relay { gap: 3px; }
 .level.relay::before { display: none; }
 .relay-letter { color: var(--accent); font-weight: 700; text-shadow: 0 0 6px rgba(255, 90, 71, 0.7); }
-.level.on::before { background: radial-gradient(circle at 40% 35%, #fff, #ffd2c8 60%, #ff9a85); border: 0; box-shadow: 0 0 5px rgba(255, 255, 255, 0.8); }
+.level.on::before { background: var(--red); border: 0; box-shadow: 0 0 6px rgba(240, 83, 62, 0.8); }
 
 .params-section { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--surface); }
 .params-head { display: flex; align-items: center; gap: 8px; height: 46px; flex-shrink: 0; padding: 0 10px 0 14px; border-bottom: 1px solid var(--bg); }
@@ -863,6 +849,13 @@ button:disabled { opacity: 0.4; cursor: default; }
    Banks: all 40 banks in an 8 × 5 grid, the selected preset's details on the right.
    Preset: bank browser | effect row over the parameters | docked fine-adjust panel. */
 .level-long { display: none; }
+.level-tag { display: inline-flex; }
+/* A named loop: the LED, then its number small on top and the pedal's name below. */
+.level.named { justify-content: flex-start; padding: 0 6px; }
+.level-text { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.level-text .level-tag { font-size: 7px; line-height: 1.1; opacity: 0.75; }
+.level-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: "IBM Plex Sans", system-ui, sans-serif; -webkit-text-stroke: 0;
+  font-size: 11.5px; font-weight: 600; letter-spacing: 0; line-height: 1.15; }
 @media (min-width: 1200px) and (min-height: 700px) {
   .level-short { display: none; }
   .level-long { display: inline; }

@@ -18,6 +18,7 @@ import { NOVA_BLOCK_ID, NOVA_FIELD, NOVA_HEADER_FIELD, NOVA_PRESETS, novaPreset,
 import { TAP_MAX_MS, TEMPO_BLOCKS, TEMPO_MAX_BPM, bpmToMs, msToBpm, presetTempoMs, syncToTempo, writeTempoMs } from "../core/tempo";
 import { NAME_LEN, Preset, SysexError, USER_SLOTS } from "../core/sysex";
 import { askText } from "./dialog";
+import { LOOP_NAME_LEN, LoopNames } from "./loopnames";
 import { DESKTOP, el } from "./dom";
 import { ICONS, fillDotNumber, iconButton, onLongPress, routingIcon, showMenu } from "./widgets";
 
@@ -147,6 +148,8 @@ export class PresetView {
   onSelect: ((slot: number) => void) | null = null;
   /** The Boost Max global setting of the G-System, when known: the boost level cannot go above it. */
   boostMax: () => number | null = () => null;
+  /** Names of the loops of the G-System whose workspace is shown. */
+  loopNames = new LoopNames();
 
   private readonly number = el("div", "dot-number");
   private readonly nameButton = el("button", "preset-name");
@@ -231,7 +234,8 @@ export class PresetView {
     this.openSlot(0);
     // Codes are measured in the panel font: again once it has loaded, and when the window changes size.
     void document.fonts?.ready.then(() => fitCodes(this.tiles));
-    addEventListener("resize", () => fitCodes(this.tiles));
+    // Also when the view is shown again: hidden, the tiles have no width to fit into.
+    new ResizeObserver(() => fitCodes(this.tiles)).observe(this.tiles);
   }
 
   // Live link
@@ -684,15 +688,27 @@ export class PresetView {
     this.levelBar.replaceChildren(...LEVEL_LABELS.map(([key, label]) => {
       const on = this.buffer ? levelOn(this.buffer.data, key) : false;
       if (key === "relay") return this.relaySwitch(on);
-      const b = el("button", on ? "level on" : "level");
+      const loop = key.startsWith("loop") ? Number(key.slice(4)) - 1 : null;
+      const name = loop === null ? "" : this.loopNames.name(loop);
+      const b = el("button", ["level", on ? "on" : "", name ? "named" : ""].filter(Boolean).join(" "));
       // Short on a phone ("L1", "INS"), spelled out on a desktop ("LOOP 1", "INSERT"): CSS picks one.
-      b.append(el("span", "level-short", label),
+      const tag = el("span", "level-tag");
+      tag.append(el("span", "level-short", label),
         el("span", "level-long", key === "insert" ? "INSERT" : `LOOP ${label.slice(1)}`));
+      // A named loop: its number small on top, the pedal's name below.
+      if (name) {
+        const text = el("span", "level-text");
+        text.append(tag, el("span", "level-name", name));
+        b.append(text);
+      } else b.append(tag);
       b.type = "button";
       b.disabled = !this.buffer;
-      b.title = label === "INS" ? "Insert (loop 5)" : label === "BST"
-        ? `Boost ${this.buffer ? presetLevels(this.buffer.data).boostLevel : 0} dB` : `Loop ${label.slice(1)}`;
+      b.title = label === "INS" ? "Insert (loop 5)"
+        : `Loop ${label.slice(1)}${name ? `: ${name}` : ""} (long press or right-click: name it)`;
+      b.setAttribute("aria-label", label === "INS" ? "Insert" : this.loopNames.label(loop!));
       b.setAttribute("aria-pressed", String(on));
+      // Registered before the click, so the click ending a long press is swallowed.
+      if (loop !== null) onLongPress(b, () => void this.renameLoop(loop));
       b.addEventListener("click", () => this.setLevel(key, !on));
       return b;
     }));
@@ -717,6 +733,18 @@ export class PresetView {
   }
 
   /** Boost: its switch (LED) toggles it, its label shows its level and opens it like an effect block. */
+  /** Name the pedal in a loop, for this G-System. */
+  private async renameLoop(loop: number): Promise<void> {
+    const name = await askText(`Loop ${loop + 1} on this G-System: the pedal in it (${LOOP_NAME_LEN} characters max., empty for none)`,
+      this.loopNames.name(loop), LOOP_NAME_LEN);
+    if (name !== null) this.loopNames.set(loop, name);
+  }
+
+  /** The loop names changed, or another G-System's are shown. */
+  loopNamesChanged(): void {
+    this.renderLevels();
+  }
+
   private renderBoostBlock(): void {
     const lv = this.buffer ? presetLevels(this.buffer.data) : null;
     const on = !!lv?.boost;
