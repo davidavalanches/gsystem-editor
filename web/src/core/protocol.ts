@@ -3,7 +3,9 @@
  *
  * - Universal Device Inquiry, answered with the firmware version.
  * - 55 45 01 <num>: request a stored preset (read-only), answered by a dump in
- *   about 0.77 s. The unit ignores requests while busy; empty slots never answer.
+ *   about 0.77 s: ~40 ms before it starts, then 728 ms to send its 1044 bytes (the
+ *   unit's own pace, measured over USB). Requests sent while it answers are mostly
+ *   ignored, so presets are asked for one at a time; empty slots never answer.
  *   A slot whose memory is damaged answers 55 28 <num:2> 00 01 instead (seen for
  *   27-3 to 28-4; the firmware has "Corrupt preset!" and "Checksum Error" messages).
  * - 55 22 <block> <param:2> <value:6 nibbles>: set one parameter of the edit

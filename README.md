@@ -103,12 +103,16 @@ d'abord menu Pomme → À propos de ce Mac → Plus d'infos → Rapport système
 - **Fichiers** : ouverture des banques Vyzor `.sqs` et des `.syx` ; export `.syx` (téléchargement
   sur ordinateur ; sur Android, l'écran « Enregistrer sous » du système : dossier au choix, Drive…, sans permission de stockage). La banque en cours est conservée d'une
   session à l'autre.
-- **Lecture du G-System** : « Connect » propose, une fois le G-System identifié, de lire toutes les banques ou la banque affichée. Toutes les banques (READ ALL BANKS, ~2 min 30, la liste se remplit au fur et à mesure)
+- **Lecture du G-System** : « Connect » propose, une fois le G-System identifié, de lire toutes les banques ou la banque affichée. Toutes les banques (READ ALL BANKS, ~2 min 30, la liste se remplit au fur et à mesure,
+  en commençant par la banque affichée ; tant qu'un preset n'est pas lu, il est grisé et ne peut être ni ouvert
+  ni modifié)
   ou seulement la banque affichée (menu ⋮ ou vue MIDI, 0,8 s par preset).
 - **Langue** : l'interface est en anglais.
 - **Preset** : en-tête (preset précédent/suivant, numéro banque/position en points, nom, tempo avec les deux
   LEDs vertes de tempo, côte à côte, allumées à tour de rôle à chaque temps, voyant ambre « Modified » tant que le preset n'est pas
-  stocké, Live, Store), 8 tuiles d'effets avec voyant et type, rangée Loop 1–4 / Insert / Boost, paramètres
+  stocké, Live, Store), 8 tuiles d'effets avec leur switch dessiné comme sur le G-System (dôme chrome sur base
+  translucide qui s'allume en rouge) et leur type, rangée Loop 1–4 / Insert / Relay / Boost (fond plein quand actif,
+  noms complets sur ordinateur), paramètres
   du bloc en potentiomètres (curseurs sur téléphone pour Reverb, Delay, Pitch), panneau de réglage fin sur
   téléphone (valeur, curseur, − / + maintenus, choix pour les listes), tampon d'édition avec Store.
   Sur ordinateur, pas de panneau latéral : les potentiomètres se tournent directement à la souris (glisser

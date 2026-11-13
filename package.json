@@ -1,6 +1,6 @@
 {
   "name": "gsystem-editor",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "private": true,
   "description": "Éditeur libre pour TC Electronic G-System (web, Android via Capacitor)",
   "type": "module",

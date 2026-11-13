@@ -35,6 +35,9 @@ export interface BanksActions {
   hasOtherUnit(): boolean;
 }
 
+const NOT_READ = "Not read yet from the G-System: its content is unknown until the read reaches it";
+const NOT_READ_ALERT = "Some of these presets are not read yet from the G-System. Wait for the read to reach them, or read their bank (bank menu).";
+
 export class BanksView {
   readonly el = el("section", "view");
   bankIndex = 0;
@@ -233,6 +236,7 @@ export class BanksView {
       cell.append(head, ...slots.map((slot) => {
         const p = this.bank.preset(slot);
         const damaged = this.bank.corrupt.has(slot);
+        if (this.bank.unread.has(slot)) return this.unreadSlot("cell-slot", slot);
         const button = el("button", ["cell-slot", p ? "" : "empty", slot === this.current ? "selected" : "",
           this.bank.pending.has(slot) ? "pending" : "", damaged ? "corrupt" : ""].filter(Boolean).join(" "));
         button.type = "button";
@@ -542,7 +546,28 @@ export class BanksView {
     }
   }
 
+  /** A slot the read of the G-System has not reached: shown, but neither openable nor changeable. */
+  private unreadSlot(kind: "slot" | "cell-slot", slot: number): HTMLElement {
+    const row = el("button", `${kind} unread`);
+    row.type = "button";
+    row.disabled = true;
+    row.dataset.slot = String(slot);
+    row.title = NOT_READ;
+    row.setAttribute("aria-label", `${slotLabel(slot)} not read yet from the G-System`);
+    const pos = String((slot % PRESETS_PER_BANK) + 1);
+    if (kind === "cell-slot") row.append(el("span", "cell-pos", pos), el("span", "cell-name", "not read"));
+    else {
+      const head = el("span", "slot-head");
+      head.append(el("span", "slot-code", pos), el("span", "slot-name", "not read yet"));
+      const main = el("span", "slot-main");
+      main.append(head);
+      row.append(main);
+    }
+    return row;
+  }
+
   private slotRow(slot: number): HTMLElement {
+    if (this.bank.unread.has(slot)) return this.unreadSlot("slot", slot);
     const p = this.bank.preset(slot);
     const damaged = this.bank.corrupt.has(slot);
     const classes = ["slot", p ? "" : "empty", slot === this.current ? "current" : "", p && !p.checksumOk ? "warn" : "",
@@ -603,6 +628,10 @@ export class BanksView {
 
   /** An edit of the editor's bank; the slots join the list to store into the G-System. */
   private edit(changes: Map<number, Preset | null>, text: string): void {
+    if (this.bank.anyUnread(changes.keys())) {
+      alert(NOT_READ_ALERT);
+      return;
+    }
     this.bank.setSlots(changes, text);
     this.bank.markPending([...changes.keys()].filter((s) => !this.bank.isProtected(s)));
   }

@@ -320,6 +320,20 @@ describe("bank", () => {
     expect(bank.pending.size).toBe(0);
   });
 
+  it("keeps slots not reached by a full read apart", () => {
+    const bank = new BankStore();
+    bank.unread = new Set([0, 1, 2]);
+    const seen: (number[] | null)[] = [];
+    bank.onChange = (slots) => seen.push(slots);
+    expect(bank.anyUnread([4, 2])).toBe(true);
+    bank.markRead([0, 1, 9]);
+    expect([...bank.unread]).toEqual([2]);
+    expect(seen).toEqual([[0, 1]]);
+    expect(bank.anyUnread([0, 1])).toBe(false);
+    bank.load([], "autre banque");
+    expect(bank.unread.size).toBe(0);
+  });
+
   it("exports renumbered presets", () => {
     const bank = new BankStore();
     bank.load([null, makePreset("B", 150)], "t");

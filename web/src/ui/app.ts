@@ -58,6 +58,8 @@ export class App {
   /** The offer to switch Prg. Change In on was declined for this link: not asked again. */
   private prgChangeDeclined: GSystemLink | null = null;
   private readMode: ReadMode | null = null;
+  /** Slots of the read running, in the order they are asked for. */
+  private readOrder: number[] = [];
   /** Links whose identity has answered (it is asked several times). */
   private readonly answered = new WeakSet<GSystemLink>();
   /** Set by Connect: once the G-System answers, ask what to read. */
@@ -337,6 +339,10 @@ export class App {
         });
       }
       for (const [s, p] of [...changes]) if (sameBytes(this.bank.preset(s)?.data, p?.data)) changes.delete(s);
+      if (this.bank.anyUnread(changes.keys())) {
+        alert("Some of these slots are not read yet from the G-System. Wait for the read to reach them, then import.");
+        return;
+      }
       const protectedSlots = [...changes.keys()].filter((s) => this.bank.isProtected(s));
       const replaced = [...changes.keys()].filter((s) => this.bank.preset(s)).map((s) => `${slotLabel(s)}  ${this.bank.preset(s)!.name}`);
       if (!changes.size) {
@@ -675,6 +681,7 @@ export class App {
         if (this.readMode === "all" && p.userSlot !== null) this.bank.setDirect(p.userSlot, p);
       };
       link.onProgress = (done, total) => {
+        if (this.readMode === "all") this.bank.markRead(this.readOrder.slice(0, done));
         if (this.readMode === "all" || this.readMode === "bank") this.banks.setReading([done, total]);
       };
       link.onReadFinished = (presets, missing, corrupt) => this.readFinished(presets, missing, corrupt);
@@ -815,6 +822,10 @@ export class App {
 
   /** Store into the editor's bank and, when connected, into the unit. */
   private store(slot: number, p: Preset): void {
+    if (this.bank.unread.has(slot)) {
+      alert(`${slotLabel(slot)} is not read yet from the G-System: wait for the read to reach it before storing there.`);
+      return;
+    }
     this.bank.setSlots(new Map([[slot, p]]), `Store “${p.name}”`);
     this.writeToUnit(new Map([[slot, p]]));
   }
@@ -830,6 +841,10 @@ export class App {
     }
     if (!Number.isInteger(to) || to < 0 || to >= BANK_COUNT || to === from) {
       alert("Enter a bank number from 00 to 39, other than the bank shown.");
+      return;
+    }
+    if (this.bank.anyUnread([...this.bankSlots(from), ...this.bankSlots(to)])) {
+      alert("These banks are not fully read from the G-System yet. Wait for the read to reach them, or read them (bank menu).");
       return;
     }
     const written = kind === "swap" ? [from, to] : [to];
@@ -1043,7 +1058,12 @@ export class App {
       if (!this.canReplaceBank()) return;
       if (!this.bank.undo.isClean && !confirm("The bank shown has unexported changes. Discard them?")) return;
       this.bank.load(new Array(USER_SLOTS).fill(null), `G-System (read ${new Date().toLocaleString("en-GB")})`);
-      slots = [...Array(USER_SLOTS).keys()];
+      // The bank shown first, usable within seconds; then the others from the start. Until a slot is read
+      // it is marked "not read" and cannot be opened or changed.
+      const first = this.bankSlots(this.banks.bankIndex);
+      slots = [...first, ...[...Array(USER_SLOTS).keys()].filter((s) => !first.includes(s))];
+      this.bank.unread = new Set(slots);
+      this.banks.refresh();
     } else if (mode === "bank") {
       slots = this.banks.bankSlots;
     } else if (mode === "verify") {
@@ -1054,6 +1074,7 @@ export class App {
       slots = [this.preset.slot];
     }
     this.readMode = mode;
+    this.readOrder = slots;
     if (mode === "all" || mode === "bank") this.banks.setReading([0, slots.length]);
     this.link.readSlots(slots);
   }
@@ -1087,9 +1108,13 @@ export class App {
       return;
     }
     const changes = new Map<number, Preset | null>();
+    // A slot left "not read" by an interrupted full read: now known (a damaged one keeps the mark).
+    const known = this.readOrder.filter((s) => !corrupt.includes(USER_PRESET_BASE + s));
+    const wasUnread = new Set(known.filter((s) => this.bank.unread.has(s)));
     for (const p of presets) if (p.userSlot !== null) changes.set(p.userSlot, p);
     for (const n of missing) changes.set(n - USER_PRESET_BASE, null);
-    for (const [s, p] of [...changes]) if (sameBytes(this.bank.preset(s)?.data, p?.data)) changes.delete(s);
+    for (const [s, p] of [...changes]) if (!wasUnread.has(s) && sameBytes(this.bank.preset(s)?.data, p?.data)) changes.delete(s);
+    this.bank.markRead(wasUnread);
     // A damaged slot keeps the editor's copy: it may be the only good one left.
     if (mode === "bank") {
       this.notify(`${presets.length} preset(s) read, ${changes.size} different from the bank shown`

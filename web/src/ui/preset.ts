@@ -684,7 +684,10 @@ export class PresetView {
     this.levelBar.replaceChildren(...LEVEL_LABELS.map(([key, label]) => {
       const on = this.buffer ? levelOn(this.buffer.data, key) : false;
       if (key === "relay") return this.relaySwitch(on);
-      const b = el("button", on ? "level on" : "level", label);
+      const b = el("button", on ? "level on" : "level");
+      // Short on a phone ("L1", "INS"), spelled out on a desktop ("LOOP 1", "INSERT"): CSS picks one.
+      b.append(el("span", "level-short", label),
+        el("span", "level-long", key === "insert" ? "INSERT" : `LOOP ${label.slice(1)}`));
       b.type = "button";
       b.disabled = !this.buffer;
       b.title = label === "INS" ? "Insert (loop 5)" : label === "BST"
@@ -708,7 +711,7 @@ export class PresetView {
     button.disabled = !this.buffer;
     button.title = `Relay ${inUse} in use: tap for Relay ${other} (settings in the Routing panel)`;
     button.setAttribute("aria-label", `Relay ${inUse} in use, switch to ${other}`);
-    button.append("RLY", el("span", "relay-letter", inUse));
+    button.append(el("span", "level-short", "RLY"), el("span", "level-long", "RELAY"), el("span", "relay-letter", inUse));
     button.addEventListener("click", () => this.setLevel("relay", !on));
     return button;
   }

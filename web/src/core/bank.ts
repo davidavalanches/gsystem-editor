@@ -123,6 +123,21 @@ export class BankStore {
   /** Banks the user excluded from writing: on some units, stores into a faulty memory area
    * freeze the G-System. A state of the unit, kept whatever bank is loaded. */
   protectedBanks = new Set<number>();
+  /** Slots a full read of the unit has not reached yet: their content is unknown, so they can be
+   * neither opened nor changed. Cleared by loading another bank. */
+  unread = new Set<number>();
+
+  /** The read of the unit has reached these slots (read, empty or damaged). */
+  markRead(slots: Iterable<number>): void {
+    const done = [...slots].filter((s) => this.unread.delete(s));
+    if (done.length) this.onChange?.(done);
+  }
+
+  /** Whether any of these slots is still waiting for the unit's read. */
+  anyUnread(slots: Iterable<number>): boolean {
+    for (const s of slots) if (this.unread.has(s)) return true;
+    return false;
+  }
 
   /** No write into this bank: the user protected it, or the unit reported one of its slots damaged. */
   isProtectedBank(bank: number): boolean {
@@ -145,6 +160,7 @@ export class BankStore {
     this.sqs = sqs;
     this.title = title;
     this.pending = new Set(pending);
+    this.unread.clear();
     this.undo.clear();
     this.onChange?.(null);
   }
