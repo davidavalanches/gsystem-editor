@@ -30,8 +30,7 @@
     "@capacitor/android": "^8.5.3",
     "@capacitor/core": "^8.5.3",
     "@capacitor/filesystem": "^8.1.5",
-    "@fontsource/barlow": "^5.0.0",
-    "@fontsource/barlow-condensed": "^5.0.0"
+    "@fontsource/inter": "^5.0.0"
   },
   "main": "desktop/main.cjs",
   "build": {

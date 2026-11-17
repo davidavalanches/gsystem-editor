@@ -483,6 +483,7 @@ export class BanksView {
         const on = field !== null && readField(p.data, field) === 1;
         const cell = el("div", on ? "detail-block on" : "detail-block");
         cell.style.setProperty("--h", `var(--fx-${key})`);
+        cell.style.setProperty("--t", `var(--fx-${key}-tint)`);
         const sw = el("span", on ? "footswitch on" : "footswitch");
         sw.innerHTML = blockIcon(key);
         cell.append(sw, el("span", "detail-code", label),

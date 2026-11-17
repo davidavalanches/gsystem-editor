@@ -617,6 +617,7 @@ export class PresetView {
       // A footswitch (on/off, as on the unit) beside the label that shows the block's parameters.
       const tile = el("div", `tile${key === this.blockKey ? " selected" : ""}${on ? " on" : ""}`);
       tile.style.setProperty("--h", `var(--fx-${key})`);
+      tile.style.setProperty("--t", `var(--fx-${key}-tint)`);
       const label = TILE_LABELS[key] ?? blk.label;
       const footswitch = el("button", on ? "footswitch on" : "footswitch");
       footswitch.innerHTML = blockIcon(key);
@@ -952,6 +953,7 @@ export class PresetView {
       const on = this.isOn(blk);
       const head = el("button", on ? "all-head on" : "all-head");
       head.style.setProperty("--h", `var(--fx-${key})`);
+      head.style.setProperty("--t", `var(--fx-${key}-tint)`);
       head.type = "button";
       head.title = `Show ${blk.label} alone`;
       head.append(el("span", "all-code", code),
