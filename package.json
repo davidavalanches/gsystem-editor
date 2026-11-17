@@ -3,6 +3,9 @@
   "version": "1.0.5",
   "private": true,
   "description": "Éditeur libre pour TC Electronic G-System (web, Android via Capacitor)",
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
