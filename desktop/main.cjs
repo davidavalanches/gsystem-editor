@@ -27,7 +27,7 @@ function createWindow() {
     height: 1080,
     minWidth: 640,
     minHeight: 360,
-    backgroundColor: "#26272a",
+    backgroundColor: "#1a1d22",
     autoHideMenuBar: true,
     // Full screen everywhere; on macOS in its own Space, left with the green button or Ctrl+Cmd+F.
     fullscreen: true,

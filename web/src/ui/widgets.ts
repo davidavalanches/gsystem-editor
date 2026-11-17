@@ -128,37 +128,26 @@ export function routingIcon(routing: number): string {
     + `stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>`;
 }
 
-/** 5×7 dot-matrix digits, one string of 5 columns per row: wide, rounded zeros with no slash. */
-const DOT_DIGITS: Record<string, string[]> = {
-  "0": [".###.", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."],
-  "1": ["..#..", ".##..", "..#..", "..#..", "..#..", "..#..", ".###."],
-  "2": [".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####"],
-  "3": [".###.", "#...#", "....#", "..##.", "....#", "#...#", ".###."],
-  "4": ["...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#."],
-  "5": ["#####", "#....", "####.", "....#", "....#", "#...#", ".###."],
-  "6": ["..##.", ".#...", "#....", "####.", "#...#", "#...#", ".###."],
-  "7": ["#####", "....#", "...#.", "..#..", ".#...", ".#...", ".#..."],
-  "8": [".###.", "#...#", "#...#", ".###.", "#...#", "#...#", ".###."],
-  "9": [".###.", "#...#", "#...#", ".####", "....#", "...#.", ".##.."],
-};
-
-/** Digits drawn as round LEDs, the unlit ones faintly visible as on the unit's display. */
-function dotDigits(text: string, className: string): SVGSVGElement {
-  const width = text.length * 6 - 1;
-  const dots: string[] = [];
-  [...text].forEach((ch, i) => (DOT_DIGITS[ch] ?? DOT_DIGITS["0"]).forEach((row, y) => [...row].forEach((c, x) =>
-    dots.push(`<circle class="${c === "#" ? "lit" : "unlit"}" cx="${i * 6 + x + 0.5}" cy="${y + 0.5}" r="0.42"/>`))));
-  const box = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  box.setAttribute("class", className);
-  box.setAttribute("viewBox", `0 0 ${width} 7`);
-  box.setAttribute("aria-hidden", "true");
-  box.innerHTML = dots.join("");
-  return box;
-}
-
-/** The red bank number with the position as a small index at its top right, as on the unit. */
+/** The bank number with the position as a small index at its top right. */
 export function fillDotNumber(target: HTMLElement, bank: number, position: number): void {
   const bankText = String(bank).padStart(2, "0");
   target.setAttribute("aria-label", `Bank ${bankText}, position ${position}`);
-  target.replaceChildren(dotDigits(bankText, "bank"), dotDigits(String(position), "position"));
+  target.replaceChildren(el("span", "bank", bankText), el("span", "position", String(position)));
+}
+
+/** Icons of the effect blocks (24 × 24, stroked): what each block does, drawn. */
+export const BLOCK_ICONS: Record<string, string> = {
+  filter: "M3 18c5 0 6-11 9-11s4 11 9 11",
+  comp: "M4 12h16M12 3v5.5M9 5.5l3 3 3-3M12 21v-5.5M9 18.5l3-3 3 3",
+  mod: "M2.5 12c2.4-6.5 4.8-6.5 7.2 0s4.8 6.5 7.2 0 3.6-4.2 4.6-3.6",
+  pitch: "M7.5 19V5M4.5 8l3-3 3 3M16.5 5v14M13.5 16l3 3 3-3",
+  delay: "M4 5v14M9 7.5v9M14 9.5v5M19 11v2",
+  reverb: "M5 12h.01M8.5 8.5a5 5 0 0 1 0 7M12 5a10 10 0 0 1 0 14M15.5 2a14.5 14.5 0 0 1 0 20",
+  eq: "M6 4v16M12 4v16M18 4v16M3.5 15h5M9.5 8h5M15.5 12h5",
+  gate: "M2.5 18h5V6h9v12h5",
+};
+
+export function blockIcon(key: string): string {
+  const d = BLOCK_ICONS[key];
+  return d ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>` : "";
 }

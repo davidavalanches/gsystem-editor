@@ -8,11 +8,11 @@ import { msToBpm, presetTempoMs } from "../core/tempo";
 import { NAME_LEN, type Preset } from "../core/sysex";
 import { askText, showChoices } from "./dialog";
 import { DESKTOP, el } from "./dom";
-import { ICONS, fillDotNumber, iconButton, onLongPress, routingIcon, showMenu, type MenuItem } from "./widgets";
+import { ICONS, blockIcon, fillDotNumber, iconButton, onLongPress, routingIcon, showMenu, type MenuItem } from "./widgets";
 
 /** The effect blocks, named as on the unit's switches (desktop preset details). */
-const STRIP: [string, string][] = [["filter", "FILTER"], ["comp", "COMP"], ["mod", "MOD"], ["pitch", "PITCH"],
-  ["delay", "DELAY"], ["reverb", "REVERB"], ["eq", "EQ"], ["gate", "GATE"]];
+const STRIP: [string, string][] = [["filter", "Filter"], ["comp", "Comp"], ["mod", "Mod"], ["pitch", "Pitch"],
+  ["delay", "Delay"], ["reverb", "Reverb"], ["eq", "EQ"], ["gate", "Gate"]];
 
 const DAMAGED = "The G-System reports this slot's memory as damaged (it answers \u201ccorrupt preset\u201d).";
 
@@ -482,7 +482,10 @@ export class BanksView {
         const field = blk.enableField(p.data);
         const on = field !== null && readField(p.data, field) === 1;
         const cell = el("div", on ? "detail-block on" : "detail-block");
-        cell.append(el("span", on ? "footswitch on" : "footswitch"), el("span", "detail-code", label),
+        cell.style.setProperty("--h", `var(--fx-${key})`);
+        const sw = el("span", on ? "footswitch on" : "footswitch");
+        sw.innerHTML = blockIcon(key);
+        cell.append(sw, el("span", "detail-code", label),
           el("span", "detail-type", blk.effectType(p.data)?.name ?? (key === "eq" ? "3-band" : "Gate")));
         blocks.append(cell);
       }

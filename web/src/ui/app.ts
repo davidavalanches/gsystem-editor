@@ -17,7 +17,6 @@ import { loadSession, pickFile, saveFile, storeSession } from "./files";
 import { MidiView } from "./midiview";
 import { PresetView } from "./preset";
 import { SettingsView } from "./settings";
-import { SKINS, chooseSkin, currentSkin } from "./skin";
 import { ICONS, type MenuItem } from "./widgets";
 import { LOOP_NAMES_BASE } from "./loopnames";
 import { FAVORITES_BASE, GLOBALS_BASE, PROTECTED_BASE, SESSION_BASE, Units, defaultUnitName, parseSlotLabel, storageKey, type Unit } from "./units";
@@ -253,16 +252,7 @@ export class App {
         action: () => this.bank.undoLast(), disabled: !this.bank.undo.canUndo },
       { label: "Redo", action: () => this.bank.redoLast(), disabled: !this.bank.undo.canRedo },
       { label: `G-System: ${this.units.current.name}…`, action: () => this.chooseUnit() },
-      { label: "Appearance…", action: () => this.chooseSkin() },
     ];
-  }
-
-  /** The panels' finish, after the G-System's black, grey and red editions. */
-  private chooseSkin(): void {
-    const now = currentSkin();
-    showChoices("Appearance", SKINS.map(([key, label]) => ({
-      label, detail: key === now ? "In use" : `Panels in ${label.toLowerCase()} metal`, run: () => chooseSkin(key),
-    })));
   }
 
   /** The actions of one bank; each first makes it the bank shown. */

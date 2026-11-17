@@ -20,12 +20,12 @@ import { NAME_LEN, Preset, SysexError, USER_SLOTS } from "../core/sysex";
 import { askText } from "./dialog";
 import { LOOP_NAME_LEN, LoopNames } from "./loopnames";
 import { DESKTOP, el } from "./dom";
-import { ICONS, fillDotNumber, iconButton, onLongPress, routingIcon, showMenu } from "./widgets";
+import { ICONS, blockIcon, fillDotNumber, iconButton, onLongPress, routingIcon, showMenu } from "./widgets";
 
 /** Tile order of the design: the unit's effect sections. */
 const TILES: [string, string][] = [
-  ["filter", "FILTER"], ["comp", "COMP"], ["mod", "MOD"], ["pitch", "PITCH"],
-  ["delay", "DELAY"], ["reverb", "REVERB"], ["eq", "EQ"], ["gate", "GATE"],
+  ["filter", "Filter"], ["comp", "Comp"], ["mod", "Mod"], ["pitch", "Pitch"],
+  ["delay", "Delay"], ["reverb", "Reverb"], ["eq", "EQ"], ["gate", "Gate"],
 ];
 const TILE_LABELS: Record<string, string> = { mod: "Modulation", eq: "Parametric EQ" };
 /** Pseudo block of the tile list: pedal and encoder assignments. */
@@ -616,8 +616,10 @@ export class PresetView {
       const on = this.isOn(blk);
       // A footswitch (on/off, as on the unit) beside the label that shows the block's parameters.
       const tile = el("div", `tile${key === this.blockKey ? " selected" : ""}${on ? " on" : ""}`);
+      tile.style.setProperty("--h", `var(--fx-${key})`);
       const label = TILE_LABELS[key] ?? blk.label;
       const footswitch = el("button", on ? "footswitch on" : "footswitch");
+      footswitch.innerHTML = blockIcon(key);
       footswitch.type = "button";
       footswitch.disabled = !this.buffer || blk.enableField(this.buffer.data) === null;
       footswitch.setAttribute("aria-pressed", String(on));
@@ -648,7 +650,7 @@ export class PresetView {
     tile.type = "button";
     tile.setAttribute("aria-label", `Pedals and encoders, ${assigned.length} assignment(s)`);
     tile.title = assigned.map((t) => t.name).join(", ");
-    tile.append(el("span", "tile-code", "MODIFIERS"),
+    tile.append(el("span", "tile-code", "Modifiers"),
       el("span", assigned.length ? "tile-count" : "tile-count none", sources.join(" · ") || "none"));
     tile.addEventListener("click", () => {
       this.blockKey = MODIFIERS;
@@ -670,7 +672,7 @@ export class PresetView {
       tile.title = `L ${left} dB · R ${right} dB`;
       tile.setAttribute("aria-label", `Routing ${ROUTINGS[routing] ?? routing}, outputs ${left} and ${right} dB`);
     }
-    tile.append(el("span", "tile-code", "ROUTING"), type);
+    tile.append(el("span", "tile-code", "Routing"), type);
     tile.addEventListener("click", () => {
       this.blockKey = ROUTING;
       this.tab = "block";
@@ -949,6 +951,7 @@ export class PresetView {
       const blk = block(key);
       const on = this.isOn(blk);
       const head = el("button", on ? "all-head on" : "all-head");
+      head.style.setProperty("--h", `var(--fx-${key})`);
       head.type = "button";
       head.title = `Show ${blk.label} alone`;
       head.append(el("span", "all-code", code),
