@@ -18,6 +18,7 @@ import { MidiView } from "./midiview";
 import { PresetView } from "./preset";
 import { SettingsView } from "./settings";
 import { ICONS, type MenuItem } from "./widgets";
+import { THEMES, chooseTheme, currentTheme } from "./theme";
 import { LOOP_NAMES_BASE } from "./loopnames";
 import { FAVORITES_BASE, GLOBALS_BASE, PROTECTED_BASE, SESSION_BASE, Units, defaultUnitName, parseSlotLabel, storageKey, type Unit } from "./units";
 
@@ -252,7 +253,16 @@ export class App {
         action: () => this.bank.undoLast(), disabled: !this.bank.undo.canUndo },
       { label: "Redo", action: () => this.bank.redoLast(), disabled: !this.bank.undo.canRedo },
       { label: `G-System: ${this.units.current.name}…`, action: () => this.chooseUnit() },
+      { label: "Appearance…", action: () => this.chooseTheme() },
     ];
+  }
+
+  /** The theme: Modern, or Old school (the look of versions 1.0.x) in one of the unit's three finishes. */
+  private chooseTheme(): void {
+    const now = currentTheme();
+    showChoices("Appearance", THEMES.map(([key, label, detail]) => ({
+      label, detail: key === now ? `In use · ${detail}` : detail, run: () => chooseTheme(key),
+    })));
   }
 
   /** The actions of one bank; each first makes it the bank shown. */

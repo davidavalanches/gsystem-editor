@@ -1,0 +1,644 @@
+/* Old school theme: the look of versions 1.0.x, after the unit itself, on the current layout.
+   Chosen in More actions → Appearance (ui/theme.ts), which sets data-theme="oldschool" on <html> and the finish
+   in data-skin (none: Black brushed; "grey"; "red"). Modern (styles.css) stays the default.
+   Part 1 is the 1.0.5 look, rule by rule: its colours, backgrounds, shadows and fonts, scoped to this theme
+   (generated from the 1.0.5 stylesheet, the layout properties left out). Part 2 dresses what the new layout added. */
+
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/ibm-plex-sans/700.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/600.css";
+@import "@fontsource/doto/800.css";
+@import "@fontsource/michroma/400.css";
+@import "@fontsource/vt323/400.css";
+
+/* ── Part 1: the 1.0.5 look ─────────────────────────────────────────── */
+
+:root[data-theme="oldschool"] {
+  --bg: #26272a;
+  --bar: #2b2c2f;
+  --bar-dark: #0b0b0c;
+  --panel: #3a3b3e;
+  --surface: #333437;
+  --surface-2: #3e4044;
+  --surface-3: #3e4044;
+  --selected: #45474b;
+  --current: rgba(255, 255, 255, 0.09);
+  --sheet: #333437;
+  --edge: #1e1f21;
+  --groove: #222325;
+  --line: #4a4c50;
+  --line-2: #55585d;
+  --line-3: #6a6d72;
+  --ink: #ececec;
+  --head-ink: #d9dce0;
+  --soft: #c4c7cb;
+  --muted: #b4b7bb;
+  --dim: #a0a3a8;
+  --faint: #7d8085;
+  --dark-ink: #1a1b1d;
+  --bright: #f2f2f2;
+  --idle: #8a8d92;
+  --well: rgba(0, 0, 0, 0.18);
+  --field: #222326;
+  --red: #f0533e;
+  --accent: #ff5a47;
+  --amber: #f2c230;
+  --lcd: #b5d334;
+  --lcd-ink: #1f2a08;
+  --green: #5bc46a;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --display: "Michroma", "IBM Plex Sans", sans-serif;
+  --display-stroke: 0.04em currentColor;
+  --lcd-font: "VT323", ui-monospace, monospace;
+  --scanlines: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 3px);
+  --metal: radial-gradient(circle at 40% 32%, #fff 0%, #e4e6e8 38%, #9da2a8 78%, #c7cbcf 100%);
+}
+:root[data-theme="oldschool"][data-skin="grey"] :is(.header, .rail, .detail-display, .toast) {
+  --bg: #26272a;
+  --bar: #2b2c2f;
+  --bar-dark: #0b0b0c;
+  --panel: #3a3b3e;
+  --surface: #333437;
+  --surface-2: #3e4044;
+  --surface-3: #3e4044;
+  --selected: #45474b;
+  --current: rgba(255, 255, 255, 0.09);
+  --sheet: #333437;
+  --edge: #1e1f21;
+  --groove: #222325;
+  --line: #4a4c50;
+  --line-2: #55585d;
+  --line-3: #6a6d72;
+  --ink: #ececec;
+  --head-ink: #d9dce0;
+  --soft: #c4c7cb;
+  --muted: #b4b7bb;
+  --dim: #a0a3a8;
+  --faint: #7d8085;
+  --dark-ink: #1a1b1d;
+  --bright: #f2f2f2;
+  --strong: #fff;
+  --idle: #8a8d92;
+  --well: rgba(0, 0, 0, 0.18);
+  --field: #222326;
+  --red: #f0533e;
+  --accent: #ff5a47;
+  --amber: #f2c230;
+  --lcd: #b5d334;
+  --lcd-ink: #1f2a08;
+  --green: #5bc46a;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --display: "Michroma", "IBM Plex Sans", sans-serif;
+  --display-stroke: 0.04em currentColor;
+  --lcd-font: "VT323", ui-monospace, monospace;
+  --scanlines: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 3px);
+  --metal: radial-gradient(circle at 40% 32%, #fff 0%, #e4e6e8 38%, #9da2a8 78%, #c7cbcf 100%);
+  color-scheme: dark;
+}
+:root[data-theme="oldschool"][data-skin="grey"] {
+  --bg: #aeb0b3;
+  --bar: #bfc1c4;
+  --panel: #d0d1d3;
+  --surface: #c4c6c9;
+  --surface-2: #b8babd;
+  --surface-3: #dfe0e2;
+  --selected: #e6e7e9;
+  --current: rgba(0, 0, 0, 0.07);
+  --sheet: #d6d7d9;
+  --edge: #8d8f93;
+  --groove: #9c9ea2;
+  --line: #a9abaf;
+  --line-2: #95979b;
+  --line-3: #7c7e82;
+  --ink: #121314;
+  --head-ink: #121314;
+  --soft: #26282b;
+  --muted: #33363a;
+  --dim: #484b50;
+  --faint: #66696e;
+  --idle: #6e7176;
+  --well: rgba(0, 0, 0, 0.06);
+  --field: #eeeff0;
+  --bright: #121314;
+  --strong: #000;
+  --dark-ink: #f4f4f5;
+  --red: #d63a26;
+  --accent: #d93a25;
+  --amber: #b07800;
+  --green: #2c8f42;
+  --scanlines: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.26) 0 1px, rgba(0, 0, 0, 0.022) 1px 2px, transparent 2px 3px);
+  color-scheme: light;
+}
+:root[data-theme="oldschool"][data-skin="red"] {
+  --bg: #2b1718;
+  --bar: #331b1c;
+  --panel: #6e1f20;
+  --surface: #45191a;
+  --surface-2: #552022;
+  --surface-3: #552022;
+  --selected: #642a2b;
+  --current: rgba(255, 255, 255, 0.1);
+  --sheet: #3f1718;
+  --edge: #1a0b0c;
+  --groove: #210e0f;
+  --line: #6a3334;
+  --line-2: #7b4041;
+  --line-3: #935657;
+  --soft: #ecd9d8;
+  --muted: #dcc4c3;
+  --dim: #c9adac;
+  --faint: #a58584;
+  --accent: #ff8a5c;
+  --red: #ff6b4f;
+  --scanlines: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 3px);
+}
+:root[data-theme="oldschool"] {
+  font: 14px "IBM Plex Sans", system-ui, sans-serif;
+}
+:root[data-theme="oldschool"] body {
+  font: 14px "IBM Plex Sans", system-ui, sans-serif;
+}
+:root[data-theme="oldschool"] .pill {
+  font-family: var(--display);
+  -webkit-text-stroke: var(--display-stroke);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+:root[data-theme="oldschool"] .rail button[aria-current="page"] {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+:root[data-theme="oldschool"] .rail button[aria-current="page"] svg .accent {
+  stroke: var(--accent);
+}
+:root[data-theme="oldschool"] .rail .midi-dot.lost {
+  box-shadow: 0 0 6px var(--red);
+}
+:root[data-theme="oldschool"] .header-title {
+  -webkit-text-stroke: var(--display-stroke);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+:root[data-theme="oldschool"] .header-sub {
+  font-size: 11.5px;
+  color: #a7acb2;
+}
+:root[data-theme="oldschool"] .reading b {
+  color: var(--amber);
+}
+:root[data-theme="oldschool"] .progress {
+  background: repeating-linear-gradient(90deg, #2e3034 0 4px, transparent 4px 6px);
+}
+:root[data-theme="oldschool"] .progress span {
+  background: repeating-linear-gradient(90deg, var(--amber) 0 4px, transparent 4px 6px);
+}
+:root[data-theme="oldschool"] .drag-ghost .drag-hint {
+  color: #fff;
+}
+:root[data-theme="oldschool"] .bank-list button.drop-target {
+  background: rgba(255, 90, 71, 0.12);
+}
+:root[data-theme="oldschool"] .bank-list button[aria-selected="true"] {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+:root[data-theme="oldschool"] .bank-num {
+  -webkit-text-stroke: var(--display-stroke);
+  font-size: 13px;
+}
+:root[data-theme="oldschool"] .slot-level-name {
+  -webkit-text-stroke: var(--display-stroke);
+  font-size: 7.5px;
+  letter-spacing: 0.05em;
+}
+:root[data-theme="oldschool"] .slot-tempo {
+  font-family: "Doto", monospace;
+  font-weight: 800;
+}
+:root[data-theme="oldschool"] .slot-routing-name {
+  text-transform: uppercase;
+}
+:root[data-theme="oldschool"] .slot.current {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+:root[data-theme="oldschool"] .slot-code {
+  -webkit-text-stroke: var(--display-stroke);
+  font-size: 16px;
+}
+:root[data-theme="oldschool"] .dot-number {
+  display: flex;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 7px 8px;
+  border-radius: 2px;
+  background: #3a0c08;
+}
+:root[data-theme="oldschool"] .dot-number .lit {
+  fill: #ff4a36;
+}
+:root[data-theme="oldschool"] .dot-number .unlit {
+  fill: #ff4a36;
+  fill-opacity: 0.09;
+}
+:root[data-theme="oldschool"] .dot-number .bank {
+  height: 24px;
+}
+:root[data-theme="oldschool"] .dot-number .position {
+  height: 11px;
+}
+:root[data-theme="oldschool"] .preset-lcd {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-left: 8px;
+  background: var(--lcd);
+}
+:root[data-theme="oldschool"] .preset-name {
+  grid-column: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border: 0;
+  border-radius: 0;
+  background: var(--lcd);
+  color: var(--lcd-ink);
+  text-align: left;
+}
+:root[data-theme="oldschool"] .preset-name .name {
+  font-family: var(--lcd-font);
+  font-size: 22px;
+  line-height: 0.95;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+:root[data-theme="oldschool"] .preset-tempo {
+  grid-column: 2;
+  align-self: start;
+  height: 22px;
+  margin-top: 3px;
+  padding: 0 10px 0 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--lcd-ink);
+  font-family: var(--lcd-font);
+  font-size: 18px;
+  line-height: 1;
+  white-space: nowrap;
+}
+:root[data-theme="oldschool"] .preset-name .status {
+  font-family: var(--lcd-font);
+  font-size: 15px;
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+:root[data-theme="oldschool"] .preset-name .status.alert {
+  color: var(--lcd-ink);
+}
+:root[data-theme="oldschool"] .live-dot {
+  background: #3a3d20;
+}
+:root[data-theme="oldschool"] .pill.live.active {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+:root[data-theme="oldschool"] .pill.live.active .live-dot {
+  background: var(--amber);
+}
+:root[data-theme="oldschool"] .pill.store {
+  background: #2a2d31;
+  color: #8e949a;
+}
+:root[data-theme="oldschool"] .edit-led {
+  -webkit-text-stroke: var(--display-stroke);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+:root[data-theme="oldschool"] .edit-led-dot {
+  box-shadow: 0 0 8px rgba(242, 194, 48, 0.85);
+}
+:root[data-theme="oldschool"] .footswitch {
+  background: radial-gradient(circle closest-side, #5e6165 0 70%, #53565a 86%, #3e4144 96%, #26282a 100%);
+  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+:root[data-theme="oldschool"] .footswitch::before {
+  content: "";
+  position: absolute;
+  inset: 12.5%;
+  border-radius: 50%;
+  background: radial-gradient(circle closest-side at 48% 52%, #e2e5e7 0%, #ced2d5 55%, #b9bec2 73%, rgba(185, 190, 194, 0) 74%),
+    radial-gradient(circle closest-side, #fff 0%, #fff 80%, #f2f4f6 89%, #b6bbc0 96%, #5f646a 100%);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.35);
+}
+:root[data-theme="oldschool"] .footswitch::after {
+  content: "";
+  position: absolute;
+  inset: 12.5%;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0 14deg, #141619 24deg 50deg, transparent 60deg 70deg,
+    #0d0e10 82deg 110deg, transparent 120deg 240deg, #141619 254deg 286deg, transparent 300deg 360deg);
+  -webkit-mask: radial-gradient(circle closest-side at 48% 52%, transparent 74%, #000 76%, #000 82%, transparent 86%);
+  mask: radial-gradient(circle closest-side at 48% 52%, transparent 74%, #000 76%, #000 82%, transparent 86%);
+}
+:root[data-theme="oldschool"] .footswitch > * {
+  position: relative;
+  z-index: 1;
+}
+:root[data-theme="oldschool"] .footswitch.on {
+  background: radial-gradient(circle closest-side, #ff7a60 0 70%, #ff3f24 84%, #d8240f 94%, #8a1205 100%);
+  box-shadow: inset 0 0 0 0.5px rgba(90, 10, 0, 0.6), 0 0 4px rgba(255, 60, 30, 0.4), 0 0 9px rgba(255, 60, 30, 0.15);
+}
+:root[data-theme="oldschool"] .footswitch.on::before {
+  background: radial-gradient(circle closest-side at 48% 52%, #e2e5e7 0%, #ced2d5 55%, #b9bec2 73%, rgba(185, 190, 194, 0) 74%),
+    radial-gradient(circle closest-side, #fdfdfd 0%, #fff 78%, #ffe3dc 88%, #ff9d88 96%, #b0301c 100%);
+}
+:root[data-theme="oldschool"] .footswitch:disabled {
+  opacity: 1;
+  filter: grayscale(1) brightness(0.7);
+}
+:root[data-theme="oldschool"] .routing-choice button.on {
+  box-shadow: inset 0 0 0 1px var(--accent), 0 0 10px rgba(255, 90, 71, 0.25);
+}
+:root[data-theme="oldschool"] .routing-choice button.on svg {
+  color: var(--accent);
+  filter: drop-shadow(0 0 2px var(--accent)) drop-shadow(0 0 5px rgba(255, 90, 71, 0.7));
+}
+:root[data-theme="oldschool"] .relay-contact.on {
+  color: var(--ink);
+}
+:root[data-theme="oldschool"] .relay-contact.on::before {
+  background: var(--red);
+  box-shadow: 0 0 6px rgba(240, 83, 62, 0.8);
+}
+:root[data-theme="oldschool"] .relay-pick {
+  -webkit-text-stroke: var(--display-stroke);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+:root[data-theme="oldschool"] .relay-row.in-use .relay-pick {
+  box-shadow: 0 0 8px rgba(255, 90, 71, 0.25);
+}
+:root[data-theme="oldschool"] .relay-row.in-use .relay-pick-dot {
+  background: var(--red);
+  box-shadow: 0 0 6px rgba(240, 83, 62, 0.8);
+}
+:root[data-theme="oldschool"] .favorites-title {
+  -webkit-text-stroke: var(--display-stroke);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+}
+:root[data-theme="oldschool"] .boost-block.selected {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
+:root[data-theme="oldschool"] .boost-block.on .boost-switch::before {
+  background: radial-gradient(circle at 40% 35%, #ffb09e, #f03a22 55%, #a51a0c);
+  box-shadow: 0 0 6px rgba(255, 64, 32, 0.8);
+}
+:root[data-theme="oldschool"] .boost-name {
+  -webkit-text-stroke: var(--display-stroke);
+  font-size: 8.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+:root[data-theme="oldschool"] .level {
+  -webkit-text-stroke: var(--display-stroke);
+  font-size: 8.5px;
+}
+:root[data-theme="oldschool"] .level.on {
+  color: var(--ink);
+}
+:root[data-theme="oldschool"] .relay-letter {
+  text-shadow: 0 0 6px rgba(255, 90, 71, 0.7);
+}
+:root[data-theme="oldschool"] .params-head .label {
+  -webkit-text-stroke: var(--display-stroke);
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+:root[data-theme="oldschool"] .head-level-name {
+  -webkit-text-stroke: var(--display-stroke);
+  font-size: 7px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+:root[data-theme="oldschool"] .param-name {
+  -webkit-text-stroke: var(--display-stroke);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+:root[data-theme="oldschool"] .knob-arc {
+  stroke: var(--accent);
+}
+:root[data-theme="oldschool"] .params.slider-list .param.selected {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+:root[data-theme="oldschool"] .track-fill {
+  background: var(--accent);
+}
+:root[data-theme="oldschool"] .param.modifier.selected {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+:root[data-theme="oldschool"] .track-thumb {
+  background: radial-gradient(circle at 40% 35%, #fff, #b9bdc2);
+}
+:root[data-theme="oldschool"] .param-block {
+  letter-spacing: 0.06em;
+}
+:root[data-theme="oldschool"] .source-chip.on {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+:root[data-theme="oldschool"] .source-chip.warn {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+:root[data-theme="oldschool"] .mod-bar {
+  background: var(--amber);
+}
+:root[data-theme="oldschool"] .sheet-choices.sources button.on {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+:root[data-theme="oldschool"] .sheet-head {
+  -webkit-text-stroke: var(--display-stroke);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+:root[data-theme="oldschool"] .sheet .track-fill {
+  background: var(--accent);
+}
+:root[data-theme="oldschool"] .card h2 {
+  -webkit-text-stroke: var(--display-stroke);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+:root[data-theme="oldschool"] .status-line .dot.on {
+  box-shadow: 0 0 6px var(--green);
+}
+:root[data-theme="oldschool"] .slot-corrupt {
+  -webkit-text-stroke: var(--display-stroke);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+:root[data-theme="oldschool"] .settings-empty h2 {
+  -webkit-text-stroke: var(--display-stroke);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+:root[data-theme="oldschool"] .pedalboard-lcd {
+  background: var(--lcd);
+  color: var(--lcd-ink);
+  font-family: var(--lcd-font);
+  font-size: 18px;
+}
+:root[data-theme="oldschool"] .pedal[aria-checked="true"] {
+  box-shadow: inset 0 0 0 1px var(--accent), 0 0 10px rgba(255, 90, 71, 0.35);
+}
+:root[data-theme="oldschool"] .switch-number {
+  -webkit-text-stroke: var(--display-stroke);
+  font-size: 12px;
+}
+:root[data-theme="oldschool"] .level-name {
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  -webkit-text-stroke: 0;
+}
+:root[data-theme="oldschool"] .choices-title {
+  -webkit-text-stroke: var(--display-stroke);
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+:root[data-theme="oldschool"] .choice:hover::before {
+  box-shadow: 0 0 8px rgba(255, 90, 71, 0.7);
+}
+:root[data-theme="oldschool"] .choice:focus-visible::before {
+  box-shadow: 0 0 8px rgba(255, 90, 71, 0.7);
+}
+@media (min-width: 1200px) and (min-height: 700px) {
+  :root[data-theme="oldschool"] .bank-cell-num {
+    -webkit-text-stroke: var(--display-stroke);
+    font-size: 12px;
+  }
+  :root[data-theme="oldschool"] .cell-slot.drop-target {
+    background: rgba(255, 90, 71, 0.12);
+  }
+  :root[data-theme="oldschool"] .bank-cell.drop-target {
+    box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 18px rgba(255, 90, 71, 0.25);
+  }
+  :root[data-theme="oldschool"] .cell-slot.corrupt.empty .cell-name {
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  :root[data-theme="oldschool"] .detail-code {
+    -webkit-text-stroke: var(--display-stroke);
+    font-size: 9.5px;
+    letter-spacing: 0.04em;
+  }
+  :root[data-theme="oldschool"] .browser-bank-num {
+    -webkit-text-stroke: var(--display-stroke);
+    font-size: 11px;
+  }
+  :root[data-theme="oldschool"] .browser-slot.current {
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+  :root[data-theme="oldschool"] .preset-header .preset-lcd {
+    flex: 0 1 460px;
+  }
+  :root[data-theme="oldschool"] .all-code {
+    -webkit-text-stroke: var(--display-stroke);
+    font-size: 13px;
+    letter-spacing: 0.05em;
+  }
+}
+@media (max-width: 1199px), (max-height: 699px) {
+  :root[data-theme="oldschool"] .edit-led-text {
+    display: none;
+  }
+}
+
+/* ── Part 2: the new layout in the old look ─────────────────────────── */
+
+:root[data-theme="oldschool"] {
+  --sans: "IBM Plex Sans", system-ui, sans-serif;
+  /* One meaning for red, as on the unit: on. Loops, insert, boost and blocks alike; no colour per family. */
+  --rig: var(--accent);
+  --on-ink: #fff;
+  --fx-filter: var(--accent); --fx-comp: var(--accent); --fx-gate: var(--accent); --fx-eq: var(--accent);
+  --fx-mod: var(--accent); --fx-pitch: var(--accent); --fx-delay: var(--accent); --fx-reverb: var(--accent);
+  --fx-filter-tint: transparent; --fx-comp-tint: transparent; --fx-gate-tint: transparent; --fx-eq-tint: transparent;
+  --fx-mod-tint: transparent; --fx-pitch-tint: transparent; --fx-delay-tint: transparent; --fx-reverb-tint: transparent;
+}
+
+/* The preset LCD: name, status line and tempo on the green display; the header's own tempo readout steps aside. */
+:root[data-theme="oldschool"] .preset-name .status,
+:root[data-theme="oldschool"] .lcd-tempo { display: block; }
+:root[data-theme="oldschool"] .lcd-tempo[hidden] { display: none; }
+:root[data-theme="oldschool"] .preset-tempo-group .preset-tempo { display: none; }
+:root[data-theme="oldschool"] .preset-name .status { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:root[data-theme="oldschool"] .preset-name .status.alert { color: var(--lcd-ink); }
+:root[data-theme="oldschool"] .dot-number span { display: none; }
+:root[data-theme="oldschool"] .dot-number svg { display: block; width: auto; }
+
+/* Footswitches: the chrome switch replaces the block's icon. */
+:root[data-theme="oldschool"] .footswitch { position: relative; border: 0; border-radius: 50%; }
+:root[data-theme="oldschool"] .footswitch svg,
+:root[data-theme="oldschool"] .head-icon { display: none; }
+:root[data-theme="oldschool"] .footswitch.on { border: 0; }
+
+/* Blocks (phone grid and desktop chain): dark wells on the brushed panel, the lit switch says "on". */
+:root[data-theme="oldschool"] .blocks-column,
+:root[data-theme="oldschool"] .chain-section { background: var(--panel) var(--scanlines); }
+:root[data-theme="oldschool"] .blocks .tile,
+:root[data-theme="oldschool"] .chain .tile,
+:root[data-theme="oldschool"] .chain-loops { background: var(--well); border-color: var(--groove); }
+:root[data-theme="oldschool"] .blocks .tile.on:not(.stack),
+:root[data-theme="oldschool"] .chain .tile.on { background: var(--well); border-color: var(--groove); }
+:root[data-theme="oldschool"] .blocks .tile.selected,
+:root[data-theme="oldschool"] .chain .tile.selected,
+:root[data-theme="oldschool"] .blocks .tile.on.selected:not(.stack) {
+  background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 -3px 0 var(--accent);
+}
+:root[data-theme="oldschool"] .tile-code { font-family: var(--display); -webkit-text-stroke: var(--display-stroke); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
+:root[data-theme="oldschool"] .chain-group { border-color: var(--line-3); }
+:root[data-theme="oldschool"] .chain-group.selected { border-color: var(--accent); }
+:root[data-theme="oldschool"] .loop-row.on .loop-led { box-shadow: 0 0 6px rgba(240, 83, 62, 0.8); }
+
+/* Loops, insert, relay and boost chips: no dot (their labels keep the room), lit in red when on. */
+:root[data-theme="oldschool"] .level.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+:root[data-theme="oldschool"] .boost-block.on { background: var(--accent); border-color: var(--accent); }
+:root[data-theme="oldschool"] .boost-block.on .boost-name,
+:root[data-theme="oldschool"] .boost-block.on .boost-level { color: #fff; }
+
+/* Desktop side column and editor tabs, in the old type. */
+:root[data-theme="oldschool"] .side-title,
+:root[data-theme="oldschool"] .chain-group-title,
+:root[data-theme="oldschool"] .chain-end { font-family: var(--display); -webkit-text-stroke: var(--display-stroke); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
+:root[data-theme="oldschool"] .side-preset.current,
+:root[data-theme="oldschool"] .browser-slot.current { box-shadow: inset 3px 0 0 var(--accent); }
+:root[data-theme="oldschool"] .block-dots span.on { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 4px rgba(255, 90, 71, 0.6); }
+:root[data-theme="oldschool"] .side-segment button.on { box-shadow: inset 3px 0 0 var(--accent); }
+:root[data-theme="oldschool"] .side-boost.on .side-boost-switch { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* VT323 has a single, regular weight: the Modern semibold would make the browser thicken it artificially. */
+:root[data-theme="oldschool"] .preset-name .name,
+:root[data-theme="oldschool"] .preset-name .status,
+:root[data-theme="oldschool"] .preset-tempo,
+:root[data-theme="oldschool"] .pedalboard-lcd { font-weight: 400; }

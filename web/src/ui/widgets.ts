@@ -19,6 +19,7 @@ export const ICONS = {
   next: svg('<path d="M6 3l5 5-5 5"/>', 18),
   chevron: svg('<path d="M6 3l5 5-5 5"/>', 14),
   undo: svg('<path d="M5.5 3.5 2.5 6.5l3 3M3 6.5h6.5a4 4 0 0 1 0 8H7"/>', 20),
+  redo: svg('<path d="M10.5 3.5l3 3-3 3M13 6.5H6.5a4 4 0 0 0 0 8H9"/>', 20),
   search: svg('<circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/>', 18),
   more: '<svg width="20" height="20" viewBox="0 0 16 16" aria-hidden="true" fill="#ECEAE6">'
     + '<circle cx="8" cy="3.5" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="8" cy="12.5" r="1.3"/></svg>',
@@ -114,25 +115,61 @@ export function onLongPress(target: HTMLElement, action: (x: number, y: number) 
   }, true);
 }
 
-/** Small diagrams of the effect routings: blocks in series, two parallel paths, or series then two paths. */
+/**
+ * Small diagrams of the effect routings: blocks in series, two parallel paths, series then two paths, and
+ * Serial2 (three blocks in series, the middle one, the delay, with a block in its feedback loop).
+ */
 const ROUTING_PATHS = [
   "M1 7h5M12 7h6M24 7h5M6 4h6v6H6zM18 4h6v6h-6z",
   "M1 7h5M6 3v8M6 3h5M6 11h5M11 1h8v4h-8zM11 9h8v4h-8zM19 3h5M19 11h5M24 3v8M24 7h5",
   "M1 7h3M4 4h6v6H4zM10 7h4M14 3v8M14 3h2M14 11h2M16 1h6v4h-6zM16 9h6v4h-6zM22 3h3M22 11h3M25 3v8M25 7h4",
+  "M0 4h2M2 1.5h5v5H2zM7 4h4M11 1.5h6v5h-6zM17 4h4M21 1.5h5v5h-5zM26 4h4M16 6.5v4h-1M12 10.5h-1v-4M12 8.5h3v4h-3z",
 ];
 
-/** SVG of a routing (Serial2 is drawn as Serial). */
+/** SVG of a routing. */
 export function routingIcon(routing: number): string {
-  const path = ROUTING_PATHS[routing === 3 ? 0 : routing] ?? "";
+  const path = ROUTING_PATHS[routing] ?? "";
   return `<svg viewBox="0 0 30 14" width="30" height="14" aria-hidden="true"><path d="${path}" fill="none" `
     + `stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>`;
 }
 
-/** The bank number with the position as a small index at its top right. */
+/** 5×7 dot-matrix digits, one string of 5 columns per row: wide, rounded zeros with no slash. */
+const DOT_DIGITS: Record<string, string[]> = {
+  "0": [".###.", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."],
+  "1": ["..#..", ".##..", "..#..", "..#..", "..#..", "..#..", ".###."],
+  "2": [".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####"],
+  "3": [".###.", "#...#", "....#", "..##.", "....#", "#...#", ".###."],
+  "4": ["...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#."],
+  "5": ["#####", "#....", "####.", "....#", "....#", "#...#", ".###."],
+  "6": ["..##.", ".#...", "#....", "####.", "#...#", "#...#", ".###."],
+  "7": ["#####", "....#", "...#.", "..#..", ".#...", ".#...", ".#..."],
+  "8": [".###.", "#...#", "#...#", ".###.", "#...#", "#...#", ".###."],
+  "9": [".###.", "#...#", "#...#", ".####", "....#", "...#.", ".##.."],
+};
+
+/** Digits drawn as round LEDs, the unlit ones faintly visible as on the unit's display (Old school theme). */
+function dotDigits(text: string, className: string): SVGSVGElement {
+  const width = text.length * 6 - 1;
+  const dots: string[] = [];
+  [...text].forEach((ch, i) => (DOT_DIGITS[ch] ?? DOT_DIGITS["0"]).forEach((row, y) => [...row].forEach((c, x) =>
+    dots.push(`<circle class="${c === "#" ? "lit" : "unlit"}" cx="${i * 6 + x + 0.5}" cy="${y + 0.5}" r="0.42"/>`))));
+  const box = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  box.setAttribute("class", className);
+  box.setAttribute("viewBox", `0 0 ${width} 7`);
+  box.setAttribute("aria-hidden", "true");
+  box.innerHTML = dots.join("");
+  return box;
+}
+
+/**
+ * The bank number with the position as a small index at its top right: plain text (Modern theme) and the
+ * unit's red dot-matrix (Old school theme); the theme's stylesheet shows one of them.
+ */
 export function fillDotNumber(target: HTMLElement, bank: number, position: number): void {
   const bankText = String(bank).padStart(2, "0");
   target.setAttribute("aria-label", `Bank ${bankText}, position ${position}`);
-  target.replaceChildren(el("span", "bank", bankText), el("span", "position", String(position)));
+  target.replaceChildren(el("span", "bank", bankText), el("span", "position", String(position)),
+    dotDigits(bankText, "bank"), dotDigits(String(position), "position"));
 }
 
 /** Icons of the effect blocks (24 × 24, stroked): what each block does, drawn. */

@@ -300,24 +300,33 @@ button:disabled { opacity: 0.4; cursor: default; }
 .preset-header { background: var(--bar-dark); padding: 0 8px 0 4px; gap: 4px; }
 /* Red dot-matrix preset number and green LCD, as on the unit. */
 .dot-number { display: flex; align-items: flex-start; gap: 3px; padding: 7px 4px; background: transparent; }
+.dot-number svg { display: none; }
 .dot-number span { display: block; font-family: var(--sans); font-weight: 600; line-height: 1; color: var(--ink); }
 .dot-number .bank { font-size: 28px; }
 .dot-number .position { font-size: 14px; color: var(--soft); }
-/* Name LCD: a grid with the name and the source/slot line at the left, the tempo in its own column at the top right,
-   so that neither text can run under it. */
-.preset-lcd { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; margin-left: 8px; background: var(--lcd); }
-.preset-name { grid-column: 1; min-width: 0; height: 40px; padding: 0 10px; display: flex; flex-direction: column; justify-content: center; border: 0; border-radius: 0; background: var(--lcd); color: var(--lcd-ink); text-align: left; }
+/* Name and status of the preset, then its tempo (LEDs, BPM, Tap) as a group of its own. */
+/* The name never runs under the arrow beside it: the button clips and its text ends in an ellipsis. */
+.preset-name { flex: 0 1 auto; min-width: 0; height: 44px; padding: 0 8px; display: flex; flex-direction: column; justify-content: center; overflow: hidden; border: 0; border-radius: 8px; background: transparent; color: var(--ink); text-align: left; }
+.preset-name > span { display: block; max-width: 100%; }
+/* The LCD frame and its status line and tempo belong to the Old school theme: here only the name shows. */
+.preset-lcd { display: contents; }
+.preset-name .status, .lcd-tempo { display: none; }
 .preset-name .name { font-family: var(--sans); font-size: 20px; font-weight: 600; line-height: 1.1; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
-.preset-tempo { grid-column: 2; align-self: start; height: 22px; margin-top: 3px; padding: 0 10px 0 4px; border: 0; border-radius: 0; background: transparent; color: var(--lcd-ink); font-family: var(--sans); font-size: 16px; font-weight: 600; line-height: 1; white-space: nowrap; }
+.preset-tempo-group { display: flex; align-items: center; gap: 2px; flex-shrink: 0; margin-left: 6px; }
+.preset-tempo { height: 40px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font-family: var(--sans); font-size: 15px; font-weight: 600; line-height: 1; white-space: nowrap; }
 .preset-tempo:hover { text-decoration: underline; }
-.preset-name .status { font-family: var(--sans); font-size: 13px; color: var(--muted); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.preset-name .status.alert { color: var(--lcd-ink); }
+.pill.tap { height: 36px; padding: 0 10px; font-size: 13px; }
+.pill.tap:active { background: var(--surface-2); }
+.pill.compare.active { background: var(--surface-2); border-color: var(--line-3); }
+.pill.store { margin-left: 4px; }
 .separator { width: 1px; height: 28px; background: #2e3034; margin: 0 4px; flex-shrink: 0; }
 .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line-2); }
 .pill.live.active { background: var(--rig); border-color: var(--rig); color: var(--on-ink); }
 .pill.live.active .live-dot { background: var(--on-ink); }
-.pill.store { border: 0; background: var(--surface-2); color: var(--muted); margin-left: 4px; padding: 0 12px; }
+/* Store: the main button, in --ink once there is something to store. */
+.pill.store { border: 0; background: var(--surface-2); color: var(--muted); padding: 0 14px; }
 .pill.store.dirty { background: var(--ink); color: var(--dark-ink); }
+.preset-header .icon-button.redo { margin-left: -6px; }
 /* Amber LED while the preset has changes not stored. */
 .edit-led { display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-right: 2px; font-family: var(--display); font-weight: 600; font-size: 12px; letter-spacing: 0.01em; color: var(--amber); }
 .edit-led-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--amber); }
@@ -328,29 +337,64 @@ button:disabled { opacity: 0.4; cursor: default; }
 @keyframes beat { 0% { background: var(--green); } 50% { background: #17361c; box-shadow: none; } }
 
 .preset-body { flex: 1; min-height: 0; display: flex; position: relative; }
+/* Phone: the panel of blocks at the left, the block's settings at the right. Desktop: the chain over them. */
 .preset-main { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.preset-lower { flex: 1; min-height: 0; display: flex; }
+.preset-side { display: none; }
 /* Desktop-only parts (see the desktop layout at the end). */
 .bank-grid, .bank-detail, .preset-browser { display: none; }
-/* Effect blocks: a 2 × 4 panel of footswitches, like the unit's. */
-.blocks-column { width: 236px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--panel) var(--scanlines); border-right: 1px solid var(--edge); }
-.blocks { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); }
-.tile {
+
+/* Phone: the effect blocks as a 2 × 5 panel, like the unit's footswitches, then Modifiers and Routing. */
+.blocks-column { width: 236px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--panel); border-right: 1px solid var(--edge); }
+/* Tiles with slightly rounded corners and a small margin between them, as in the accordion mock-up. */
+.blocks { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 5px; padding: 5px; }
+.blocks .tile { display: flex; align-items: center; gap: 7px; min-height: 0; min-width: 0; padding: 0 6px 0 7px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); text-align: left; }
+.blocks .tile.on:not(.stack) { background: var(--t, rgba(255, 107, 91, 0.34)); border-color: var(--h, var(--rig)); }
+.blocks .tile.selected { box-shadow: 0 0 0 2px var(--ink); }
+.blocks .tile .footswitch { --size: 32px; }
+.blocks .tile.stack { flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; padding: 0 10px; }
+.tile-routing { display: flex; align-items: center; gap: 6px; color: var(--soft); }
+.tile-routing svg { flex-shrink: 0; }
+.tile-count { font-size: 12px; font-weight: 600; color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.tile-count.none { color: var(--dim); font-weight: 500; }
+
+/* Signal chain (desktop). */
+.chain-section { flex-shrink: 0; overflow-x: auto; background: var(--panel); border-bottom: 1px solid var(--edge); }
+.chain { display: flex; align-items: center; gap: 0; min-width: max-content; padding: 6px 6px; }
+.chain-link { flex: 0 0 6px; height: 2px; background: var(--line); }
+.chain-end { flex-shrink: 0; padding: 4px 8px; border: 1px solid var(--line); border-radius: 12px; font-size: 12px; font-weight: 600; color: var(--muted); }
+/* A block of the chain (sized for the desktop at the end). */
+.chain .tile {
+  position: relative;
+  flex: 0 0 auto;
+  width: 70px;
+  height: 88px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 9px;
-  min-height: 0;
+  gap: 4px;
   min-width: 0;
-  padding: 0 8px 0 10px;
-  border: 0;
-  border-bottom: 1px solid var(--groove);
-  border-radius: 0;
-  background: transparent;
-  text-align: left;
+  padding: 6px 4px 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  text-align: center;
 }
-.tile:nth-child(odd):not(.wide) { border-right: 1px solid var(--groove); }
-.tile.on:not(.stack) { background: var(--t, rgba(255, 107, 91, 0.34)); box-shadow: inset 0 0 0 1px var(--h, var(--rig)); }
-.tile.on.selected { background: var(--t, rgba(255, 107, 91, 0.34)); box-shadow: inset 0 0 0 2px var(--ink); }
-.tile.selected { background: var(--surface-2); box-shadow: inset 0 0 0 2px var(--ink); }
+.chain .tile.on { background: var(--t, rgba(255, 107, 91, 0.34)); border-color: var(--h, var(--rig)); }
+.chain .tile.selected { box-shadow: 0 0 0 2px var(--ink); }
+.chain .tile .footswitch { --size: 40px; }
+.chain .tile .tile-label { align-items: center; text-align: center; width: 100%; }
+.chain-loops { flex-shrink: 0; display: flex; flex-direction: column; }
+/* The four routed blocks, framed in dashes. */
+.chain-group { flex-shrink: 0; display: flex; align-items: center; gap: 4px; padding: 3px 4px; border: 1.5px dashed var(--line-2); border-radius: 12px; }
+.chain-group.selected { border-color: var(--ink); border-style: solid; }
+.chain-group-head { display: flex; align-items: center; }
+.chain-group-title { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 4px; border: 0; border-radius: 8px; background: transparent; color: var(--soft); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.chain-group-title svg { width: 30px; height: 14px; }
+.chain-group-body.lane, .lane { display: flex; align-items: center; }
+.lanes { display: flex; flex-direction: column; gap: 4px; padding: 0 8px; border-left: 2px solid var(--line); border-right: 2px solid var(--line); }
+.feedback { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px; border: 1px dashed var(--line-2); border-radius: 10px; }
+.feedback-tag { font-size: 10px; font-weight: 600; color: var(--muted); }
 /* On/off switch of an effect block: an empty square when off, filled with the block's colour (--h) when on.
    The shape changes with the colour, so the state reads without telling hues apart. */
 .footswitch {
@@ -367,7 +411,6 @@ button:disabled { opacity: 0.4; cursor: default; }
 .footswitch { display: grid; place-items: center; color: var(--faint); }
 .footswitch svg { width: 62%; height: 62%; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .footswitch.on { background: var(--h, var(--rig)); border-color: var(--h, var(--rig)); color: var(--on-ink); }
-.tile .footswitch { --size: 34px; }
 /* 5" phones (360 px high): the five rows fit without scrolling. */
 @media (max-height: 380px) {
   .slot { padding-top: 0; padding-bottom: 0; }
@@ -382,9 +425,6 @@ button:disabled { opacity: 0.4; cursor: default; }
 /* Long effect names (Vintage Phaser, Touch Res Filter…) go on two lines rather than being cut. */
 .tile-type { font-size: 11px; font-weight: 500; line-height: 1.15; color: var(--dim); overflow: hidden; max-width: 100%;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-/* Pedal and encoder assignments, under the effect tiles. */
-.tile.wide { grid-column: 1 / -1; flex-direction: column; align-items: flex-start; justify-content: center; gap: 3px; padding: 0 12px; }
-/* Half-width tiles under the blocks: Modifiers and Routing. */
 /* Routing choice: four buttons in a row, one lit. */
 .routing-choice { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; padding: 6px 0 8px; }
 .routing-choice button { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; min-width: 0; padding: 7px 2px 6px; border: 0; border-radius: 6px; background: var(--surface-2); color: var(--muted); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
@@ -414,10 +454,6 @@ button:disabled { opacity: 0.4; cursor: default; }
   .relay-pick { height: 40px; padding: 0 8px; font-size: 10px; }
   .relay-text { display: none; }
 }
-.tile.stack { flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; padding: 0 10px; }
-.tile-routing { display: flex; align-items: center; gap: 6px; color: var(--soft); }
-.tile-count { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--soft); }
-.tile-count.none { color: var(--dim); font-family: inherit; font-weight: 500; }
 
 /* Loops, insert and boost: live-only switches. */
 /* Favorites of the shown effect, under the loops strip. */
@@ -431,13 +467,17 @@ button:disabled { opacity: 0.4; cursor: default; }
 .favorite.match { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .favorite.empty { border-style: dashed; background: transparent; color: var(--faint); font-weight: 500; }
 .favorite.empty .favorite-num { color: var(--faint); }
-.preset-strip { display: flex; align-items: center; gap: 8px; flex-shrink: 0; padding: 5px 8px; background: var(--panel) var(--scanlines); border-bottom: 1px solid var(--edge); }
-.levels { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; }
+.preset-strip { display: flex; align-items: center; gap: 6px; flex-shrink: 0; padding: 4px 6px; background: var(--panel) var(--scanlines); border-bottom: 1px solid var(--edge); }
+.levels { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+/* Relay: the letter in use as its switch, the closed contacts under its name. */
+.relay-switch { font-size: 15px; font-weight: 700; color: var(--ink); }
+.relay-switch::before { display: none; }
+.boost-block.selected { box-shadow: 0 0 0 2px var(--ink); }
 /* Boost: a small footswitch block at the end of the loops, like BOOST at the end of the unit's bottom row. */
-.boost-block { flex-shrink: 0; display: flex; align-items: stretch; height: 32px; border: 1px solid var(--groove); border-radius: 6px; background: var(--well); }
+.boost-block { flex-shrink: 0; display: flex; align-items: stretch; height: 40px; border: 1px solid var(--groove); border-radius: 6px; background: var(--well); }
 /* Selected like an effect tile: a lighter ground and the red bar along the bottom. */
 .boost-block.selected { box-shadow: 0 0 0 2px var(--ink); }
-.boost-switch { width: 30px; padding: 0; border: 0; border-right: 1px solid var(--groove); border-radius: 6px 0 0 6px; background: transparent; display: grid; place-items: center; }
+.boost-switch { width: 36px; padding: 0; border: 0; border-right: 1px solid var(--groove); border-radius: 6px 0 0 6px; background: transparent; display: grid; place-items: center; }
 .boost-switch::before { content: ""; width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--line-3); }
 .boost-block.on { background: var(--rig); border-color: var(--rig); }
 .boost-block.on .boost-switch::before { border: 0; background: var(--on-ink); }
@@ -448,7 +488,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 .boost-level { font-family: var(--mono); font-size: 11px; font-weight: 600; line-height: 1; color: var(--soft); white-space: nowrap; }
 .params-note { grid-column: 1 / -1; margin: 6px 10px; font-size: 12px; color: var(--dim); }
 .level {
-  height: 32px;
+  height: 40px;
   min-width: 0;
   padding: 0;
   border-radius: 6px;
@@ -464,16 +504,19 @@ button:disabled { opacity: 0.4; cursor: default; }
   gap: 4px;
   white-space: nowrap;
 }
-.level::before { content: ""; flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--line-3); }
+/* No dot: the coral fill alone says a loop is on, and its label gets the room. */
 .level.on { color: var(--ink); }
 .level.relay { gap: 3px; }
 .level.relay::before { display: none; }
 .relay-letter { color: var(--accent); font-weight: 700; text-shadow:; }
 .level.on { background: var(--rig); border-color: var(--rig); color: var(--on-ink); }
-.level.on::before { background: var(--on-ink); border: 0; }
 
 .params-section { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--surface); }
+.desk-only { display: none; }
 .params-head { display: flex; align-items: center; gap: 8px; height: 46px; flex-shrink: 0; padding: 0 10px 0 14px; border-bottom: 1px solid var(--bg); }
+.head-icon { flex-shrink: 0; display: grid; place-items: center; width: 32px; height: 32px; border: 2px solid var(--line-2); border-radius: 8px; color: var(--faint); }
+.head-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.head-icon.on { background: var(--h, var(--rig)); border-color: var(--h, var(--rig)); color: var(--on-ink); }
 .params-head .label { font-family: var(--display); font-weight: 600; font-size: 18px; letter-spacing: 0.01em; white-space: nowrap; }
 .type-select {
   height: 36px;
@@ -532,7 +575,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 .knob circle { fill: none; }
 .knob-scale { stroke: var(--line); stroke-width: 2.5; stroke-linecap: round; }
 /* The accent marks the value, as the sliders' fill did; dimmed while the block is off. */
-.knob-arc { stroke: var(--accent); stroke-opacity: 0.4; stroke-width: 2.5; stroke-linecap: round; }
+.knob-arc { stroke: var(--h, var(--accent)); stroke-opacity: 0.4; stroke-width: 2.5; stroke-linecap: round; }
 .on-block .knob-arc { stroke-opacity: 1; }
 .knob .knob-shadow { fill: #141516; }
 .knob .knob-cap { fill: #26272a; stroke: #5a5d62; stroke-width: 1; }
@@ -546,7 +589,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 .params.slider-list .param.selected { background: var(--selected); box-shadow: inset 0 0 0 2px var(--accent); }
 .params.slider-list .param-value { font-size: 14px; }
 .params.slider-list .param-body { display: block; min-height: 0; text-align: left; }
-.track-fill { position: absolute; top: 0; bottom: 0; border-radius: 2px; background: var(--accent); opacity: 0.4; }
+.track-fill { position: absolute; top: 0; bottom: 0; border-radius: 2px; background: var(--h, var(--accent)); opacity: 0.4; }
 .on-block .track-fill { opacity: 1; }
 .segments { display: flex; gap: 3px; }
 .segments span { flex: 1; height: 5px; border-radius: 3px; background: var(--line); }
@@ -604,7 +647,10 @@ button:disabled { opacity: 0.4; cursor: default; }
 .sheet-head .field { font-family: var(--mono); font-size: 11px; color: var(--dim); }
 .sheet-value { margin: auto 0 14px; padding: 8px 12px; background: var(--lcd); color: var(--lcd-ink); font-family: var(--lcd-font); font-size: 44px; line-height: 1; text-align: center; white-space: nowrap; overflow: hidden; }
 .sheet .track { height: 6px; border-radius: 3px; margin: 0 12px; touch-action: none; }
-.sheet .track-fill { border-radius: 3px; background: var(--accent); opacity: 1; }
+.sheet .track-fill { border-radius: 3px; background: var(--h, var(--accent)); opacity: 1; }
+/* The travel a pedal or encoder gives the parameter, under the fill. */
+.track-mod { position: absolute; top: -5px; bottom: -5px; border-radius: 4px; background: rgba(233, 236, 240, 0.16); border: 1px dashed var(--line-3); }
+.sheet-mod { margin: -4px 12px 8px; font-size: 12px; color: var(--muted); }
 .sheet .track-thumb { width: 24px; height: 24px; margin: -12px 0 0 -12px; }
 .sheet-range { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--dim); margin: 10px 12px auto; }
 .sheet-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; overflow-y: auto; margin: 4px 0 auto; max-height: 190px; }
@@ -739,12 +785,40 @@ button:disabled { opacity: 0.4; cursor: default; }
 .pedalboard { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 12px; background: #2b2d31;
   box-shadow: inset 0 0 0 1px #3a3d42, 0 6px 18px rgba(0, 0, 0, 0.25); }
 .pedalboard-row { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+/* The unit's green display, under the first row of switches. */
 .pedalboard-lcd { display: flex; justify-content: space-between; gap: 12px; min-height: 30px; margin: 2px 0; padding: 4px 12px;
-  border-radius: 4px; background: var(--lcd); color: var(--lcd-ink); font-family: var(--lcd-font); font-size: 18px; line-height: 1.2; white-space: nowrap; overflow: hidden; }
+  border-radius: 4px; background: #b5d334; box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.35); color: #1f2a08;
+  font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 16px; font-weight: 600; line-height: 1.2;
+  text-transform: uppercase; white-space: nowrap; overflow: hidden; }
 .pedalboard-lcd span:last-child { overflow: hidden; text-overflow: ellipsis; }
 .pedal { position: relative; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 2px 6px;
   border: 1px solid #3a3d42; border-radius: 8px; background: #222428; color: #e8eaed; cursor: pointer; }
 .pedal .footswitch { --size: clamp(34px, 7vw, 56px); display: grid; place-items: center; }
+/* The pedalboard keeps the look of the unit: the rest of the app is flat, this view is a drawing of the hardware.
+   G-System footswitch (Loop 1, seen from the front): a thick smoky plastic base, a bright chrome bezel with sharp
+   dark reflections on its inner edge, and a flat, softly lit chrome face carrying the switch number. */
+.pedal .footswitch {
+  position: relative;
+  border: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle closest-side, #5e6165 0 70%, #53565a 86%, #3e4144 96%, #26282a 100%);
+  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.pedal .footswitch::before,
+.pedal .footswitch::after { content: ""; position: absolute; inset: 12.5%; border-radius: 50%; }
+.pedal .footswitch::before {
+  background:
+    radial-gradient(circle closest-side at 48% 52%, #e2e5e7 0%, #ced2d5 55%, #b9bec2 73%, rgba(185, 190, 194, 0) 74%),
+    radial-gradient(circle closest-side, #fff 0%, #fff 80%, #f2f4f6 89%, #b6bbc0 96%, #5f646a 100%);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.35);
+}
+.pedal .footswitch::after {
+  background: conic-gradient(from 0deg, transparent 0 14deg, #141619 24deg 50deg, transparent 60deg 70deg,
+    #0d0e10 82deg 110deg, transparent 120deg 240deg, #141619 254deg 286deg, transparent 300deg 360deg);
+  -webkit-mask: radial-gradient(circle closest-side at 48% 52%, transparent 74%, #000 76%, #000 82%, transparent 86%);
+  mask: radial-gradient(circle closest-side at 48% 52%, transparent 74%, #000 76%, #000 82%, transparent 86%);
+}
+.pedal .footswitch > * { position: relative; z-index: 1; }
 .pedal-number { font-family: var(--mono); font-size: clamp(10px, 1.6vw, 13px); font-weight: 700; color: #1d1f22; }
 .pedal-name { max-width: 100%; font-weight: 700; font-size: clamp(9px, 1.6vw, 12px); letter-spacing: 0.03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pedal-detail { max-width: 100%; min-height: 1.2em; font-size: clamp(8.5px, 1.4vw, 11px); color: #9ba1a8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -771,7 +845,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 .level-long { display: none; }
 .level-tag { display: inline-flex; }
 /* A named loop: the LED, then its number small on top and the pedal's name below. */
-.level.named { justify-content: flex-start; padding: 0 6px; }
+.level.named { justify-content: flex-start; padding: 0 5px; }
 .level-text { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
 .level-text .level-tag { font-size: 7px; line-height: 1.1; opacity: 0.75; }
 .level-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--sans);
@@ -854,19 +928,7 @@ button:disabled { opacity: 0.4; cursor: default; }
   .browser-pos { width: 12px; flex-shrink: 0; font-size: 12px; color: var(--dim); }
   .browser-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
 
-  /* The LCD keeps the proportions of a display: 16 characters, not the width of the window. */
-  .preset-header .preset-lcd { flex: 0 1 460px; }
-  .preset-header .separator { margin-left: auto; }
 
-  .preset-main { flex-direction: column; }
-  .blocks-column { width: auto; border-right: 0; border-bottom: 1px solid var(--edge); }
-  .blocks { grid-template-columns: repeat(10, minmax(0, 1fr)); grid-auto-rows: auto; }
-  .tile, .tile.stack { flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 132px; padding: 14px 6px 16px; border-bottom: 0; border-right: 1px solid var(--groove); text-align: center; }
-  .tile:last-child { border-right: 0; }
-    .tile .footswitch { --size: clamp(44px, 3.4vw, 60px); order: 2; }
-  .tile-label { flex: none; align-items: center; text-align: center; max-width: 100%; }
-  .tile-code { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: clamp(10px, 0.75vw, 14px); }
-  .tile.stack .tile-type, .tile.stack .tile-count { max-width: 100%; text-align: center; }
   .params { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; padding: 12px 14px; }
   .params.row-list { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
   .param { min-height: 128px; padding: 12px 6px 10px; }
@@ -903,6 +965,68 @@ button:disabled { opacity: 0.4; cursor: default; }
   .field-table tr.changed td.num { color: var(--amber); }
   .field-table .take { height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--surface-2); font-size: 12px; cursor: pointer; }
   .compare-select { max-width: 320px; }
+
+  /* Preset: the chain on one line, from In to Out; under it the block's settings and the side column. */
+  .desk-only { display: inline-flex; }
+  .preset-main { flex-direction: column; }
+  .preset-strip { display: none; }
+  .preset-name { flex: 0 1 420px; }
+  .chain-section { display: flex; justify-content: center; overflow-x: auto; }
+  .chain { padding: 18px 20px; }
+  .chain-link { flex: 0 1 16px; min-width: 6px; }
+  .chain .tile { flex-direction: row; align-items: center; gap: 10px; width: 136px; height: 62px; padding: 4px 8px 4px 4px; text-align: left; }
+  .chain .tile .footswitch { --size: 52px; }
+  .chain .tile .tile-label { align-items: flex-start; text-align: left; }
+  .tile-code { font-size: 14px; }
+  .chain-loops { gap: 3px; width: 128px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  .loop-row { display: flex; align-items: center; gap: 7px; height: 22px; padding: 0 6px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 600; text-align: left; cursor: pointer; }
+  .loop-row:hover { background: var(--surface-2); }
+  .loop-led { flex-shrink: 0; width: 11px; height: 11px; border-radius: 3px; border: 1.5px solid var(--line-3); }
+  .loop-row.on { color: var(--ink); }
+  .loop-row.on .loop-led { background: var(--rig); border-color: var(--rig); }
+  .loop-tag { flex-shrink: 0; width: 22px; }
+  .loop-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; color: var(--soft); }
+  .chain-group { flex-direction: column; align-items: stretch; gap: 8px; padding: 6px 12px 12px; }
+  .chain-group-head { justify-content: space-between; gap: 12px; }
+  .chain-group-title { height: 32px; font-size: 13px; color: var(--ink); }
+  .chain-group .routing-choice { display: flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--bg); }
+  .chain-group .routing-choice button { flex-direction: row; gap: 6px; padding: 4px 8px; font-size: 11.5px; cursor: pointer; }
+  .chain-group .routing-choice button span { overflow: visible; }
+  .chain-group .routing-choice button.on { background: var(--line); }
+  .chain-group-body { justify-content: center; }
+
+  .preset-side { display: flex; flex-direction: column; gap: 14px; width: clamp(260px, 17vw, 340px); flex-shrink: 0; min-height: 0; overflow-y: auto; padding: 14px 14px 18px; background: var(--bar); border-left: 1px solid var(--edge); }
+  .side-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .side-title { font-size: 13px; font-weight: 600; color: var(--soft); }
+  .side-more { height: 26px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 6px; background: transparent; font-size: 12px; cursor: pointer; }
+  .side-preset { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; height: 36px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; text-align: left; cursor: pointer; position: relative; }
+  .side-preset:hover:not(:disabled) { background: rgba(255, 255, 255, 0.06); }
+  .side-preset.current { background: var(--selected); box-shadow: inset 0 0 0 2px var(--ink); }
+  .side-preset.empty .side-preset-name, .side-preset.unread .side-preset-name { color: var(--faint); }
+  .side-preset.unread { cursor: progress; opacity: 0.6; }
+  .side-preset.unread .side-preset-name { font-style: italic; }
+  .side-preset-pos { font-size: 12px; color: var(--dim); }
+  .side-preset-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; font-size: 13px; }
+  .side-dirty { position: absolute; top: 6px; left: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--amber); }
+  .block-dots { display: flex; gap: 3px; }
+  .block-dots span { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--line-2); }
+  .block-dots span.on { background: var(--h); border-color: var(--h); }
+  .side-segment { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 3px; border-radius: 9px; background: var(--bg); }
+  .side-segment button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); text-align: left; cursor: pointer; }
+  .side-segment button.on { background: var(--surface-2); color: var(--ink); box-shadow: inset 3px 0 0 var(--rig); }
+  .side-segment-name { font-size: 12.5px; font-weight: 600; }
+  .side-segment-sub { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--dim); }
+  .side-boost { display: flex; gap: 4px; margin-top: 8px; }
+  .side-boost button { height: 36px; border-radius: 8px; border: 1px solid var(--line-2); background: transparent; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .side-boost-switch { flex: 1; }
+  .side-boost-level { padding: 0 12px; color: var(--soft); }
+  .side-boost.on .side-boost-switch { background: var(--rig); border-color: var(--rig); color: var(--on-ink); }
+  .side-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; font-size: 13px; }
+  .side-row-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--soft); }
+  .side-row-value { white-space: nowrap; font-weight: 600; }
+  .side-link { width: 100%; margin: 0 -6px; padding: 0 6px; width: calc(100% + 12px); border: 0; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; }
+  .side-link:hover { background: rgba(255, 255, 255, 0.06); }
+  .side-note { margin: 0; font-size: 12.5px; color: var(--dim); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
@@ -910,7 +1034,18 @@ button:disabled { opacity: 0.4; cursor: default; }
 
 /* Phone: the block header keeps room for the type list beside the Mix / Output readouts. */
 @media (max-width: 1199px), (max-height: 699px) {
-  .edit-led-text { display: none; }
+  .preset-header { height: 50px; }
+  /* The name takes the room left, up to the arrow. */
+  .preset-name { flex: 1 1 0; }
+  .preset-header .grow { display: none; }
+  .preset-header .dot-number .bank { font-size: 24px; }
+  .preset-name .name { font-size: 17px; }
+  .preset-tempo { padding: 0 4px; font-size: 14px; }
+  .preset-tempo-group { margin-left: 0; }
+  .tempo-leds { margin-left: 2px; }
+
+  .store-where { display: none; }
+  .preset-header .pill.live { padding: 0 10px; }
   .params-head { gap: 6px; padding-left: 10px; }
   .params-head .label { font-size: 11px; }
   .params-head .type-select { min-width: 100px; }
