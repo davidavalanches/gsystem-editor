@@ -95,8 +95,11 @@ d'abord menu Pomme → À propos de ce Mac → Plus d'infos → Rapport système
   (tous les effets, loops, insert, boost et modifiers coupés), car le G-System n'accepte que des presets complets.
 - **Noms des loops** : appui long (clic droit sur ordinateur) sur Loop 1 à 4 pour y noter la pédale branchée.
   Les noms sont propres à chaque G-System (SysEx ID), gardés sur l'appareil, et repris dans le détail de la vue Banks.
-- **Interface** : thème sombre en paysage, conçue pour un téléphone 5" (740×360 dp), polices IBM Plex et Doto
-  embarquées (OFL).
+- **Interface** : deux thèmes au choix (menu ⋮ → Appearance…), conçue pour un téléphone 5" (740×360 dp) et ordinateur.
+  - **Modern** (par défaut) : palette sombre épurée, police Inter, disposition identique sur téléphone et ordinateur.
+  - **Old school** : aspect fidèle au pédalier G-System, avec trois finitions (Black, Grey, Red brushed), 
+    polices IBM Plex Sans et Mono, Michroma, VT323 (écran LCD), Doto, switches chromés à base rouge allumée, 
+    panneaux brossés. Le choix de thème est gardé sur l'appareil.
 - **Import** (menu ⋮ → « Import banks from a file… ») : prendre des banques d'une sauvegarde `.sqs` / `.syx`, venant de
   n'importe quel G-System (le SysEx ID n'intervient pas), dans les mêmes banques ou dans la banque affichée, sans
   remplacer le reste ; les presets importés attendent dans la liste « Store (n) ». « Send to the G-System » (menu d'un
@@ -112,9 +115,14 @@ d'abord menu Pomme → À propos de ce Mac → Plus d'infos → Rapport système
 - **Langue** : l'interface est en anglais.
 - **Preset** : en-tête (preset précédent/suivant, numéro banque/position en points, nom, tempo avec les deux
   LEDs vertes de tempo, côte à côte, allumées à tour de rôle à chaque temps, voyant ambre « Modified » tant que le preset n'est pas
-  stocké, Live, Store), 8 tuiles d'effets avec leur switch dessiné comme sur le G-System (dôme chrome sur base
-  translucide qui s'allume en rouge) et leur type, rangée Loop 1–4 / Insert / Relay / Boost (fond plein quand actif,
-  noms complets sur ordinateur), paramètres
+  stocké, Live, Store). Sur **ordinateur**, la vue suit la **chaîne du signal** du G-System 
+  (In → Filter → Comp → Loops → Gate → EQ → groupe routé [Mod, Pitch, Delay, Reverb] → Out), 
+  avec le **routing affiché graphiquement** (Serial, Parallel, Semi-Parallel, Serial2) ; 
+  colonne de droite : presets de la banque, Relay, Modifiers, Outputs et NovaDrive.
+  Sur **téléphone**, grille 2×5 (8 blocs + MODIFIERS + ROUTING), puis rangée L1–L4 / INS / Relay / Boost.
+  Les 8 tuiles d'effets montrent leur switch dessiné comme sur le G-System (dôme chrome sur base
+  translucide qui s'allume en rouge, ou en corail dans le thème Modern) et leur type. Loops 1–4 / Insert / Relay / Boost : 
+  fond plein quand actif, noms complets sur ordinateur. Paramètres
   du bloc en potentiomètres (curseurs sur téléphone pour Reverb, Delay, Pitch), panneau de réglage fin sur
   téléphone (valeur, curseur, − / + maintenus, choix pour les listes), tampon d'édition avec Store.
   Sur ordinateur, pas de panneau latéral : les potentiomètres se tournent directement à la souris (glisser
@@ -201,7 +209,7 @@ G-System Editor est un logiciel libre distribué sous licence **GNU GPL v3** (vo
 Vous pouvez l'utiliser, l'étudier, le modifier et le redistribuer. Toute version redistribuée, modifiée ou
 non, doit rester sous GPL v3 et être accompagnée de son code source.
 
-Composants tiers : Capacitor, Vite et Electron (MIT) ; polices IBM Plex, Michroma, Doto et VT323 (SIL Open
+Composants tiers : Capacitor, Vite et Electron (MIT) ; polices Inter, IBM Plex, Michroma, Doto et VT323 (SIL Open
 Font License).
 
 G-System, Nova System et TC Electronic sont des marques de leurs propriétaires. Ce projet n'est ni affilié à
