@@ -6,23 +6,18 @@ l'état du code et les étapes restantes. Les maquettes d'origine sont un caneva
 
 ## État actuel
 
-- Branche : `refonte-ui-etape-1` (partie de `main` en version 1.0.5). Pas encore fusionnée.
-- Étape 1 faite (styles et états, aucun changement de comportement) :
-  - une seule palette sombre ; finitions Black/Grey/Red brushed, `ui/skin.ts` et le menu « Appearance » supprimés ;
-  - police Inter (`@fontsource/inter` 400 à 700) partout ; Michroma, IBM Plex, VT323, Doto et Barlow retirés ;
-  - libellés en casse normale (« Filter », « Reverb », « Modifiers ») ;
-  - switch d'un bloc = carré avec l'icône du bloc (`BLOCK_ICONS` / `blockIcon()` dans `ui/widgets.ts`) :
-    vide et gris éteint, plein de la couleur du bloc allumé ; la tuile allumée prend une teinte et un contour
-    de cette couleur (variables `--h` et `--t` posées en TS sur chaque tuile) ;
-  - loops, insert, boost, contacts de relais et Live allumés en corail `#ff6b5b` (`--rig`) ;
-  - sélection = contour neutre `--ink` ; ambre `--amber` réservé à « pas encore enregistré » ;
-  - plus de textures, halos ni écran LCD : numéro et nom du preset en texte.
-  - `.nvmrc` (22) et `engines.node >= 22` ajoutés.
-- À vérifier par l'utilisateur sur sa console (Retroid Pocket Flip 2, Android 13) : la teinte des blocs allumés.
-  Elle n'apparaissait pas, très probablement parce que l'APK n'avait pas été reconstruit (Node < 22 bloquait
-  `cap sync`). Les teintes sont en `rgba` fixes, sans `color-mix`.
-- Non fait dans la session précédente : `npm test`, `npm run build` (installation de paquets impossible
-  là-bas). `package-lock.json` doit être régénéré par `npm install` et commité.
+- Branches : `refonte-ui-etape-1` (étape 1), puis `refonte-ui-etape-2` (étape 2, commit `a7d109f`), toutes deux
+  poussées sur GitHub. Rien n'est fusionné dans `main`, qui reste en version 1.0.5.
+- Étape 1 faite : palette sombre unique, Inter, libellés en casse normale, switch d'un bloc = carré avec son
+  icône (plein de la couleur du bloc quand il est allumé, variables `--h` et `--t`), matériel allumé en corail
+  `--rig`, sélection en contour `--ink`, ambre réservé à « pas encore enregistré ». `.nvmrc` (22) et
+  `engines.node >= 22`. Cet aspect est devenu le **thème Modern** (voir étape 2).
+- Étape 2 faite (détail plus bas) : vue Preset en chaîne du signal sur ordinateur, grille gardée sur téléphone,
+  relais et modificateurs plus accessibles, vue Switches réaliste, et deux thèmes : **Modern** et **Old school**.
+- Vérifié : typecheck, 76 tests, build, captures en 740×360 et 1920×1080 (Playwright). APK de test :
+  `~/Documents/G-System/gsystem-editor-refonte-etape2.apk` sur la machine de l'utilisateur.
+- **Pas encore essayé sur la console** (Retroid Pocket Flip 2, Android 13) : toute l'étape 2, et la teinte des
+  blocs allumés de l'étape 1.
 
 ## Décisions de design (validées par l'utilisateur)
 
@@ -57,6 +52,21 @@ Gate et EQ se placent après la dernière boucle physique (le gate ne coupe pas 
   bandeau qui dit quoi faire). L'échange de deux presets reste possible, en second.
 - Pas de glisser au doigt sur téléphone (trop imprécis sur 5 pouces).
 
+**Thèmes (étape 2) :** l'utilisateur choisit dans Banques → « More actions » (⋮) → **Appearance…** ; le choix
+est gardé sur l'appareil (`localStorage`, clé `gsystem-editor.theme`).
+- **Modern** (par défaut) : l'aspect de l'étape 1, police Inter.
+- **Old school** : l'aspect des versions 1.0.x, dans les trois finitions du G-System (Black, Grey ou Red brushed) :
+  polices IBM Plex Sans et Mono, Michroma, VT323 (écran LCD, toujours en graisse normale : elle n'a qu'une
+  graisse), Doto ; écran LCD vert du preset (nom, ligne d'état, tempo), numéro en points rouges, switches
+  chromés à base rouge allumée, panneaux brossés, rouge comme seule couleur « allumé ».
+- **La disposition est la même dans les deux thèmes.** Exception voulue : pas de pastille sur les loops, même
+  en Old school (les libellés gardent la place) ; une loop allumée est remplie.
+
+**Téléphone (décidé à l'étape 2, après essai) :** la chaîne du signal en une rangée ne marchait pas sur 5 pouces
+(on confondait bloc choisi et routing). On garde la **grille 2 × 5** (8 blocs, puis Modifiers et Routing), en
+tuiles aux coins arrondis espacées de 5 px. Un accordéon (grille plein écran qui se replie quand on ouvre un
+bloc) a été maquetté puis écarté : il ajoute une action pour voir les réglages.
+
 **Cibles :** écran d'ordinateur (maquettes en 1920×1080) et téléphone Android 5 pouces en paysage (740×360 dp).
 Zones de toucher d'au moins 44 px.
 
@@ -64,27 +74,47 @@ Zones de toucher d'au moins 44 px.
 
 Chaque étape = une version à essayer sur le téléphone avant la suivante.
 
-### Étape 2 : vue Preset
+### Étape 2 : vue Preset (faite, branche `refonte-ui-etape-2`)
 
-1. Remplacer la grille 2×4 de tuiles par la **chaîne du signal** dans l'ordre ci-dessus.
-   - Ordinateur : une ligne. Entrée, Filter, Comp, bloc Loops (L1 à L4 et Insert empilés, avec leurs noms
-     de `LoopNames`), Gate, EQ, groupe routé encadré en pointillés (titre = nom du routing), Sortie.
-     Tuiles horizontales d'environ 128×62 px : carré d'icône de 52 px à gauche (toggle), nom et type à droite.
-   - Téléphone : une rangée de tuiles d'environ 70×88 px (icône en haut, nom et type en bas) : Filter, Comp,
-     un repère étroit « Loop » avec 5 petits carrés allumés en `--rig`, Gate, EQ, puis le groupe routé
-     encadré avec l'icône du routing. Les loops, l'insert, le relais et le boost restent en rangée de puces
-     de 44 px sous les tuiles.
-2. Le **groupe routé se redessine selon le routing** (voir Décisions). Le sélecteur de routing devient un
-   sélecteur segmenté avec les icônes existantes (`routingIcon`, ajouter un dessin pour Série 2).
-3. **Éditeur du bloc choisi** sous la chaîne : icône, nom, menu du type, bouton Allumé/Éteint, 4 favoris ;
-   potards dont l'arc prend la couleur du bloc (`--h`) ; badge EXP / ENC A / VOL sur un réglage piloté par un
-   modificateur, avec sa course visible sur le curseur fin.
-4. En-tête : numéro et nom du preset, point ambre « Modifié », tempo avec LED et Tap, Live (en `--rig` quand
-   actif), Annuler/Rétablir, Comparer, « Enregistrer dans 07-3 » en bouton principal.
-5. Ordinateur, colonne de droite : les 5 presets de la banque (avec une rangée de 8 pastilles des blocs
-   allumés, dans l'ordre de la chaîne), relais A/B et boost, modificateurs du preset, sorties et NovaDrive.
+Ce qui est en place :
+
+1. **Ordinateur, chaîne du signal** : In, Filter, Comp, bloc Loops (L1 à L4 et Insert empilés avec les noms de
+   `LoopNames`, appui long ou clic droit pour nommer), Gate, EQ, groupe routé, Out. Tuiles de 136 × 62 px
+   (élargies depuis 128 pour que « Percussive » tienne), icône de 52 px à gauche.
+2. **Groupe routé** encadré en pointillés, redessiné selon le routing : Serial en ligne, Parallel sur 4 voies,
+   Semi Parallel (Delay et Reverb en parallèle), Serial2 (Mod dans la boucle de retour du Delay). Sélecteur
+   segmenté avec `routingIcon()` dans son en-tête ; dessin ajouté pour Serial2.
+3. **Ordinateur, colonne de droite** : les 5 presets de la banque avec 8 pastilles des blocs allumés (un preset
+   pas encore lu s'affiche « Not read yet » et ne s'ouvre pas), Relay et boost (bouton Edit → panneau Relays),
+   Modifiers (chaque affectation ouvre directement son réglage), Outputs et NovaDrive. La liste des banques
+   avec recherche reste à gauche.
+4. **Téléphone** : grille 2 × 5 (voir Décisions), puis la bande L1 à L4, INS, **Relay** et Boost. Relay
+   fonctionne comme Boost : la lettre (A ou B) bascule le relais, le libellé (contacts fermés) ouvre le panneau
+   **Relays** (contacts des réglages A et B, retirés du panneau Routing).
+5. **Éditeur du bloc** : icône, nom, type, On/Off, 4 favoris, lecture Mix/Output ; potards et curseurs à la
+   couleur du bloc ; badge EXP / ENC / VOL sur un réglage piloté, et sa course (Min → Max) en pointillés sur le
+   curseur fin. Menu d'appui long d'un bloc : allumer/éteindre, favoris, modificateurs.
+6. **En-tête** : numéro, nom (s'arrête avant le chevron, avec points de suspension ; plus de ligne d'état en
+   Modern), point ambre « Modified », LED de tempo et BPM, **Tap** (ordinateur seulement : pas la place sur
+   téléphone), Live, Annuler / Rétablir (appui long sur Annuler : retour au preset enregistré), Compare
+   (ordinateur), « Store in 07-3 » (« Store » sur téléphone).
+7. **Vue Switches** : switches chromés et écran vert du pédalier rétablis (dans les deux thèmes).
+
+Fichiers : `web/src/ui/preset.ts` (disposition selon `DESKTOP`, chaîne, grille, panneaux), `web/src/ui/theme.ts`,
+`web/src/themes/oldschool.css` (partie 1 : règles de la 1.0.5 limitées aux couleurs, fonds, ombres et polices,
+générées depuis l'ancienne feuille ; partie 2 : écrite à la main pour la nouvelle disposition),
+`web/src/ui/widgets.ts` (chiffres en points pour Old school, icônes redo et Serial2).
+
+Restes et points ouverts :
+- `docs/refonte-ui/maquette-accordeon.html` : maquette non suivie par git, à supprimer (sinon publiée avec
+  `docs/`).
+- L'APK passe de 5,3 à 6,3 Mo à cause des polices Old school.
+- Non vérifié en captures : la finition Red brushed, et les vues Settings et MIDI en Old school.
 
 ### Étape 3 : vue Banques
+
+À faire dans les deux thèmes (Modern et Old school), en gardant la même disposition ; sur téléphone, partir
+de ce qui marche aujourd'hui et faire essayer avant d'aller plus loin (leçon de l'étape 2).
 
 1. Ordinateur : 40 lignes, une par banque, de 5 cases ; chaque case = nom, pastilles des blocs allumés, tempo.
    Numéro de banque avec poignée de glisser, à gauche.
@@ -109,15 +139,17 @@ Même hauteur de ligne, même sélection et mêmes boutons dans Réglages, Switc
 - L'écran ne bloque jamais pendant un échange MIDI : tout changement s'affiche tout de suite puis part en
   file d'attente ; en Live, seuls les derniers mouvements d'un réglage sont envoyés ; la lecture des 40
   banques se fait en tâche de fond, banque par banque, avec le temps restant.
-- Interface sans framework : DOM direct avec `el()` (`ui/dom.ts`), CSS dans `web/src/styles.css`.
+- Interface sans framework : DOM direct avec `el()` (`ui/dom.ts`), CSS dans `web/src/styles.css` (Modern) et
+  `web/src/themes/oldschool.css` (règles préfixées par `:root[data-theme="oldschool"]`). Toute nouvelle
+  interface doit être habillée dans les deux.
 - Pas de fonctions CSS trop récentes sans vérifier la WebView cible (Android 7 minimum, SDK 24).
 
 ## Construire et tester
 
 ```sh
 nvm use                      # Node 22 requis par Capacitor 8
-npm install
-npm test && npm run build
+npm ci
+npx tsc --noEmit -p . && npm test && npm run build
 npx cap sync android
 cd android && ./gradlew assembleDebug   # ou installDebug avec la console branchée en débogage USB
 # APK : android/app/build/outputs/apk/debug/app-debug.apk
