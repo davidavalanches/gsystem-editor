@@ -17,7 +17,7 @@ import { loadSession, pickFile, saveFile, storeSession } from "./files";
 import { MidiView } from "./midiview";
 import { PresetView } from "./preset";
 import { SettingsView } from "./settings";
-import { SKINS, chooseSkin, currentSkin } from "./skin";
+import { SKINS, SKIN_BASE, applySkin, chooseSkin, currentSkin } from "./skin";
 import { ICONS, type MenuItem } from "./widgets";
 import { LOOP_NAMES_BASE } from "./loopnames";
 import { FAVORITES_BASE, GLOBALS_BASE, PROTECTED_BASE, SESSION_BASE, Units, defaultUnitName, parseSlotLabel, storageKey, type Unit } from "./units";
@@ -257,11 +257,12 @@ export class App {
     ];
   }
 
-  /** The panels' finish, after the G-System's black, grey and red editions. */
+  /** The panels' finish, after the G-System's black, grey and red editions: kept for this G-System. */
   private chooseSkin(): void {
-    const now = currentSkin();
-    showChoices("Appearance", SKINS.map(([key, label]) => ({
-      label, detail: key === now ? "In use" : `Panels in ${label.toLowerCase()} metal`, run: () => chooseSkin(key),
+    const unitKey = storageKey(SKIN_BASE, this.units.current);
+    const now = currentSkin(unitKey);
+    showChoices(`Appearance for “${this.units.current.name}”`, SKINS.map(([key, label]) => ({
+      label, detail: key === now ? "In use" : `Panels in ${label.toLowerCase()} metal`, run: () => chooseSkin(key, unitKey),
     })));
   }
 
@@ -441,6 +442,8 @@ export class App {
 
   /** Show a unit's workspace: its bank, Store list, protected banks and last settings read. */
   private loadUnit(unit: Unit): void {
+    // Each G-System has its own finish.
+    applySkin(currentSkin(storageKey(SKIN_BASE, unit)));
     this.bank.protectedBanks.clear();
     try {
       for (const b of JSON.parse(localStorage.getItem(storageKey(PROTECTED_BASE, unit)) ?? "[]") as number[]) {

@@ -150,7 +150,7 @@ d'abord menu Pomme → À propos de ce Mac → Plus d'infos → Rapport système
   la pédale de volume ou les encodeurs A–C, avec Min / Mid / Max (en % de la plage du paramètre, valeur
   équivalente affichée). La liste suit les types d'effets choisis, comme sur le G-System ; les paramètres
   pilotés portent un badge EXP / VOL / ENC dans leur bloc. Enregistré avec le preset (Store), envoyé en Live.
-- **Plusieurs G-System** : chacun a son espace de travail (banque, liste Store, banques protégées, réglages lus),
+- **Plusieurs G-System** : chacun a son espace de travail (banque, liste Store, banques protégées, réglages lus, apparence choisie dans menu ⋮ → « Appearance… »),
   reconnu à la connexion par son **SysEx ID**, qui doit donc être différent sur chaque G-System (menu MIDI du
   G-System). Un nom est demandé à la première connexion ; menu ⋮ → « G-System: … » pour changer d'espace hors
   connexion ou le renommer. Menu d'un preset ou d'une banque : « Copy to the other G-System… » le copie dans
