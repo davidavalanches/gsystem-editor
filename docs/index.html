@@ -3,12 +3,35 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>G-System Editor</title>
-<meta name="description" content="A free, modern editor for the TC Electronic G-System guitar multi-effects floorboard. macOS, Windows, Linux, Android.">
-<meta property="og:title" content="G-System Editor">
-<meta property="og:description" content="A free, modern editor for the TC Electronic G-System. macOS, Windows, Linux, Android.">
+<title>TC Electronic G-System Editor — Free for Mac, Windows, Linux &amp; Android</title>
+<meta name="description" content="G-System Editor is a free, open-source editor and librarian for the TC Electronic G-System guitar multi-effects floorboard. Edit presets, banks, switches and global settings on macOS, Windows, Linux and Android.">
+<link rel="canonical" href="https://davidavalanches.github.io/gsystem-editor/">
+<meta property="og:title" content="G-System Editor — free editor for the TC Electronic G-System">
+<meta property="og:description" content="A free, open-source editor for the TC Electronic G-System. macOS, Windows, Linux, Android.">
+<meta property="og:url" content="https://davidavalanches.github.io/gsystem-editor/">
+<meta property="og:site_name" content="G-System Editor">
 <meta property="og:image" content="https://davidavalanches.github.io/gsystem-editor/screenshots/preset-editor.jpg">
 <meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "G-System Editor",
+  "alternateName": "TC Electronic G-System Editor",
+  "description": "Free, open-source editor and librarian for the TC Electronic G-System guitar multi-effects floorboard.",
+  "url": "https://davidavalanches.github.io/gsystem-editor/",
+  "downloadUrl": "https://github.com/davidavalanches/gsystem-editor/releases/latest",
+  "applicationCategory": "MultimediaApplication",
+  "operatingSystem": "macOS, Windows, Linux, Android",
+  "screenshot": "https://davidavalanches.github.io/gsystem-editor/screenshots/preset-editor.jpg",
+  "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+  "author": { "@type": "Person", "name": "David Avalanches", "url": "https://github.com/davidavalanches" },
+  "codeRepository": "https://github.com/davidavalanches/gsystem-editor"
+}
+</script>
 <meta name="theme-color" content="#16171a">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%23ff4b3e' stroke-width='4'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -67,7 +90,7 @@
   .lang button { background: none; border: 0; color: var(--muted); font: 600 12px "IBM Plex Sans"; padding: 6px 9px; cursor: pointer; }
   .lang button[aria-pressed="true"] { background: var(--panel-2); color: var(--text); }
   .brand { white-space: nowrap; }
-  @media (max-width: 720px) { header.top nav a.hide-sm { display: none; } .brand { font-size: 12px; } }
+  @media (max-width: 720px) { header.top nav a.hide-sm { display: none; } .brand { font-size: 12px; } header.top .wrap { gap: 8px; } .lang { margin-left: 4px; } }
 
   /* Hero */
   .hero { padding: 72px 0 40px; text-align: center; }
@@ -78,10 +101,16 @@
     padding: 6px 14px 6px 6px; border-radius: 4px; margin-bottom: 28px;
   }
   .lcd b { background: #2a0907; color: var(--red); padding: 2px 8px; border-radius: 3px; letter-spacing: .1em; }
-  h1 {
+  .display {
     font-family: "Michroma", sans-serif; font-weight: 400;
     font-size: clamp(30px, 6vw, 58px); line-height: 1.15; letter-spacing: .02em;
     margin: 0 0 18px;
+  }
+  .nowrap { white-space: nowrap; }
+  h1.kicker {
+    font: 600 15px/1.4 "IBM Plex Sans", system-ui, sans-serif;
+    letter-spacing: .02em; color: var(--muted);
+    margin: 0 0 12px;
   }
   .hero p.lead { max-width: 640px; margin: 0 auto 32px; color: var(--muted); font-size: clamp(17px, 2.2vw, 19px); }
   .cta { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
@@ -222,7 +251,8 @@
   <section class="hero">
     <div class="wrap">
       <div class="lcd"><b>00¹</b> <span lang="en">Free · Open source · Cross-platform</span><span lang="fr">Gratuit · Open source · Multiplateforme</span></div>
-      <h1><span lang="en">Your G-System,<br>back in control.</span><span lang="fr">Reprenez la main<br>sur votre G-System.</span></h1>
+      <h1 class="kicker"><span lang="en">G-System Editor — free editor for the TC Electronic G-System</span><span lang="fr">G-System Editor — éditeur gratuit pour le TC Electronic G-System</span></h1>
+      <p class="display"><span lang="en">Your <span class="nowrap">G-System</span>,<br>back in control.</span><span lang="fr">Reprenez la main<br>sur votre <span class="nowrap">G-System</span>.</span></p>
       <p class="lead">
         <span lang="en">A fast, modern editor for the TC Electronic G-System guitar floorboard. Edit presets, manage your 200 slots and tweak every global setting — on the computers and phones you actually use today.</span>
         <span lang="fr">Un éditeur rapide et moderne pour le pédalier TC Electronic G-System. Éditez vos presets, organisez vos 200 emplacements et réglez tous les paramètres globaux — sur les ordinateurs et téléphones d'aujourd'hui.</span>
