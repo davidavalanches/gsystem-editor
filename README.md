@@ -155,6 +155,9 @@ d'abord menu Pomme → À propos de ce Mac → Plus d'infos → Rapport système
   G-System). Un nom est demandé à la première connexion ; menu ⋮ → « G-System: … » pour changer d'espace hors
   connexion ou le renommer. Menu d'un preset ou d'une banque : « Copy to the other G-System… » le copie dans
   l'espace de l'autre, où il attend dans sa liste Store. Les presets en attente d'un G-System ne partent jamais vers un autre.
+- **Quitter** : l'app s'ouvre en plein écran ; menu ⋮ → « Quit » la ferme (ordinateur, Android, et fenêtre ouverte
+  par `scripts/gsystem-editor.sh`). Elle demande confirmation si un preset modifié n'est pas enregistré ou si un
+  échange avec le G-System est en cours ; les presets en attente d'envoi sont gardés pour la prochaine fois.
 - **Vue MIDI** : connexion, lectures, SysEx ID, et les réglages du menu MIDI du G-System (canal, Program Change
   In/Out, SysEx ID, MIDI Clock, CC des encodeurs et du tap), modifiables comme dans les réglages.
 - **Réglages globaux du G-System** : vue **Settings** (niveaux, utilitaires, pédales, accordeur), vue **MIDI**
