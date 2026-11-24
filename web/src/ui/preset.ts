@@ -513,6 +513,29 @@ export class PresetView {
     this.setBuffer(after);
   }
 
+  /** Forget the changes not stored, without asking or sending anything: a saved session replaces them. */
+  dropChanges(): void {
+    this.closeSheet();
+    this.undoStack = [];
+    this.redoStack = [];
+    this.buffer = this.stored;
+    this.render();
+  }
+
+  /** A preset being edited, from a saved session: shown modified (Store keeps it), not sent to the unit. */
+  restoreDraft(slot: number, preset: Preset): void {
+    if (slot < 0 || slot >= USER_SLOTS) return;
+    this.slot = slot;
+    this.closeSheet();
+    this.stored = this.bank.preset(slot);
+    this.undoStack = [];
+    this.redoStack = [];
+    this.buffer = preset;
+    this.onSlotChange?.(slot);
+    this.renderBrowser();
+    this.render();
+  }
+
   /** Drop every change since the preset was opened or stored; in Live mode the unit follows. */
   revert(): void {
     if (!this.isDirty || !this.stored) return;

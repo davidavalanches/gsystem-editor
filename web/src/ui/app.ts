@@ -8,12 +8,13 @@ import { BOOST_MAX_PARAM, GLOBAL_PARAMS, GLOBAL_RANGES, LEVELS_BLOCK, MIDI_CHANN
   globalValue } from "../core/globals";
 import { GSystemLink } from "../core/protocol";
 import { SqsFile, USER_BANK_KIND, readSyx } from "../core/sqs";
-import { NAME_LEN, USER_PRESET_BASE, USER_SLOTS, sameBytes, type Preset } from "../core/sysex";
+import { NAME_LEN, Preset, USER_PRESET_BASE, USER_SLOTS, sameBytes } from "../core/sysex";
 import { midiAccess } from "../midi/transport";
 import { BanksView } from "./banks";
+import { CloudSync, type CloudSession, type SessionContent } from "./cloud";
 import { askText, showChecklist, showChoices } from "./dialog";
 import { el } from "./dom";
-import { loadSession, pickFile, saveFile, storeSession } from "./files";
+import { fromBase64, loadSession, pickFile, saveFile, storeSession, toBase64 } from "./files";
 import { MidiView } from "./midiview";
 import { PresetView } from "./preset";
 import { canQuit, quitApp } from "./quit";
@@ -43,6 +44,8 @@ const pad2 = (n: number) => String(n).padStart(2, "0");
 type ViewKey = "banks" | "preset" | "settings" | "switches" | "midi";
 /** Views of the G-System's global settings: shown, they are read again. */
 const GLOBAL_VIEWS = new Set<ViewKey>(["settings", "switches", "midi"]);
+/** What a G-System's workspace keeps, by storage base: all of it goes into its online session. */
+const SESSION_BASES = [SESSION_BASE, PROTECTED_BASE, GLOBALS_BASE, FAVORITES_BASE, LOOP_NAMES_BASE, SKIN_BASE];
 
 export class App {
   private readonly bank = new BankStore();
@@ -55,6 +58,14 @@ export class App {
   private readonly railButtons = new Map<ViewKey, HTMLButtonElement>();
   private readonly viewEls = new Map<ViewKey, HTMLElement>();
   private readonly midiDot = el("span", "midi-dot");
+  private readonly cloud = new CloudSync({
+    unit: () => this.units.current,
+    units: () => this.units.list,
+    content: () => this.cloudContent(),
+    apply: (session) => this.applyCloudSession(session),
+    busy: () => (this.link?.busy ? "Wait until the exchange with the G-System is over, then restore the session" : null),
+    notify: (text, warn) => this.notify(text, warn),
+  });
   private view: ViewKey = "banks";
   private link: GSystemLink | null = null;
   /** The offer to switch Prg. Change In on was declined for this link: not asked again. */
@@ -189,6 +200,7 @@ export class App {
     this.restore();
     this.show("banks");
     this.welcome();
+    void this.cloud.check();
   }
 
   /** At start: connect the G-System, open a bank file, or go on with the last session's bank. */
@@ -254,6 +266,7 @@ export class App {
         action: () => this.bank.undoLast(), disabled: !this.bank.undo.canUndo },
       { label: "Redo", action: () => this.bank.redoLast(), disabled: !this.bank.undo.canRedo },
       { label: `G-System: ${this.units.current.name}…`, action: () => this.chooseUnit() },
+      ...(this.cloud.available ? [{ label: this.cloud.menuLabel, action: () => this.cloud.open() }] : []),
       { label: "Appearance…", action: () => this.chooseSkin() },
       // Last: leaving the app (full screen, it has no other way out).
       ...(canQuit() ? [{ label: "Quit", action: () => this.quit() }] : []),
@@ -268,7 +281,8 @@ export class App {
   private quit(): void {
     const leave = () => {
       this.saveNow();
-      quitApp();
+      if (this.cloud.autoOn) this.notify("Saving the session on Dropbox…");
+      void this.cloud.flush().finally(quitApp);
     };
     const risks = [
       ...(this.preset.isDirty ? ["the changes to the preset in the editor (not stored)"] : []),
@@ -494,9 +508,57 @@ export class App {
   /** Save the shown workspace now, then show another unit's. */
   private switchUnit(unit: Unit): void {
     if (unit.key === this.units.current.key) return;
+    // The session left goes online as it is now; the one shown may have been saved meanwhile elsewhere.
+    void this.cloud.flush();
     this.saveNow();
     this.units.select(unit);
     this.loadUnit(unit);
+    void this.cloud.check();
+  }
+
+  /** The workspace shown, for its online session: everything stored for this G-System, and the preset being edited. */
+  private cloudContent(): SessionContent {
+    this.saveNow();
+    const unit = this.units.current;
+    const storage: Record<string, string> = {};
+    for (const base of SESSION_BASES) {
+      try {
+        const value = localStorage.getItem(storageKey(base, unit));
+        if (value !== null) storage[base] = value;
+      } catch {
+        // Not stored: not in the session either.
+      }
+    }
+    const buffer = this.preset.isDirty ? this.preset.buffer : null;
+    return { sysexId: unit.sysexId, unitName: unit.name, storage,
+      draft: buffer ? { slot: this.preset.slot, syx: toBase64(buffer.toSysex()) } : null };
+  }
+
+  /** A session restored from Dropbox replaces its G-System's workspace here (one is made for a G-System not known yet). */
+  private applyCloudSession(session: CloudSession): void {
+    const unit = this.units.bySysexId(session.sysexId) ?? this.units.add(session.sysexId, session.unitName || defaultUnitName(session.sysexId));
+    if (unit.key !== this.units.current.key) {
+      this.saveNow();
+      this.units.select(unit);
+    }
+    for (const base of SESSION_BASES) {
+      try {
+        const value = session.storage[base];
+        if (typeof value === "string") localStorage.setItem(storageKey(base, unit), value);
+        else localStorage.removeItem(storageKey(base, unit));
+      } catch {
+        // Storage full: the rest is still shown.
+      }
+    }
+    this.preset.dropChanges();
+    this.loadUnit(unit);
+    if (session.draft) {
+      try {
+        this.preset.restoreDraft(session.draft.slot, Preset.fromSysex(fromBase64(session.draft.syx), false));
+      } catch {
+        // A damaged draft is left out; the stored preset shows.
+      }
+    }
   }
 
   private scheduleSave(): void {

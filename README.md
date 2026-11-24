@@ -83,6 +83,12 @@ d'abord menu Pomme → À propos de ce Mac → Plus d'infos → Rapport système
 - **Contournement** : une interface USB-MIDI sans pilote (Roland UM-ONE…) sur les prises MIDI In et
   MIDI Out à 5 broches du G-System, les deux reliées (lecture des banques plus lente).
 
+### Clé de l'app Dropbox
+
+La sauvegarde en ligne n'est proposée que si `web/src/cloud/config.ts` contient la clé d'une app Dropbox
+(https://www.dropbox.com/developers/apps : *Scoped access*, *App folder*, permissions `files.content.read` et
+`files.content.write`, aucune URL de redirection). La clé est publique (PKCE, pas de secret dans l'app).
+
 ## Fonctionnalités
 
 - **Banques** : liste des 40 banques, les 5 presets de la banque avec le voyant de chacun des 8 effets,
@@ -158,6 +164,14 @@ d'abord menu Pomme → À propos de ce Mac → Plus d'infos → Rapport système
 - **Quitter** : l'app s'ouvre en plein écran ; menu ⋮ → « Quit » la ferme (ordinateur, Android, et fenêtre ouverte
   par `scripts/gsystem-editor.sh`). Elle demande confirmation si un preset modifié n'est pas enregistré ou si un
   échange avec le G-System est en cours ; les presets en attente d'envoi sont gardés pour la prochaine fois.
+- **Sauvegarde sur Dropbox** (menu ⋮ → « Back up to Dropbox… ») : la session de chaque G-System (banque, presets
+  en attente d'écriture, réglages globaux lus et modifications non envoyées, banques protégées, favoris, noms de
+  loops, apparence, et le preset modifié non stocké) est gardée dans le dossier de l'app sur le Dropbox de
+  l'utilisateur, un fichier par SysEx ID (`gsystem-id-<ID>.json`). Liaison : l'app ouvre la page Dropbox, qui
+  affiche un code à coller dans l'app ; elle ne voit que son propre dossier. Sauvegarde à la main, ou automatique
+  (au plus toutes les 20 s quand quelque chose a changé, en passant en arrière-plan et en quittant).
+  « Restore a session… » reprend une session sur un autre appareil. Si un autre appareil a sauvegardé le même
+  G-System entre-temps, l'app demande quoi faire (restaurer, garder celle-ci, plus tard) au lieu d'écraser.
 - **Vue MIDI** : connexion, lectures, SysEx ID, et les réglages du menu MIDI du G-System (canal, Program Change
   In/Out, SysEx ID, MIDI Clock, CC des encodeurs et du tap), modifiables comme dans les réglages.
 - **Réglages globaux du G-System** : vue **Settings** (niveaux, utilitaires, pédales, accordeur), vue **MIDI**
