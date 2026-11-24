@@ -17,7 +17,8 @@ if ! curl -sf "http://localhost:$port/" >/dev/null 2>&1; then
 fi
 for browser in google-chrome chromium chromium-browser; do
   if command -v "$browser" >/dev/null 2>&1; then
-    exec "$browser" --app="http://localhost:$port/" --start-fullscreen
+    # ?window=app: the app knows it has a window of its own, which its Quit can close.
+    exec "$browser" --app="http://localhost:$port/?window=app" --start-fullscreen
   fi
 done
 echo "Ouvrez http://localhost:$port/ dans Chrome ou Chromium." >&2

@@ -16,6 +16,7 @@ import { el } from "./dom";
 import { loadSession, pickFile, saveFile, storeSession } from "./files";
 import { MidiView } from "./midiview";
 import { PresetView } from "./preset";
+import { canQuit, quitApp } from "./quit";
 import { SettingsView } from "./settings";
 import { SKINS, SKIN_BASE, applySkin, chooseSkin, currentSkin } from "./skin";
 import { ICONS, type MenuItem } from "./widgets";
@@ -254,9 +255,30 @@ export class App {
       { label: "Redo", action: () => this.bank.redoLast(), disabled: !this.bank.undo.canRedo },
       { label: `G-System: ${this.units.current.name}…`, action: () => this.chooseUnit() },
       { label: "Appearance…", action: () => this.chooseSkin() },
-      // The version, last and greyed: information, not an action.
-      { label: `G-System Editor ${__APP_VERSION__}`, action: () => {}, disabled: true },
+      // Last: leaving the app (full screen, it has no other way out).
+      ...(canQuit() ? [{ label: "Quit", action: () => this.quit() }] : []),
     ];
+  }
+
+  /**
+   * Leaves the app (it runs full screen). Presets waiting to be sent are kept with the session;
+   * only a preset modified in the editor and not stored, or an exchange with the G-System under
+   * way, would be lost: then it asks first.
+   */
+  private quit(): void {
+    const leave = () => {
+      this.saveNow();
+      quitApp();
+    };
+    const risks = [
+      ...(this.preset.isDirty ? ["the changes to the preset in the editor (not stored)"] : []),
+      ...(this.link?.busy ? ["the exchange with the G-System under way"] : []),
+    ];
+    if (!risks.length) return leave();
+    showChoices("Quit G-System Editor?", [
+      { label: "Quit", detail: `Loses ${risks.join(" and ")}`, run: leave },
+      { label: "Cancel", detail: "Stay in the editor", run: () => {} },
+    ]);
   }
 
   /** The panels' finish, after the G-System's black, grey and red editions: kept for this G-System. */
