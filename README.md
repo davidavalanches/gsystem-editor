@@ -186,6 +186,16 @@ Delay 10, Reverb 4, NovaDrive 4). L'emplacement n d'un bloc pilote le n-ième pa
 d'effet courant. Chaque emplacement : source sur 3 bits (0 aucune, 1 Vol, 2 Exp, 3–5 encodeurs A–C) puis
 Min, Mid et Max sur 7 bits chacun. Voir `web/src/core/modifiers.ts`.
 
+## Téléchargements
+
+```sh
+npm run downloads                        # téléchargements par version et par plateforme
+npm run downloads -- --log suivi.csv     # ajoute aussi les totaux du jour à un CSV, pour suivre l'évolution
+```
+
+Les chiffres sont les compteurs de GitHub pour chaque fichier attaché aux releases : ils comptent tous les
+téléchargements (page des releases, boutons du site, lien direct), sans distinguer leur origine ni les robots.
+
 ## Tests
 
 ```sh

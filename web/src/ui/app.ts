@@ -254,6 +254,8 @@ export class App {
       { label: "Redo", action: () => this.bank.redoLast(), disabled: !this.bank.undo.canRedo },
       { label: `G-System: ${this.units.current.name}…`, action: () => this.chooseUnit() },
       { label: "Appearance…", action: () => this.chooseSkin() },
+      // The version, last and greyed: information, not an action.
+      { label: `G-System Editor ${__APP_VERSION__}`, action: () => {}, disabled: true },
     ];
   }
 

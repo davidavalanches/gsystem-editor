@@ -1028,3 +1028,6 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 .midi-body .settings-card { flex: 1 1 340px; min-width: min(340px, 100%); max-width: 520px; }
 .single-body > .settings-card > h2 { display: none; }
+
+/* The app's version, at the end of the MIDI view's help. */
+.app-version { margin-top: 12px; font-family: var(--mono); font-size: 12px; color: var(--faint); }

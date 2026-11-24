@@ -43,6 +43,7 @@ export class MidiView {
         + "the list fills in as they arrive."),
       el("p", "", "“Live” (Preset view) sends each setting to the G-System's working memory without storing anything. "
         + "Changing preset with your foot makes the editor follow."),
+      el("p", "app-version", `G-System Editor ${__APP_VERSION__}`),
     );
     this.body.append(status, help);
     this.el.append(header, this.body);
