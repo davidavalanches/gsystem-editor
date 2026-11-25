@@ -172,6 +172,16 @@ La sauvegarde en ligne n'est proposée que si `web/src/cloud/config.ts` contient
   (au plus toutes les 20 s quand quelque chose a changé, en passant en arrière-plan et en quittant).
   « Restore a session… » reprend une session sur un autre appareil. Si un autre appareil a sauvegardé le même
   G-System entre-temps, l'app demande quoi faire (restaurer, garder celle-ci, plus tard) au lieu d'écraser.
+- **Nouvelles versions** : une fois par lancement (ordinateur et Android, pas dans un simple navigateur), l'app
+  demande à GitHub la dernière release (`web/src/ui/update.ts`). Si elle est plus récente, une fenêtre propose
+  le fichier de la plateforme (APK, AppImage, `.exe`, zip Mac selon le processeur, ou la page de la release),
+  ouvert dans le navigateur : l'app n'installe rien elle-même. Jamais pendant un échange avec le G-System ni
+  par-dessus une autre fenêtre. « Later » redemande au prochain lancement, « Skip this version » ne rappelle plus
+  cette version (gardé sur l'appareil). Sans réseau, rien ne s'affiche.
+- **Ko-fi** : menu ⋮ → « Support G-System Editor on Ko-fi… ». Après une lecture complète des banques sans erreur
+  ou des presets écrits et vérifiés, une invitation peut apparaître, jamais pendant un échange ni deux fois par
+  session : « Maybe later » (ou fermer la fenêtre) redemande au plus tôt un mois après, « Support » et
+  « No thanks » ne redemandent plus (`web/src/ui/donate.ts`, gardé sur l'appareil).
 - **Vue MIDI** : connexion, lectures, SysEx ID, et les réglages du menu MIDI du G-System (canal, Program Change
   In/Out, SysEx ID, MIDI Clock, CC des encodeurs et du tap), modifiables comme dans les réglages.
 - **Réglages globaux du G-System** : vue **Settings** (niveaux, utilitaires, pédales, accordeur), vue **MIDI**
