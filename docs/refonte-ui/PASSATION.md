@@ -24,6 +24,20 @@ l'état du code et les étapes restantes. Les maquettes d'origine sont un caneva
 - Non fait dans la session précédente : `npm test`, `npm run build` (installation de paquets impossible
   là-bas). `package-lock.json` doit être régénéré par `npm install` et commité.
 
+## Ce qui a avancé sur `main` depuis (v1.0.10)
+
+`main` a reçu, hors refonte : la sauvegarde de session sur Dropbox (1.0.8–1.0.9), puis en 1.0.10
+l'invitation au don Ko-fi (`ui/donate.ts` : lien permanent dans le menu « More actions », invitation
+ponctuelle après une lecture complète ou une écriture vérifiée, au plus une fois par session, « Maybe later »
+= un mois) et la détection des nouvelles versions (`ui/update.ts` : une requête à l'API GitHub par
+lancement, propose le fichier de la plateforme, n'installe rien). Les deux fenêtres ne se chevauchent pas :
+chacune attend qu'aucun échange MIDI ni autre fenêtre ne soit en cours.
+
+À la fusion de `refonte-ui-etape-1` : rebaser sur `main` ou fusionner. Conflit attendu dans `fileMenu()`
+de `ui/app.ts` : la refonte supprime l'entrée « Appearance… » (et `ui/skin.ts`), `main` y a ajouté
+l'entrée Ko-fi juste à côté. Garder l'entrée Ko-fi, supprimer « Appearance ». Les fenêtres de don et de
+mise à jour utilisent `showChoices` : elles prennent automatiquement le nouveau style.
+
 ## Décisions de design (validées par l'utilisateur)
 
 **Chaîne du signal, fixe sur le G-System :**
