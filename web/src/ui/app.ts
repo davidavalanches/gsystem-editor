@@ -18,6 +18,7 @@ import { fromBase64, loadSession, pickFile, saveFile, storeSession, toBase64 } f
 import { MidiView } from "./midiview";
 import { PresetView } from "./preset";
 import { canQuit, quitApp } from "./quit";
+import { inviteToDonate, openKofi } from "./donate";
 import { SettingsView } from "./settings";
 import { SKINS, SKIN_BASE, applySkin, chooseSkin, currentSkin } from "./skin";
 import { ICONS, type MenuItem } from "./widgets";
@@ -268,6 +269,7 @@ export class App {
       { label: `G-System: ${this.units.current.name}…`, action: () => this.chooseUnit() },
       ...(this.cloud.available ? [{ label: this.cloud.menuLabel, action: () => this.cloud.open() }] : []),
       { label: "Appearance…", action: () => this.chooseSkin() },
+      { label: "Support G-System Editor on Ko-fi…", action: () => openKofi() },
       // Last: leaving the app (full screen, it has no other way out).
       ...(canQuit() ? [{ label: "Quit", action: () => this.quit() }] : []),
     ];
@@ -1104,6 +1106,12 @@ export class App {
     this.link?.editorModeOff();
     this.notify(this.writeTotal > 1 ? `${this.writeTotal} presets written to the G-System (verified)`
       : `“${item.preset.name}” stored in the G-System (${slotLabel(item.slot)}, verified)`);
+    this.inviteToDonate();
+  }
+
+  /** After a real success (all banks read, presets written and verified): a Ko-fi invitation, now and then. */
+  private inviteToDonate(): void {
+    inviteToDonate(() => Boolean(this.link?.busy) || this.writeQueue.length > 0 || this.readMode !== null);
   }
 
   /** Still different after the retries: say what differs, and let the G-System's version be kept. */
@@ -1201,6 +1209,7 @@ export class App {
       this.notify(`${presets.length} presets read, ${missing.length} empty slot(s)`
         + (corrupt.length ? `, ${corrupt.length} damaged (${corrupt.map((n) => slotLabel(n - USER_PRESET_BASE)).join(", ")})` : "")
         + ". Remember to export the bank.", corrupt.length > 0);
+      if (presets.length && !corrupt.length) this.inviteToDonate();
       return;
     }
     const changes = new Map<number, Preset | null>();
