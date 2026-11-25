@@ -19,6 +19,7 @@ import { MidiView } from "./midiview";
 import { PresetView } from "./preset";
 import { canQuit, quitApp } from "./quit";
 import { inviteToDonate, openKofi } from "./donate";
+import { checkForUpdate } from "./update";
 import { SettingsView } from "./settings";
 import { SKINS, SKIN_BASE, applySkin, chooseSkin, currentSkin } from "./skin";
 import { ICONS, type MenuItem } from "./widgets";
@@ -202,6 +203,8 @@ export class App {
     this.show("banks");
     this.welcome();
     void this.cloud.check();
+    // A newer version on GitHub: offered once the app is idle, never installed by the app itself.
+    checkForUpdate(() => this.exchanging());
   }
 
   /** At start: connect the G-System, open a bank file, or go on with the last session's bank. */
@@ -1111,7 +1114,12 @@ export class App {
 
   /** After a real success (all banks read, presets written and verified): a Ko-fi invitation, now and then. */
   private inviteToDonate(): void {
-    inviteToDonate(() => Boolean(this.link?.busy) || this.writeQueue.length > 0 || this.readMode !== null);
+    inviteToDonate(() => this.exchanging());
+  }
+
+  /** An exchange with the G-System under way (or presets waiting to be written): no dialog may interrupt it. */
+  private exchanging(): boolean {
+    return Boolean(this.link?.busy) || this.writeQueue.length > 0 || this.readMode !== null;
   }
 
   /** Still different after the retries: say what differs, and let the G-System's version be kept. */
